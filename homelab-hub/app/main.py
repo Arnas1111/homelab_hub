@@ -82,6 +82,18 @@ class WebuiLinksPayload(BaseModel):
     links: list[WebuiLinkPayload] = Field(default_factory=list)
 
 
+class IntegrationSettingsPayload(BaseModel):
+    jellyfin_url: str = Field(default="", max_length=500)
+    jellyfin_public_url: str = Field(default="", max_length=500)
+    jellyfin_api_key: str = Field(default="", max_length=5000)
+    jellyfin_api_key_clear: bool = False
+    nextcloud_calendar_url: str = Field(default="", max_length=1000)
+    home_assistant_url: str = Field(default="", max_length=500)
+    home_assistant_token: str = Field(default="", max_length=5000)
+    home_assistant_token_clear: bool = False
+    home_assistant_entities: str = Field(default="", max_length=2000)
+
+
 class HomeAssistantTogglePayload(BaseModel):
     entity_id: str = Field(min_length=1, max_length=160)
 
@@ -134,6 +146,14 @@ def init_db() -> None:
                 enabled INTEGER NOT NULL DEFAULT 1,
                 sort_order INTEGER NOT NULL DEFAULT 0,
                 source TEXT NOT NULL DEFAULT 'manual'
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS integration_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -526,21 +546,90 @@ def host_metrics(info: dict) -> dict:
     }
 
 
+INTEGRATION_ENV = {
+    "jellyfin_url": "HUB_JELLYFIN_URL",
+    "jellyfin_public_url": "HUB_JELLYFIN_PUBLIC_URL",
+    "jellyfin_api_key": "HUB_JELLYFIN_API_KEY",
+    "nextcloud_calendar_url": "HUB_NEXTCLOUD_CALENDAR_URL",
+    "home_assistant_url": "HUB_HOME_ASSISTANT_URL",
+    "home_assistant_token": "HUB_HOME_ASSISTANT_TOKEN",
+    "home_assistant_entities": "HUB_HOME_ASSISTANT_ENTITIES",
+}
+SECRET_INTEGRATION_KEYS = {"jellyfin_api_key", "home_assistant_token"}
+
+
 def env_value(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
-def integration_config() -> dict:
+def get_integration_values() -> dict[str, str]:
+    with db() as conn:
+        rows = conn.execute("SELECT key, value FROM integration_settings").fetchall()
+    stored = {row["key"]: row["value"] for row in rows}
     return {
-        "jellyfin_url": env_value("HUB_JELLYFIN_URL").rstrip("/"),
-        "jellyfin_public_url": env_value("HUB_JELLYFIN_PUBLIC_URL").rstrip("/"),
-        "jellyfin_api_key": env_value("HUB_JELLYFIN_API_KEY"),
-        "nextcloud_calendar_url": env_value("HUB_NEXTCLOUD_CALENDAR_URL"),
-        "home_assistant_url": env_value("HUB_HOME_ASSISTANT_URL").rstrip("/"),
-        "home_assistant_token": env_value("HUB_HOME_ASSISTANT_TOKEN"),
+        key: stored[key] if key in stored else env_value(env_name)
+        for key, env_name in INTEGRATION_ENV.items()
+    }
+
+
+def public_integration_settings() -> dict:
+    values = get_integration_values()
+    return {
+        "jellyfin_url": values["jellyfin_url"],
+        "jellyfin_public_url": values["jellyfin_public_url"],
+        "jellyfin_api_key_configured": bool(values["jellyfin_api_key"]),
+        "nextcloud_calendar_url": values["nextcloud_calendar_url"],
+        "home_assistant_url": values["home_assistant_url"],
+        "home_assistant_token_configured": bool(values["home_assistant_token"]),
+        "home_assistant_entities": values["home_assistant_entities"],
+    }
+
+
+def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
+    values = {
+        "jellyfin_url": payload.jellyfin_url.strip().rstrip("/"),
+        "jellyfin_public_url": payload.jellyfin_public_url.strip().rstrip("/"),
+        "nextcloud_calendar_url": payload.nextcloud_calendar_url.strip(),
+        "home_assistant_url": payload.home_assistant_url.strip().rstrip("/"),
+        "home_assistant_entities": ",".join(
+            item.strip() for item in payload.home_assistant_entities.split(",") if item.strip()
+        ),
+    }
+    secrets_to_write = {}
+    if payload.jellyfin_api_key_clear:
+        secrets_to_write["jellyfin_api_key"] = ""
+    elif payload.jellyfin_api_key.strip():
+        secrets_to_write["jellyfin_api_key"] = payload.jellyfin_api_key.strip()
+    if payload.home_assistant_token_clear:
+        secrets_to_write["home_assistant_token"] = ""
+    elif payload.home_assistant_token.strip():
+        secrets_to_write["home_assistant_token"] = payload.home_assistant_token.strip()
+
+    with db() as conn:
+        for key, value in {**values, **secrets_to_write}.items():
+            conn.execute(
+                """
+                INSERT INTO integration_settings(key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (key, value),
+            )
+    return public_integration_settings()
+
+
+def integration_config() -> dict:
+    values = get_integration_values()
+    return {
+        "jellyfin_url": values["jellyfin_url"].rstrip("/"),
+        "jellyfin_public_url": values["jellyfin_public_url"].rstrip("/"),
+        "jellyfin_api_key": values["jellyfin_api_key"],
+        "nextcloud_calendar_url": values["nextcloud_calendar_url"],
+        "home_assistant_url": values["home_assistant_url"].rstrip("/"),
+        "home_assistant_token": values["home_assistant_token"],
         "home_assistant_entities": [
             item.strip()
-            for item in env_value("HUB_HOME_ASSISTANT_ENTITIES").split(",")
+            for item in values["home_assistant_entities"].split(",")
             if item.strip()
         ],
     }
@@ -971,6 +1060,18 @@ def home_assistant_toggle(payload: HomeAssistantTogglePayload, request: Request)
         raise HTTPException(status_code=exc.code, detail=f"Home Assistant returned HTTP {exc.code}.") from exc
     except (OSError, URLError, ValueError) as exc:
         raise HTTPException(status_code=502, detail=f"Could not reach Home Assistant: {exc}") from exc
+
+
+@app.get("/api/integration-settings")
+def integration_settings_get(request: Request):
+    require_auth(request)
+    return public_integration_settings()
+
+
+@app.put("/api/integration-settings")
+def integration_settings_put(payload: IntegrationSettingsPayload, request: Request):
+    require_auth(request)
+    return save_integration_settings(payload)
 
 
 Action = Literal["start", "stop", "restart", "pause", "unpause"]

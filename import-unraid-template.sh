@@ -21,37 +21,11 @@ if [[ ! -d /boot/config/plugins/dockerMan ]]; then
 fi
 
 TEMPLATE_DEST="${TEMPLATE_DIR}/${TEMPLATE_NAME}"
-TMP_TEMPLATE="$(mktemp)"
-cp -f "${TEMPLATE_SOURCE}" "${TMP_TEMPLATE}"
-
-blank_config_value() {
-  local target="$1"
-  sed -i -E "s#(<Config Name=\"[^\"]*\" Target=\"${target}\"[^>]*>)[^<]*(</Config>)#\\1\\2#g" "${TMP_TEMPLATE}"
-}
-
-blank_config_value "HUB_JELLYFIN_URL"
-blank_config_value "HUB_JELLYFIN_PUBLIC_URL"
-blank_config_value "HUB_JELLYFIN_API_KEY"
-blank_config_value "HUB_NEXTCLOUD_CALENDAR_URL"
-blank_config_value "HUB_HOME_ASSISTANT_URL"
-blank_config_value "HUB_HOME_ASSISTANT_TOKEN"
-blank_config_value "HUB_HOME_ASSISTANT_ENTITIES"
-
 mkdir -p "${TEMPLATE_DIR}"
-install -m 0644 "${TMP_TEMPLATE}" "${TEMPLATE_DEST}"
-rm -f "${TMP_TEMPLATE}"
+install -m 0644 "${TEMPLATE_SOURCE}" "${TEMPLATE_DEST}"
 
 echo "Imported Homelab Hub template:"
 echo "  ${TEMPLATE_DEST}"
-echo
-echo "The live integration fields were installed blank:"
-echo "  HUB_JELLYFIN_URL"
-echo "  HUB_JELLYFIN_PUBLIC_URL"
-echo "  HUB_JELLYFIN_API_KEY"
-echo "  HUB_NEXTCLOUD_CALENDAR_URL"
-echo "  HUB_HOME_ASSISTANT_URL"
-echo "  HUB_HOME_ASSISTANT_TOKEN"
-echo "  HUB_HOME_ASSISTANT_ENTITIES"
 echo
 echo "Next:"
 echo "  Unraid WebUI -> Docker -> Add Container -> Template -> Homelab-Hub"

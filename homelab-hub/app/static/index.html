@@ -151,6 +151,30 @@
           <div><button class="btn primary" type="submit">Save settings</button> <span id="settingsSaved" class="tiny muted"></span></div>
         </form>
       </div>
+      <div class="panel settings-panel">
+        <div class="panel-head"><div><h2>Connectors</h2><p class="muted">Stored locally in appdata</p></div></div>
+        <form id="integrationSettingsForm" class="connector-form">
+          <article class="connector-card">
+            <h3>Jellyfin</h3>
+            <label>Internal URL<input id="jellyfinUrl" maxlength="500" placeholder="http://192.168.178.100:8096"></label>
+            <label>Public URL<input id="jellyfinPublicUrl" maxlength="500" placeholder="https://watch.example.com"></label>
+            <label>API key<input id="jellyfinApiKey" type="password" maxlength="5000" autocomplete="new-password"></label>
+            <label class="check"><input id="jellyfinApiKeyClear" type="checkbox"><span>Clear API key</span></label>
+          </article>
+          <article class="connector-card">
+            <h3>Nextcloud</h3>
+            <label>Calendar export URL<input id="nextcloudCalendarUrl" maxlength="1000" placeholder="https://cloud.example.com/remote.php/dav/public-calendars/..."></label>
+          </article>
+          <article class="connector-card">
+            <h3>Home Assistant</h3>
+            <label>Base URL<input id="homeAssistantUrl" maxlength="500" placeholder="http://192.168.178.100:8123"></label>
+            <label>Token<input id="homeAssistantToken" type="password" maxlength="5000" autocomplete="new-password"></label>
+            <label class="check"><input id="homeAssistantTokenClear" type="checkbox"><span>Clear token</span></label>
+            <label>Entities<textarea id="homeAssistantEntities" maxlength="2000" rows="4" placeholder="light.wohnzimmer,sensor.temperature"></textarea></label>
+          </article>
+          <div class="connector-actions"><button class="btn primary" type="submit">Save connectors</button> <span id="integrationSettingsSaved" class="tiny muted"></span></div>
+        </form>
+      </div>
     </section>
   </main>
 

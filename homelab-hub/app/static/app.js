@@ -6,6 +6,7 @@ let activeContainer = null;
 let dashboardIcons = [];
 let integrationData = null;
 let integrationLoading = false;
+let integrationSettings = null;
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
 const DEFAULT_SECTION_ORDER = ['summary', 'server', 'integrations', 'webui', 'ports', 'containers'];
 let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSections') || '[]'));
@@ -328,6 +329,52 @@ async function toggleHomeAssistantEntity(entityId) {
     });
     integrationData = { ...(integrationData || {}), home_assistant: result.home_assistant };
     renderIntegrations();
+  } catch (e) { toast(e.message); }
+}
+
+function fillIntegrationSettingsForm(data) {
+  integrationSettings = data || {};
+  $('jellyfinUrl').value = integrationSettings.jellyfin_url || '';
+  $('jellyfinPublicUrl').value = integrationSettings.jellyfin_public_url || '';
+  $('jellyfinApiKey').value = '';
+  $('jellyfinApiKey').placeholder = integrationSettings.jellyfin_api_key_configured ? 'Configured - leave blank to keep' : '';
+  $('jellyfinApiKeyClear').checked = false;
+  $('nextcloudCalendarUrl').value = integrationSettings.nextcloud_calendar_url || '';
+  $('homeAssistantUrl').value = integrationSettings.home_assistant_url || '';
+  $('homeAssistantToken').value = '';
+  $('homeAssistantToken').placeholder = integrationSettings.home_assistant_token_configured ? 'Configured - leave blank to keep' : '';
+  $('homeAssistantTokenClear').checked = false;
+  $('homeAssistantEntities').value = integrationSettings.home_assistant_entities || '';
+}
+
+async function loadIntegrationSettings() {
+  try {
+    fillIntegrationSettingsForm(await api('/api/integration-settings'));
+  } catch (e) { toast(e.message); }
+}
+
+async function saveIntegrationSettings(event) {
+  event.preventDefault();
+  try {
+    const saved = await api('/api/integration-settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        jellyfin_url: $('jellyfinUrl').value,
+        jellyfin_public_url: $('jellyfinPublicUrl').value,
+        jellyfin_api_key: $('jellyfinApiKey').value,
+        jellyfin_api_key_clear: $('jellyfinApiKeyClear').checked,
+        nextcloud_calendar_url: $('nextcloudCalendarUrl').value,
+        home_assistant_url: $('homeAssistantUrl').value,
+        home_assistant_token: $('homeAssistantToken').value,
+        home_assistant_token_clear: $('homeAssistantTokenClear').checked,
+        home_assistant_entities: $('homeAssistantEntities').value,
+      }),
+    });
+    fillIntegrationSettingsForm(saved);
+    integrationData = null;
+    if (isSectionOpen('integrations')) loadIntegrations({ force: true });
+    $('integrationSettingsSaved').textContent = 'Saved.';
+    setTimeout(() => $('integrationSettingsSaved').textContent = '', 1800);
   } catch (e) { toast(e.message); }
 }
 
@@ -1115,6 +1162,7 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     document.querySelectorAll('.view').forEach(x => x.classList.remove('active')); $(`${btn.dataset.view}View`).classList.add('active');
     const names = {dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],docker:['Docker','Docker Engine information'],settings:['Settings','Configure this hub']};
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
+    if (btn.dataset.view === 'settings') loadIntegrationSettings();
   });
 }
 
@@ -1127,6 +1175,9 @@ $('settingsForm').addEventListener('submit', async e => {
   } catch (err) { toast(err.message); }
 });
 
+$('integrationSettingsForm').addEventListener('submit', saveIntegrationSettings);
+
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
+loadIntegrationSettings();
 loadIconLibrary().finally(refresh);

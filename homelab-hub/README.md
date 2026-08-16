@@ -45,7 +45,7 @@ Or, from a clone/copy of this repository on the Unraid server, import only the t
 ./import-unraid-template.sh
 ```
 
-The importer installs the template with the optional Jellyfin, Nextcloud, and Home Assistant fields blank.
+The importer installs only the basic Docker template. Live integrations are configured inside Homelab Hub.
 
 ### 2. Create the container through the normal Unraid WebUI
 
@@ -125,11 +125,9 @@ The Unraid template stores configured environment values in Unraid's Docker temp
 
 ## Optional live integrations
 
-Live integration credentials are runtime-only environment variables in the Unraid template. Do not commit real values to this repository.
+Live integration credentials are stored locally in Homelab Hub's SQLite database under appdata. Do not commit real values to this repository.
 
-- `HUB_JELLYFIN_API_KEY` enables the active Jellyfin streams card. `HUB_JELLYFIN_URL` is optional when the Jellyfin container publishes TCP 8096/8920 and can be discovered from Docker. `HUB_JELLYFIN_PUBLIC_URL` controls the Open link.
-- `HUB_NEXTCLOUD_CALENDAR_URL` accepts a public Nextcloud ICS export/subscription URL for the weekly agenda card.
-- `HUB_HOME_ASSISTANT_URL`, `HUB_HOME_ASSISTANT_TOKEN`, and `HUB_HOME_ASSISTANT_ENTITIES` enable Home Assistant sensors and `light.*` toggles. In Home Assistant, create a long-lived access token from your user profile page, then paste it into the masked Unraid field.
+Open **Settings -> Connectors** in Homelab Hub to configure Jellyfin, Nextcloud, and Home Assistant. Secret fields are not echoed back to the browser; leave them blank to keep the saved value or use the clear checkbox to remove them.
 
 ## Planned next integrations
 
