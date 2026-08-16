@@ -5,9 +5,9 @@ let logRefreshTimer = null;
 let activeContainer = null;
 
 const $ = (id) => document.getElementById(id);
-const DEFAULT_CONTAINER_ICON = 'deployed_code';
-const MATERIAL_ICONS = [
-  'apps','archive','backup','cloud','cloud_sync','database','deployed_code','dns','folder','home_storage','hub','image','lan','memory','movie','music_note','network_check','photo_library','router','security','settings','smart_display','storage','terminal','tv','videocam','vpn_key','web','wifi'
+const DEFAULT_CONTAINER_ICON = 'docker';
+const DASHBOARD_ICONS = [
+  'adguard-home','authelia','authentik','bazarr','cloudflare','cloudflare-zero-trust','deluge','docker','duplicati','filebrowser','frigate','grafana','home-assistant','immich','jellyfin','jellyseerr','lidarr','mariadb','mqtt','mysql','netdata','nextcloud','nginx','nginx-proxy-manager','node-red','overseerr','paperless-ngx','photoprism','plex','portainer','postgresql','prowlarr','qbittorrent','radarr','redis','sabnzbd','sonarr','tautulli','traefik','transmission','unifi','unraid','uptime-kuma','vaultwarden','wireguard','wordpress'
 ];
 
 function bytes(v) {
@@ -44,17 +44,25 @@ function containerIcon(c) {
   return c.icon || DEFAULT_CONTAINER_ICON;
 }
 
+function iconPath(icon) {
+  return `/static/icons/dashboard/${icon || DEFAULT_CONTAINER_ICON}.svg`;
+}
+
+function sanitizeIcon(value) {
+  return value.trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+
 function renderContainers() {
   if (!currentData) return;
   const q = $('containerSearch').value.trim().toLowerCase();
   const rows = currentData.containers.filter(c => !q || `${c.name} ${c.image} ${c.project || ''} ${c.group_name || ''}`.toLowerCase().includes(q));
   $('containerRows').innerHTML = rows.length ? groupedContainers(rows).map(group => `
-    <tr class="group-row"><td colspan="7"><span class="material-symbols-rounded">folder</span>${escapeHtml(group.name)}</td></tr>
+    <tr class="group-row"><td colspan="7"><span class="folder-mark"></span>${escapeHtml(group.name)}</td></tr>
     ${group.containers.map(c => `
     <tr class="container-row" onclick="openContainer('${c.id}')">
       <td class="name-cell">
         <div class="container-title">
-          <span class="material-symbols-rounded container-icon">${escapeHtml(containerIcon(c))}</span>
+          <span class="container-icon"><img src="${iconPath(containerIcon(c))}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')"></span>
           <div><strong>${escapeHtml(c.name)}</strong><small>${c.project ? escapeHtml(c.project) : c.short_id}</small></div>
         </div>
       </td>
@@ -63,7 +71,7 @@ function renderContainers() {
       <td>${bytes(c.memory_used)} <span class="muted">/ ${bytes(c.memory_limit)}</span><div class="meter"><i style="width:${Math.min(c.memory_percent || 0,100)}%"></i></div></td>
       <td>${portText(c.ports)}</td>
       <td><div class="image-text" title="${escapeHtml(c.image)}">${escapeHtml(c.image)}</div></td>
-      <td><button class="kebab" type="button" title="More options"><span class="material-symbols-rounded">more_horiz</span></button></td>
+      <td><button class="kebab" type="button" title="More options">•••</button></td>
     </tr>`).join('')}
   `).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
 }
@@ -127,7 +135,7 @@ window.openContainer = async function(id) {
   $('modalMeta').textContent = `${c.image} · ${c.status}`;
   $('modalActions').innerHTML = actionsFor(c).map(a => `<button class="btn ${a === 'stop' ? 'danger' : ''}" onclick="doAction('${a}')">${a[0].toUpperCase()+a.slice(1)}</button>`).join('');
   $('containerIconInput').value = containerIcon(c);
-  $('containerIconPreview').textContent = containerIcon(c);
+  setIconPreview(containerIcon(c));
   $('containerGroupInput').value = c.group_name || '';
   $('containerPrefsSaved').textContent = '';
   $('modal').classList.remove('hidden');
@@ -136,15 +144,23 @@ window.openContainer = async function(id) {
 }
 
 function renderOptionLists() {
-  $('materialIconOptions').innerHTML = MATERIAL_ICONS.map(icon => `<option value="${icon}"></option>`).join('');
+  $('dashboardIconOptions').innerHTML = DASHBOARD_ICONS.map(icon => `<option value="${icon}"></option>`).join('');
   const groups = [...new Set((currentData?.containers || []).map(c => c.group_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   $('containerGroupOptions').innerHTML = groups.map(group => `<option value="${escapeHtml(group)}"></option>`).join('');
+}
+
+function setIconPreview(icon) {
+  const slug = icon || DEFAULT_CONTAINER_ICON;
+  const preview = $('containerIconPreview');
+  preview.onerror = () => preview.closest('.container-icon').classList.add('missing');
+  preview.src = iconPath(slug);
+  preview.closest('.container-icon').classList.remove('missing');
 }
 
 async function saveContainerPrefs(event) {
   event.preventDefault();
   if (!activeContainer) return;
-  const icon = $('containerIconInput').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+  const icon = sanitizeIcon($('containerIconInput').value);
   const group_name = $('containerGroupInput').value.trim();
   try {
     const prefs = await api(`/api/containers/${activeContainer.id}/prefs`, {
@@ -156,7 +172,7 @@ async function saveContainerPrefs(event) {
     const existing = currentData.containers.find(c => c.id === activeContainer.id);
     if (existing) Object.assign(existing, prefs);
     $('containerIconInput').value = prefs.icon || DEFAULT_CONTAINER_ICON;
-    $('containerIconPreview').textContent = prefs.icon || DEFAULT_CONTAINER_ICON;
+    setIconPreview(prefs.icon || DEFAULT_CONTAINER_ICON);
     $('containerGroupInput').value = prefs.group_name;
     $('containerPrefsSaved').textContent = 'Saved.';
     renderOptionLists();
@@ -280,7 +296,7 @@ $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeMo
 $('logRefreshBtn').addEventListener('click', () => loadLogs({ forceBottom: true }));
 $('containerPrefsForm').addEventListener('submit', saveContainerPrefs);
 $('containerIconInput').addEventListener('input', () => {
-  $('containerIconPreview').textContent = $('containerIconInput').value.trim().toLowerCase() || DEFAULT_CONTAINER_ICON;
+  setIconPreview(sanitizeIcon($('containerIconInput').value) || DEFAULT_CONTAINER_ICON);
 });
 $('refreshBtn').addEventListener('click', refresh);
 $('containerSearch').addEventListener('input', renderContainers);

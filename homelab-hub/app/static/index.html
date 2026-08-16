@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ settings.title }}</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -75,8 +74,8 @@
         <form id="containerPrefsForm" class="prefs-form">
           <label>Icon
             <div class="icon-input-wrap">
-              <span id="containerIconPreview" class="material-symbols-rounded container-icon preview">deployed_code</span>
-              <input id="containerIconInput" list="materialIconOptions" maxlength="60" placeholder="deployed_code">
+              <span class="container-icon preview"><img id="containerIconPreview" alt=""></span>
+              <input id="containerIconInput" list="dashboardIconOptions" maxlength="90" placeholder="jellyfin">
             </div>
           </label>
           <label>Folder
@@ -85,7 +84,7 @@
           <button class="btn primary" type="submit">Save</button>
           <span id="containerPrefsSaved" class="tiny muted"></span>
         </form>
-        <datalist id="materialIconOptions"></datalist>
+        <datalist id="dashboardIconOptions"></datalist>
         <datalist id="containerGroupOptions"></datalist>
       </section>
       <h3>Logs</h3>

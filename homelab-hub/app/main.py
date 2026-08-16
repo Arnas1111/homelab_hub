@@ -42,7 +42,7 @@ class SettingsPayload(BaseModel):
 
 
 class ContainerPrefsPayload(BaseModel):
-    icon: str = Field(default="", max_length=60, pattern=r"^[a-z0-9_]*$")
+    icon: str = Field(default="", max_length=90, pattern=r"^[a-z0-9-]*$")
     group_name: str = Field(default="", max_length=80)
 
 
