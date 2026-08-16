@@ -45,7 +45,7 @@ LAST_PROC_TOTAL: int | None = None
 PARTY_MODE_STOP = threading.Event()
 PARTY_MODE_THREAD: threading.Thread | None = None
 PARTY_MODE_DELAY = 1.75
-PARTY_MODE_SNAPSHOT: dict[str, dict] = {}
+NORMAL_WHITE_KELVIN = 2700
 
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
@@ -1405,31 +1405,38 @@ def party_delay(craziness: int) -> float:
     return round(3.0 - (normalized * 2.75), 2)
 
 
-def snapshot_lights(cfg: dict, lights: list[str]) -> dict[str, dict]:
-    snapshot = {}
-    headers = {"Authorization": f"Bearer {cfg['home_assistant_token']}"}
-    for entity_id in lights:
-        try:
-            state = http_json(f"{cfg['home_assistant_url']}/api/states/{entity_id}", headers=headers)
-            if isinstance(state, dict):
-                snapshot[entity_id] = state
-        except Exception:
-            pass
-    return snapshot
+def clamp_color_temp(attrs: dict) -> int:
+    value = NORMAL_WHITE_KELVIN
+    minimum = attrs.get("min_color_temp_kelvin")
+    maximum = attrs.get("max_color_temp_kelvin")
+    if isinstance(minimum, int):
+        value = max(value, minimum)
+    if isinstance(maximum, int):
+        value = min(value, maximum)
+    return value
 
 
-def restore_light_default(cfg: dict, entity_id: str, snapshot: dict | None) -> None:
-    attrs = snapshot.get("attributes", {}) if isinstance(snapshot, dict) else {}
-    payload = {"entity_id": entity_id, "brightness_pct": 100, "transition": 0}
-    color_mode = attrs.get("color_mode")
-    if color_mode == "color_temp" and attrs.get("color_temp_kelvin"):
-        payload["color_temp_kelvin"] = attrs["color_temp_kelvin"]
-    elif color_mode in {"hs", "rgb", "rgbw", "rgbww"} and attrs.get("hs_color"):
-        payload["hs_color"] = attrs["hs_color"]
-    elif color_mode == "xy" and attrs.get("xy_color"):
-        payload["xy_color"] = attrs["xy_color"]
-    elif attrs.get("rgb_color"):
-        payload["rgb_color"] = attrs["rgb_color"]
+def light_attributes(cfg: dict, entity_id: str) -> dict:
+    try:
+        state = http_json(
+            f"{cfg['home_assistant_url']}/api/states/{entity_id}",
+            headers={"Authorization": f"Bearer {cfg['home_assistant_token']}"},
+        )
+        return state.get("attributes", {}) if isinstance(state, dict) else {}
+    except Exception:
+        return {}
+
+
+def restore_light_default(cfg: dict, entity_id: str) -> None:
+    attrs = light_attributes(cfg, entity_id)
+    supported = set(attrs.get("supported_color_modes") or [])
+    payload = {"entity_id": entity_id, "brightness": 255, "transition": 0}
+    if "color_temp" in supported:
+        payload["color_temp_kelvin"] = clamp_color_temp(attrs)
+    elif "rgbww" in supported:
+        payload["rgbww_color"] = [0, 0, 0, 0, 255]
+    elif "rgbw" in supported:
+        payload["rgbw_color"] = [0, 0, 0, 255]
     try:
         home_assistant_service(cfg, "light", "turn_on", payload)
     except Exception:
@@ -1484,13 +1491,11 @@ def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
     require_auth(request)
     cfg = integration_config()
     ensure_home_assistant(cfg)
-    global PARTY_MODE_DELAY, PARTY_MODE_SNAPSHOT, PARTY_MODE_THREAD
+    global PARTY_MODE_DELAY, PARTY_MODE_THREAD
     PARTY_MODE_DELAY = party_delay(payload.craziness)
     if payload.enabled:
         if PARTY_MODE_THREAD and PARTY_MODE_THREAD.is_alive():
             return {"ok": True, "enabled": True, "delay_seconds": PARTY_MODE_DELAY}
-        lights = light_entities(cfg)
-        PARTY_MODE_SNAPSHOT = snapshot_lights(cfg, lights)
         PARTY_MODE_STOP.clear()
         PARTY_MODE_THREAD = threading.Thread(target=party_worker, args=(cfg,), daemon=True)
         PARTY_MODE_THREAD.start()
@@ -1499,7 +1504,7 @@ def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
     lights = light_entities(cfg)
     for entity_id in lights:
         try:
-            restore_light_default(cfg, entity_id, PARTY_MODE_SNAPSHOT.get(entity_id))
+            restore_light_default(cfg, entity_id)
         except Exception:
             pass
     time.sleep(0.35)
@@ -1508,7 +1513,6 @@ def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
             home_assistant_service(cfg, "light", "turn_off", {"entity_id": entity_id, "transition": 0})
         except Exception:
             pass
-    PARTY_MODE_SNAPSHOT = {}
     return {"ok": True, "enabled": False, "delay_seconds": PARTY_MODE_DELAY}
 
 
