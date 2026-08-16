@@ -106,7 +106,6 @@ function renderServerMetrics(s) {
   const memory = metrics.memory || {};
   const disk = metrics.data_mount || metrics.appdata_disk || {};
   const cores = (cpu.cores || []).slice(0, 16);
-  const diskFreePercent = Number(disk.total) ? Math.round((Number(disk.free || 0) / Number(disk.total)) * 1000) / 10 : 0;
   $('serverMetrics').innerHTML = `
     <article class="server-card">
       <span class="server-card-label">Load average</span>
@@ -129,8 +128,8 @@ function renderServerMetrics(s) {
     </article>
     <article class="server-card">
       <span class="server-card-label">Data mount</span>
-      <strong>${percent(diskFreePercent)}</strong>
-      ${metricBar('Free space', diskFreePercent, `${disk.free_human || '–'} free / ${disk.total_human || '–'} total`)}
+      <strong>${percent(disk.percent)}</strong>
+      ${metricBar('Used capacity', disk.percent, `${disk.free_human || '–'} free / ${disk.total_human || '–'} total`)}
       <small class="metric-note">Shared Unraid mount capacity, not appdata folder size</small>
     </article>
   `;
