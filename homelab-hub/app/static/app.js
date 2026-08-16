@@ -7,6 +7,7 @@ let dashboardIcons = [];
 let integrationData = null;
 let integrationLoading = false;
 let integrationSettings = null;
+let colorPickerActive = false;
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
 const DEFAULT_SECTION_ORDER = ['server', 'integrations', 'webui', 'ports', 'containers'];
 let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSections') || '[]'));
@@ -136,7 +137,7 @@ function metricBar(label, value, detail = '') {
   const width = Math.min(Number(value || 0), 100);
   return `<div class="server-bar">
     <div><span>${escapeHtml(label)}</span><strong>${percent(value)}</strong></div>
-    <div class="meter wide"><i style="width:${width}%"></i></div>
+    <div class="meter wide"><i style="width:${width}%; background:${barColor(value)}"></i></div>
     ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
   </div>`;
 }
@@ -146,9 +147,30 @@ function trafficBar(label, rate, detail = '') {
   const width = Math.min(mb * 10, 100);
   return `<div class="server-bar">
     <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(bytes(rate))}/s</strong></div>
-    <div class="meter wide"><i style="width:${width}%"></i></div>
+    <div class="meter wide"><i style="width:${width}%; background:${barColor(width)}"></i></div>
     ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
   </div>`;
+}
+
+function barColor(value) {
+  const v = Number(value || 0);
+  if (v >= 85) return 'var(--red)';
+  if (v >= 65) return 'var(--yellow)';
+  return 'var(--green)';
+}
+
+function cardIcon(name) {
+  const paths = {
+    cpu: '<path d="M7 7h10v10H7z"/><path d="M4 9h3M4 15h3M17 9h3M17 15h3M9 4v3M15 4v3M9 17v3M15 17v3"/>',
+    memory: '<path d="M6 7h12v10H6z"/><path d="M9 10h1M12 10h1M15 10h1M9 14h6"/>',
+    disk: '<path d="M6 5h12v14H6z"/><path d="M9 8h6M9 16h.1M15 16h.1"/>',
+    network: '<path d="M4 12h16"/><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/>',
+    top: '<path d="M5 17h14M7 13h3v4H7zM11 9h3v8h-3zM15 5h3v12h-3z"/>',
+    jellyfin: '<path d="m12 4 8 14H4z"/><path d="m12 9 4 7H8z"/>',
+    calendar: '<path d="M5 6h14v13H5z"/><path d="M8 4v4M16 4v4M5 10h14"/>',
+    home: '<path d="m4 11 8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
+  };
+  return `<span class="card-glyph"><svg viewBox="0 0 24 24">${paths[name] || paths.cpu}</svg></span>`;
 }
 
 function addMetricHistory(cpuPercent, memoryPercent) {
@@ -190,35 +212,35 @@ function renderServerMetrics(s) {
   metricHistory.network = metricHistory.network.slice(-80);
   localStorage.setItem('metricHistory', JSON.stringify(metricHistory));
   $('serverMetrics').innerHTML = `
-    <article class="server-card cpu-card">
-      <span class="server-card-label">Processor</span>
+    <article class="server-card cpu-card metric-cpu">
+      <span class="server-card-label">${cardIcon('cpu')}Processor</span>
       <strong>${percent(cpu.total_percent)}</strong>
       ${sparkline(metricHistory.cpu, 'Recent CPU usage')}
       ${metricBar('Overall', cpu.total_percent, `${s.cpus ?? cores.length} cores`)}
       <div class="core-grid">${cores.map(core => metricBar(core.name, core.percent)).join('') || '<small class="muted">CPU sample pending</small>'}</div>
     </article>
-    <article class="server-card">
-      <span class="server-card-label">Memory</span>
+    <article class="server-card metric-memory">
+      <span class="server-card-label">${cardIcon('memory')}Memory</span>
       <strong>${percent(memory.percent)}</strong>
       ${sparkline(metricHistory.memory, 'Recent memory usage')}
       ${metricBar('RAM usage', memory.percent, `${memory.used_human || '–'} / ${memory.total_human || s.memory_total_human || '–'}`)}
       <small class="metric-note">${escapeHtml(memory.available_human || '–')} available</small>
     </article>
-    <article class="server-card">
-      <span class="server-card-label">Data mount</span>
+    <article class="server-card metric-disk">
+      <span class="server-card-label">${cardIcon('disk')}Data mount</span>
       <strong>${percent(disk.percent)}</strong>
       ${metricBar('Used capacity', disk.percent, `${disk.free_human || '–'} free / ${disk.total_human || '–'} total`)}
       <small class="metric-note">Shared Unraid mount capacity, not appdata folder size</small>
     </article>
-    <article class="server-card">
-      <span class="server-card-label">Network</span>
+    <article class="server-card metric-network">
+      <span class="server-card-label">${cardIcon('network')}Network</span>
       <strong>${escapeHtml(network.rx_rate_human || '0 B/s')} ↓</strong>
       ${sparkline(metricHistory.network, 'Recent network throughput')}
       ${trafficBar('Receive', network.rx_rate, network.rx_human ? `${network.rx_human} total` : '')}
       ${trafficBar('Transmit', network.tx_rate, network.tx_human ? `${network.tx_human} total` : '')}
     </article>
-    <article class="server-card">
-      <span class="server-card-label">Top containers</span>
+    <article class="server-card metric-top">
+      <span class="server-card-label">${cardIcon('top')}Top containers</span>
       <strong>CPU / Memory</strong>
       ${containerTopList('CPU', topContainers('cpu_percent'), 'cpu_percent')}
       ${containerTopList('Memory', topContainers('memory_percent'), 'memory_percent')}
@@ -236,14 +258,11 @@ function topContainers(key) {
 
 function containerTopList(label, rows, key) {
   return `<div class="top-list"><span>${escapeHtml(label)}</span>${rows.map(row => `
-    <div class="top-row"><strong>${escapeHtml(row.name)}</strong><small>${key === 'cpu_percent' ? percent(row.cpu_percent) : `${percent(row.memory_percent)} · ${bytes(row.memory_used)}`}</small></div>
+    <div class="top-row">
+      <span class="top-container-name"><span class="container-icon mini"><img src="${iconPath(containerIcon(row))}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')"></span><strong>${escapeHtml(row.name)}</strong></span>
+      <small>${key === 'cpu_percent' ? percent(row.cpu_percent) : `${percent(row.memory_percent)} · ${bytes(row.memory_used)}`}</small>
+    </div>
   `).join('') || '<small class="muted">Open Containers section for stats</small>'}</div>`;
-}
-
-function topList(label, rows, key) {
-  return `<div class="top-list"><span>${escapeHtml(label)}</span>${rows.slice(0, 3).map(row => `
-    <div class="top-row"><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.user)} · ${key === 'cpu_percent' ? percent(row.cpu_percent) : `${percent(row.memory_percent)} · ${row.memory_human}`}</small></div>
-  `).join('') || '<small class="muted">No process data</small>'}</div>`;
 }
 
 function ticksProgress(position, runtime) {
@@ -268,9 +287,9 @@ function integrationNotice(block) {
 
 function renderJellyfinCard(jellyfin = {}) {
   const active = jellyfin.active || [];
-  return `<article class="integration-card">
+  return `<article class="integration-card integration-jellyfin">
     <div class="integration-card-head">
-      <div><span class="server-card-label">Jellyfin</span><strong>${active.length ? `${active.length} active` : 'No active streams'}</strong></div>
+      <div><span class="server-card-label">${cardIcon('jellyfin')}Jellyfin</span><strong>${active.length ? `${active.length} active` : 'No active streams'}</strong></div>
       ${jellyfin.url ? `<a class="mini-link" href="${escapeHtml(jellyfin.url)}" target="_blank" rel="noreferrer">Open</a>` : ''}
     </div>
     ${integrationNotice(jellyfin)}
@@ -291,16 +310,16 @@ function renderJellyfinCard(jellyfin = {}) {
 
 function renderCalendarCard(calendar = {}) {
   const events = calendar.events || [];
-  return `<article class="integration-card">
+  return `<article class="integration-card integration-calendar">
     <div class="integration-card-head">
-      <div><span class="server-card-label">Agenda</span><strong>${events.length ? 'This week' : 'No events'}</strong></div>
+      <div><span class="server-card-label">${cardIcon('calendar')}Agenda</span><strong>${events.length ? 'This week' : 'No events'}</strong></div>
     </div>
     ${integrationNotice(calendar)}
     <div class="agenda-list">
       ${events.length ? events.map(event => `
         <div class="agenda-row">
           <time>${escapeHtml(formatEventTime(event))}</time>
-          <div><strong>${escapeHtml(event.summary)}</strong>${event.location ? `<small>${escapeHtml(event.location)}</small>` : ''}</div>
+          <div><strong>${escapeHtml(event.summary)}</strong>${event.location || event.calendar ? `<small>${escapeHtml([event.calendar, event.location].filter(Boolean).join(' · '))}</small>` : ''}</div>
         </div>
       `).join('') : '<div class="soft-empty">No calendar items in the next 7 days.</div>'}
     </div>
@@ -316,10 +335,11 @@ function renderHomeAssistantCard(home = {}) {
   const entities = home.entities || [];
   const lights = entities.filter(entity => entity.domain === 'light');
   const sensors = entities.filter(entity => entity.domain !== 'light');
-  return `<article class="integration-card">
+  const partyOn = localStorage.getItem('haPartyMode') === 'true';
+  return `<article class="integration-card integration-home">
     <div class="integration-card-head">
-      <div><span class="server-card-label">Home Assistant</span><strong>${entities.length ? `${entities.length} entities` : 'Not connected'}</strong></div>
-      ${lights.length ? '<button class="mini-link" type="button" data-action="ha-party">Party</button>' : ''}
+      <div><span class="server-card-label">${cardIcon('home')}Home Assistant</span><strong>${entities.length ? `${entities.length} entities` : 'Not connected'}</strong></div>
+      ${lights.length ? `<button class="mini-link ${partyOn ? 'active' : ''}" type="button" data-action="ha-party">${partyOn ? 'Party on' : 'Party'}</button>` : ''}
     </div>
     ${integrationNotice(home)}
     <div class="ha-lights">
@@ -355,7 +375,7 @@ function renderIntegrations() {
 }
 
 async function loadIntegrations({ force = false } = {}) {
-  if (!isSectionOpen('integrations') || integrationLoading) return;
+  if (!isSectionOpen('integrations') || integrationLoading || colorPickerActive) return;
   integrationLoading = true;
   if (force || !integrationData) renderIntegrations();
   try {
@@ -376,7 +396,7 @@ async function toggleHomeAssistantEntity(entityId) {
       body: JSON.stringify({ entity_id: entityId }),
     });
     integrationData = { ...(integrationData || {}), home_assistant: result.home_assistant };
-    renderIntegrations();
+    if (!colorPickerActive) renderIntegrations();
   } catch (e) { toast(e.message); }
 }
 
@@ -396,6 +416,7 @@ async function togglePartyMode() {
   try {
     await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify({ enabled: next }) });
     localStorage.setItem('haPartyMode', String(next));
+    renderIntegrations();
     toast(next ? 'Party mode on' : 'Party mode off');
   } catch (e) { toast(e.message); }
 }
@@ -883,7 +904,7 @@ function render(data) {
   renderContainers();
   renderWebLinks();
   renderPorts();
-  renderIntegrations();
+  if (!colorPickerActive) renderIntegrations();
   applySectionOrder();
   applySectionState();
   scheduleRefresh();
@@ -1180,10 +1201,17 @@ $('integrationsPanelBody').addEventListener('click', event => {
   if (button.dataset.action === 'ha-party') togglePartyMode();
   else toggleHomeAssistantEntity(button.dataset.entity);
 });
+$('integrationsPanelBody').addEventListener('focusin', event => {
+  if (event.target.closest('[data-action="ha-color"]')) colorPickerActive = true;
+});
+$('integrationsPanelBody').addEventListener('focusout', event => {
+  if (event.target.closest('[data-action="ha-color"]')) setTimeout(() => { colorPickerActive = false; }, 800);
+});
 $('integrationsPanelBody').addEventListener('change', event => {
   const input = event.target.closest('[data-action="ha-color"]');
   if (!input) return;
   colorHomeAssistantEntity(input.dataset.entity, input.value);
+  setTimeout(() => { colorPickerActive = false; }, 800);
 });
 $('overviewSections').addEventListener('click', event => {
   const sectionButton = event.target.closest('[data-action^="section-"], [data-action="toggle-section"]');

@@ -1075,14 +1075,8 @@ def caldav_calendar_events(cfg: dict) -> dict:
     result = {"configured": True, "events": [], "source": "caldav"}
     try:
         calendars = caldav_calendars(cfg)
-        wanted = cfg["nextcloud_calendar_name"].strip().lower()
-        if wanted:
-            calendars = [
-                item for item in calendars
-                if item["name"].lower() == wanted or item["href"].rstrip("/").split("/")[-1].lower() == wanted
-            ]
         if not calendars:
-            result["message"] = "No matching Nextcloud calendars found."
+            result["message"] = "No Nextcloud calendars found for this account."
             return result
         now = datetime.now(timezone.utc)
         horizon = now + timedelta(days=7)
@@ -1457,6 +1451,11 @@ def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
         PARTY_MODE_THREAD.start()
         return {"ok": True, "enabled": True}
     PARTY_MODE_STOP.set()
+    for entity_id in light_entities(cfg):
+        try:
+            home_assistant_service(cfg, "light", "turn_on", {"entity_id": entity_id, "rgb_color": [255, 255, 255]})
+        except Exception:
+            pass
     return {"ok": True, "enabled": False}
 
 
