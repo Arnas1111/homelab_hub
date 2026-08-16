@@ -65,7 +65,7 @@ function renderContainers() {
           <span>${escapeHtml(group.name)}</span>
           <small>${group.containers.length}</small>
         </button>
-        ${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="group-up" data-group="${escapeHtml(group.name)}">↑</button><button class="order-btn" type="button" data-action="group-down" data-group="${escapeHtml(group.name)}">↓</button></span>` : ''}
+        ${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="group-up" data-group="${escapeHtml(group.name)}" aria-label="Move group up">▵</button><button class="order-btn" type="button" data-action="group-down" data-group="${escapeHtml(group.name)}" aria-label="Move group down">▿</button></span>` : ''}
       </td>
     </tr>
     ${collapsedGroups.has(group.name) && !isSearching ? '' : group.containers.map(c => `
@@ -81,7 +81,7 @@ function renderContainers() {
       <td>${bytes(c.memory_used)} <span class="muted">/ ${bytes(c.memory_limit)}</span><div class="meter"><i style="width:${Math.min(c.memory_percent || 0,100)}%"></i></div></td>
       <td>${portText(c.ports)}</td>
       <td><div class="image-text" title="${escapeHtml(c.image)}">${escapeHtml(c.image)}</div></td>
-      <td>${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="container-up" data-name="${escapeHtml(c.name)}">↑</button><button class="order-btn" type="button" data-action="container-down" data-name="${escapeHtml(c.name)}">↓</button></span>` : ''}<button class="kebab" type="button" title="More options">•••</button></td>
+      <td>${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="container-up" data-name="${escapeHtml(c.name)}" aria-label="Move container up">▵</button><button class="order-btn" type="button" data-action="container-down" data-name="${escapeHtml(c.name)}" aria-label="Move container down">▿</button></span>` : ''}<button class="kebab" type="button" title="More options">•••</button></td>
     </tr>`).join('')}
   `).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
 }
