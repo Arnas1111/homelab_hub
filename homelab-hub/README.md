@@ -29,6 +29,7 @@ ghcr.io/arnas1111/homelab-hub:latest
 ```
 
 GitHub Actions publishes that image automatically when changes are pushed to `main`.
+The Unraid template includes Docker's `--pull=always` policy so recreating/applying the container fetches the current `latest` image instead of reusing a stale local image.
 
 ### 1. Install the Unraid template
 
@@ -87,7 +88,7 @@ Homelab Hub container -> no default outbound internet route
 
 ## Updating this development build
 
-Push changes to `main`. After GitHub Actions publishes a new `latest` image, update/recreate the container in Unraid so it pulls the new image.
+Push changes to `main`. After GitHub Actions publishes a new `latest` image, update/recreate the container in Unraid. The template includes `--pull=always`, so Docker fetches the current remote `latest` image during recreate/apply.
 
 If you ever want to build directly on Unraid instead, the local installer is still available:
 

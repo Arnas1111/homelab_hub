@@ -14,13 +14,13 @@
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL/>
   <Icon/>
-  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <ExtraParams>--restart=unless-stopped --pull=always</ExtraParams>
   <PostArgs/>
   <CPUset/>
   <DateInstalled/>
   <DonateText/>
   <DonateLink/>
-  <Requires>The image is published by GitHub Actions to ghcr.io/arnas1111/homelab-hub. For no outbound internet access, use a user-defined internal Docker bridge network named docker-internal, not a br0/macvlan network with its own container IP.</Requires>
+  <Requires>The image is published by GitHub Actions to ghcr.io/arnas1111/homelab-hub. The template uses Docker pull policy always so mutable tags like latest are refreshed when the container is recreated. For no outbound internet access, use a user-defined internal Docker bridge network named docker-internal, not a br0/macvlan network with its own container IP.</Requires>
 
   <Config Name="WebUI Port" Target="8080" Default="3333" Mode="tcp" Description="Host port used to access Homelab Hub from your LAN. The container target must remain 8080." Type="Port" Display="always" Required="true" Mask="false">3333</Config>
   <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/homelab-hub" Mode="rw" Description="Persistent database and Hub configuration." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/homelab-hub</Config>
