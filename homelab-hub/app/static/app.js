@@ -5,7 +5,11 @@ let logRefreshTimer = null;
 let activeContainer = null;
 let dashboardIcons = [];
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
-let containersSectionCollapsed = localStorage.getItem('containersSectionCollapsed') === 'true';
+const DEFAULT_SECTION_ORDER = ['summary', 'server', 'webui', 'ports', 'containers'];
+let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSections') || '[]'));
+if (localStorage.getItem('containersSectionCollapsed') === 'true') collapsedSections.add('containers');
+let sectionOrder = JSON.parse(localStorage.getItem('overviewSectionOrder') || '[]').filter(id => DEFAULT_SECTION_ORDER.includes(id));
+sectionOrder = [...sectionOrder, ...DEFAULT_SECTION_ORDER.filter(id => !sectionOrder.includes(id))];
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_CONTAINER_ICON = 'docker';
@@ -30,9 +34,22 @@ async function api(url, options = {}) {
   return body;
 }
 
+function monitorStatus(c) {
+  if (c.status === 'running' && c.health === 'healthy') return { label: 'Healthy', kind: 'ok', info: 'Running and Docker health check is passing.' };
+  if (c.status === 'running' && c.health === 'unhealthy') return { label: 'Attention', kind: 'attention', info: 'Running, but Docker reports an unhealthy health check.' };
+  if (c.status === 'running' && c.health === 'starting') return { label: 'Starting', kind: 'pending', info: 'Running, but the health check is still warming up.' };
+  if (c.status === 'running') return { label: 'Online', kind: 'ok', info: 'Running. No Docker health check is configured for this container.' };
+  if (c.status === 'paused') return { label: 'Paused', kind: 'paused', info: 'Container is paused and processes are suspended.' };
+  if (c.status === 'restarting' || c.status === 'created') return { label: 'Starting', kind: 'pending', info: 'Container exists but is not fully online yet.' };
+  if (c.status === 'exited' || c.status === 'dead') return { label: 'Offline', kind: 'offline', info: 'Container is stopped or dead.' };
+  if (c.status === 'error') return { label: 'Problem', kind: 'attention', info: c.error || 'Docker returned an error while reading this container.' };
+  return { label: 'Unknown', kind: 'unknown', info: `Docker state: ${c.status || 'unknown'}.` };
+}
+
 function statusBadge(c) {
-  const health = c.health ? ` · ${c.health}` : '';
-  return `<span class="badge ${c.status}">${c.status}${health}</span>`;
+  const status = monitorStatus(c);
+  const raw = [c.status, c.health].filter(Boolean).join(' / ');
+  return `<span class="badge ${status.kind}">${status.label}<span class="info-dot" title="${escapeHtml(`${status.info}${raw ? ` Raw Docker state: ${raw}.` : ''}`)}">i</span></span>`;
 }
 
 function portText(ports) {
@@ -87,8 +104,9 @@ function renderServerMetrics(s) {
   const load = metrics.load || {};
   const cpu = metrics.cpu || {};
   const memory = metrics.memory || {};
-  const disk = metrics.appdata_disk || {};
+  const disk = metrics.data_mount || metrics.appdata_disk || {};
   const cores = (cpu.cores || []).slice(0, 16);
+  const diskFreePercent = Number(disk.total) ? Math.round((Number(disk.free || 0) / Number(disk.total)) * 1000) / 10 : 0;
   $('serverMetrics').innerHTML = `
     <article class="server-card">
       <span class="server-card-label">Load average</span>
@@ -110,30 +128,59 @@ function renderServerMetrics(s) {
       <small class="metric-note">${escapeHtml(memory.available_human || '–')} available</small>
     </article>
     <article class="server-card">
-      <span class="server-card-label">Appdata storage</span>
-      <strong>${percent(disk.percent)}</strong>
-      ${metricBar('Disk usage', disk.percent, `${disk.used_human || '–'} / ${disk.total_human || '–'}`)}
-      <small class="metric-note">${escapeHtml(disk.free_human || '–')} free on /data</small>
+      <span class="server-card-label">Data mount</span>
+      <strong>${percent(diskFreePercent)}</strong>
+      ${metricBar('Free space', diskFreePercent, `${disk.free_human || '–'} free / ${disk.total_human || '–'} total`)}
+      <small class="metric-note">Shared Unraid mount capacity, not appdata folder size</small>
     </article>
   `;
 }
 
-function applyContainersFoldState() {
-  const body = $('containersPanelBody');
-  const button = $('containersFoldBtn');
-  const icon = $('containersFoldIcon');
-  if (!body || !button || !icon) return;
-  const searchActive = Boolean($('containerSearch')?.value.trim());
-  const bodyHidden = containersSectionCollapsed && !searchActive;
-  body.classList.toggle('hidden', bodyHidden);
-  button.setAttribute('aria-expanded', String(!bodyHidden));
-  icon.textContent = bodyHidden ? '▸' : '▾';
+function sectionSearchActive(section) {
+  if (section === 'containers') return Boolean($('containerSearch')?.value.trim());
+  if (section === 'ports') return Boolean($('portSearch')?.value.trim());
+  return false;
 }
 
-function toggleContainersSection() {
-  containersSectionCollapsed = !containersSectionCollapsed;
-  localStorage.setItem('containersSectionCollapsed', String(containersSectionCollapsed));
-  applyContainersFoldState();
+function isSectionOpen(section) {
+  return !collapsedSections.has(section) || sectionSearchActive(section);
+}
+
+function applySectionState() {
+  for (const section of DEFAULT_SECTION_ORDER) {
+    const body = $(`${section}PanelBody`);
+    const button = document.querySelector(`[data-action="toggle-section"][data-section="${section}"]`);
+    const icon = $(`${section}FoldIcon`);
+    if (!body || !button || !icon) continue;
+    const open = isSectionOpen(section);
+    body.classList.toggle('hidden', !open);
+    button.setAttribute('aria-expanded', String(open));
+    icon.textContent = open ? '▾' : '▸';
+  }
+}
+
+function toggleSection(section) {
+  if (collapsedSections.has(section)) collapsedSections.delete(section);
+  else collapsedSections.add(section);
+  localStorage.setItem('collapsedSections', JSON.stringify([...collapsedSections]));
+  applySectionState();
+  refresh();
+}
+
+function applySectionOrder() {
+  const parent = $('overviewSections');
+  if (!parent) return;
+  for (const section of sectionOrder) {
+    const el = document.querySelector(`[data-section="${section}"].dashboard-section`);
+    if (el) parent.appendChild(el);
+  }
+}
+
+function moveSection(section, direction) {
+  const index = sectionOrder.indexOf(section);
+  if (!moveItem(sectionOrder, index, direction)) return;
+  localStorage.setItem('overviewSectionOrder', JSON.stringify(sectionOrder));
+  applySectionOrder();
 }
 
 function renderContainers() {
@@ -141,7 +188,8 @@ function renderContainers() {
   const q = $('containerSearch').value.trim().toLowerCase();
   const isSearching = Boolean(q);
   const terms = q.split(/\s+/).filter(Boolean);
-  const rows = currentData.containers.filter(c => !terms.length || terms.every(term => containerSearchText(c).includes(term)));
+  const containers = currentData.containers || [];
+  const rows = containers.filter(c => !terms.length || terms.every(term => containerSearchText(c).includes(term)));
   $('containerRows').innerHTML = rows.length ? groupedContainers(rows).map(group => `
     <tr class="group-row ${collapsedGroups.has(group.name) && !isSearching ? 'collapsed' : ''}" data-group="${escapeHtml(group.name)}">
       <td colspan="7">
@@ -170,7 +218,7 @@ function renderContainers() {
       <td>${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="container-up" data-name="${escapeHtml(c.name)}" aria-label="Move container up">▵</button><button class="order-btn" type="button" data-action="container-down" data-name="${escapeHtml(c.name)}" aria-label="Move container down">▿</button></span>` : ''}<button class="kebab" type="button" title="More options">•••</button></td>
     </tr>`).join('')}
   `).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
-  applyContainersFoldState();
+  applySectionState();
 }
 
 function groupedContainers(containers) {
@@ -207,7 +255,7 @@ function moveItem(items, index, direction) {
 }
 
 async function moveGroup(groupName, direction) {
-  const groups = groupedContainers(currentData.containers);
+  const groups = groupedContainers(currentData.containers || []);
   const names = groups.map(g => g.name);
   if (!moveItem(names, names.indexOf(groupName), direction)) return;
   currentData.group_order = currentData.group_order || {};
@@ -217,13 +265,13 @@ async function moveGroup(groupName, direction) {
 }
 
 async function moveContainer(containerName, direction) {
-  const groups = groupedContainers(currentData.containers);
+  const groups = groupedContainers(currentData.containers || []);
   const group = groups.find(g => g.containers.some(c => c.name === containerName));
   if (!group) return;
   const names = group.containers.map(c => c.name);
   if (!moveItem(names, names.indexOf(containerName), direction)) return;
   names.forEach((name, index) => {
-    const container = currentData.containers.find(c => c.name === name);
+    const container = (currentData.containers || []).find(c => c.name === name);
     if (container) container.sort_order = index;
   });
   renderContainers();
@@ -231,7 +279,7 @@ async function moveContainer(containerName, direction) {
 }
 
 async function persistOrder() {
-  const groups = groupedContainers(currentData.containers);
+  const groups = groupedContainers(currentData.containers || []);
   try {
     await api('/api/order', {
       method: 'PUT',
@@ -243,11 +291,138 @@ async function persistOrder() {
   } catch (e) { toast(e.message); }
 }
 
+function webLinks(containers) {
+  const links = [];
+  for (const c of containers || []) {
+    for (const p of c.ports || []) {
+      const [internalPort, protocol = 'tcp'] = String(p.internal || '').split('/');
+      if (protocol !== 'tcp' || !p.host_port) continue;
+      const port = Number(p.host_port);
+      const scheme = port === 443 || port === 8443 || Number(internalPort) === 443 ? 'https' : 'http';
+      links.push({ container: c, port, url: `${scheme}://${location.hostname}:${p.host_port}` });
+    }
+  }
+  return links.sort((a, b) => a.container.name.localeCompare(b.container.name) || a.port - b.port);
+}
+
+function renderWebLinks() {
+  const links = webLinks(currentData?.containers || []);
+  $('webuiPanelBody').innerHTML = links.length ? links.map(link => `
+    <a class="webui-pill" href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(link.url)}">
+      <span class="container-icon mini"><img src="${iconPath(containerIcon(link.container))}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')"></span>
+      <span>${escapeHtml(link.container.name)}</span>
+      <small>${escapeHtml(String(link.port))}</small>
+    </a>
+  `).join('') : '<div class="empty">No published TCP ports found.</div>';
+}
+
+function portProtocol(port) {
+  return String(port.internal || '').split('/')[1] || 'tcp';
+}
+
+function usedPorts(containers) {
+  const rows = [];
+  for (const c of containers || []) {
+    for (const p of c.ports || []) {
+      const port = Number(p.host_port);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
+      rows.push({ port, protocol: portProtocol(p), container: c.name, target: p.internal, host_ip: p.host_ip || '0.0.0.0' });
+    }
+  }
+  return rows.sort((a, b) => a.protocol.localeCompare(b.protocol) || a.port - b.port || a.container.localeCompare(b.container));
+}
+
+function freeRanges(protocol, used) {
+  if (protocol === 'all') return [...freeRanges('tcp', used), ...freeRanges('udp', used)];
+  const taken = new Set(used.filter(row => row.protocol === protocol).map(row => row.port));
+  const ranges = [];
+  let start = null;
+  for (let port = 1; port <= 65535; port++) {
+    if (!taken.has(port) && start === null) start = port;
+    if ((taken.has(port) || port === 65535) && start !== null) {
+      const end = taken.has(port) ? port - 1 : port;
+      if (end >= start) ranges.push({ start, end, protocol });
+      start = null;
+    }
+  }
+  return ranges;
+}
+
+function rangeLabel(range) {
+  return range.start === range.end ? String(range.start) : `${range.start}-${range.end}`;
+}
+
+function renderPorts() {
+  const used = usedPorts(currentData?.containers || []);
+  const protocol = $('portProtocol').value;
+  const mode = $('portMode').value;
+  const q = $('portSearch').value.trim().toLowerCase();
+  const usedFiltered = used.filter(row => {
+    const protocolMatch = protocol === 'all' || row.protocol === protocol;
+    const text = `${row.port} ${row.protocol} ${row.container} ${row.target} ${row.host_ip}`.toLowerCase();
+    return protocolMatch && (!q || text.includes(q));
+  });
+  const freeFiltered = freeRanges(protocol, used).filter(range => {
+    if (!q) return true;
+    const text = `${rangeLabel(range)} ${range.protocol}`.toLowerCase();
+    const searchedPort = Number(q);
+    return text.includes(q) || (Number.isInteger(searchedPort) && searchedPort >= range.start && searchedPort <= range.end);
+  }).slice(0, 120);
+  const rows = [];
+  if (mode !== 'free') {
+    rows.push(...usedFiltered.map(row => `<tr><td><strong>${row.port}</strong></td><td>${row.protocol.toUpperCase()}</td><td><span class="port-state used">Used</span></td><td>${escapeHtml(row.container)}</td><td>${escapeHtml(row.target)}</td></tr>`));
+  }
+  if (mode !== 'used') {
+    rows.push(...freeFiltered.map(range => `<tr><td><strong>${rangeLabel(range)}</strong></td><td>${range.protocol === 'all' ? 'TCP/UDP' : range.protocol.toUpperCase()}</td><td><span class="port-state free">Free</span></td><td class="muted">Available</td><td class="muted">Host range</td></tr>`));
+  }
+  $('portSummary').innerHTML = `<span>${usedFiltered.length} used</span><span>${freeFiltered.length} free ranges shown</span>`;
+  $('portRows').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="empty">No matching ports.</td></tr>';
+  applySectionState();
+}
+
+function containerStatusSummary(containers, server) {
+  if (!containers?.length) {
+    return `${server.containers_running} online · ${server.containers_stopped} offline${server.containers_paused ? ` · ${server.containers_paused} paused` : ''}`;
+  }
+  const counts = containers.reduce((acc, c) => {
+    const status = monitorStatus(c).label.toLowerCase();
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+  return [
+    counts.healthy ? `${counts.healthy} healthy` : '',
+    counts.online ? `${counts.online} online` : '',
+    counts.attention ? `${counts.attention} attention` : '',
+    counts.offline ? `${counts.offline} offline` : '',
+    counts.paused ? `${counts.paused} paused` : '',
+    counts.starting ? `${counts.starting} starting` : '',
+  ].filter(Boolean).join(' · ') || `${server.containers_total} tracked`;
+}
+
+function overviewQuery() {
+  const containerSearchActive = Boolean($('containerSearch')?.value.trim());
+  const portSearchActive = Boolean($('portSearch')?.value.trim());
+  const includeMetrics = isSectionOpen('server');
+  const includeContainers = isSectionOpen('containers') || isSectionOpen('webui') || isSectionOpen('ports') || containerSearchActive || portSearchActive;
+  const includeStats = isSectionOpen('containers') || containerSearchActive;
+  return new URLSearchParams({
+    include_metrics: String(includeMetrics),
+    include_containers: String(includeContainers),
+    include_stats: String(includeStats),
+  }).toString();
+}
+
 function render(data) {
-  currentData = data; settings = data.settings || settings;
-  const s = data.server;
+  currentData = {
+    ...(currentData || {}),
+    ...data,
+    server: { ...((currentData || {}).server || {}), ...(data.server || {}) },
+    containers: data.containers || (currentData?.containers || []),
+  };
+  settings = data.settings || settings;
+  const s = currentData.server;
   $('metricContainers').textContent = s.containers_total;
-  $('metricContainerDetail').textContent = `${s.containers_running} running · ${s.containers_stopped} stopped${s.containers_paused ? ` · ${s.containers_paused} paused` : ''}`;
+  $('metricContainerDetail').textContent = containerStatusSummary(currentData.containers, s);
   $('metricMemory').textContent = s.metrics?.memory?.total_human || s.memory_total_human || bytes(s.memory_total);
   $('metricMemoryDetail').textContent = s.os || 'Docker host';
   $('metricCpu').textContent = s.cpus ?? '–';
@@ -263,14 +438,17 @@ function render(data) {
   $('brandTitle').textContent = settings.title;
   document.title = settings.title;
   renderOptionLists();
-  renderServerMetrics(s);
+  if (s.metrics) renderServerMetrics(s);
   renderContainers();
-  applyContainersFoldState();
+  renderWebLinks();
+  renderPorts();
+  applySectionOrder();
+  applySectionState();
   scheduleRefresh();
 }
 
 async function refresh() {
-  try { render(await api('/api/overview')); }
+  try { render(await api(`/api/overview?${overviewQuery()}`)); }
   catch (e) { $('containerRows').innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(e.message)}</td></tr>`; toast(e.message); }
 }
 
@@ -286,7 +464,7 @@ function actionsFor(c) {
 }
 
 window.openContainer = async function(id) {
-  const c = currentData?.containers.find(x => x.id === id); if (!c) return;
+  const c = (currentData?.containers || []).find(x => x.id === id); if (!c) return;
   activeContainer = c;
   $('modalTitle').textContent = c.name;
   $('modalMeta').textContent = `${c.image} · ${c.status}`;
@@ -372,7 +550,7 @@ async function saveContainerPrefs(event) {
     });
     activeContainer.icon = prefs.icon;
     activeContainer.group_name = prefs.group_name;
-    const existing = currentData.containers.find(c => c.id === activeContainer.id);
+    const existing = (currentData.containers || []).find(c => c.id === activeContainer.id);
     if (existing) Object.assign(existing, prefs);
     $('containerIconInput').value = prefs.icon || DEFAULT_CONTAINER_ICON;
     setIconPreview(prefs.icon || DEFAULT_CONTAINER_ICON);
@@ -485,7 +663,7 @@ window.doAction = async function(action) {
     await api(`/api/containers/${activeContainer.id}/${action}`, { method:'POST', body:'{}' });
     toast(`${activeContainer.name}: ${action} sent`);
     await refresh();
-    const updated = currentData.containers.find(c => c.id === activeContainer.id); if (updated) openContainer(updated.id); else closeModal();
+    const updated = (currentData.containers || []).find(c => c.id === activeContainer.id); if (updated) openContainer(updated.id); else closeModal();
   } catch (e) { toast(e.message); }
 }
 
@@ -510,8 +688,19 @@ $('dashboardIconGrid').addEventListener('click', event => {
 });
 $('iconDownloadBtn').addEventListener('click', downloadIcon);
 $('refreshBtn').addEventListener('click', refresh);
-$('containersFoldBtn').addEventListener('click', toggleContainersSection);
-$('containerSearch').addEventListener('input', renderContainers);
+$('overviewSections').addEventListener('click', event => {
+  const sectionButton = event.target.closest('[data-action^="section-"], [data-action="toggle-section"]');
+  if (!sectionButton) return;
+  event.stopPropagation();
+  const section = sectionButton.dataset.section;
+  if (sectionButton.dataset.action === 'toggle-section') toggleSection(section);
+  if (sectionButton.dataset.action === 'section-up') moveSection(section, -1);
+  if (sectionButton.dataset.action === 'section-down') moveSection(section, 1);
+});
+$('containerSearch').addEventListener('input', () => { renderContainers(); refresh(); });
+$('portSearch').addEventListener('input', () => { renderPorts(); refresh(); });
+$('portProtocol').addEventListener('change', renderPorts);
+$('portMode').addEventListener('change', renderPorts);
 $('containerRows').addEventListener('click', event => {
   const orderButton = event.target.closest('.order-btn');
   if (orderButton) {
@@ -536,7 +725,7 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-item[data-view]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
     document.querySelectorAll('.view').forEach(x => x.classList.remove('active')); $(`${btn.dataset.view}View`).classList.add('active');
-    const names = {dashboard:['Overview','Live Docker status'],docker:['Docker','Docker Engine information'],settings:['Settings','Configure this hub']};
+    const names = {dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],docker:['Docker','Docker Engine information'],settings:['Settings','Configure this hub']};
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
   });
 }

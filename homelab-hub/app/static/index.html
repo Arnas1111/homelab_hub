@@ -22,39 +22,98 @@
 
   <main class="main">
     <header class="topbar">
-      <div><h1 id="pageTitle">Overview</h1><p id="pageSubtitle" class="muted">Live Docker status from {{ server_name }}</p></div>
+      <div><h1 id="pageTitle">Overview</h1><p id="pageSubtitle" class="muted">Homelab data, shortcuts, ports, and monitoring</p></div>
       <div class="top-actions"><span id="lastUpdated" class="muted tiny"></span><button id="refreshBtn" class="btn">Refresh</button></div>
     </header>
 
     <section id="dashboardView" class="view active">
-      <div class="metric-grid">
-        <article class="metric"><span class="metric-label">Containers</span><strong id="metricContainers">–</strong><small id="metricContainerDetail">Loading</small></article>
-        <article class="metric"><span class="metric-label">Host memory</span><strong id="metricMemory">–</strong><small id="metricMemoryDetail">–</small></article>
-        <article class="metric"><span class="metric-label">CPU cores</span><strong id="metricCpu">–</strong><small>Docker host</small></article>
-        <article class="metric"><span class="metric-label">Images</span><strong id="metricImages">–</strong><small>Local Docker images</small></article>
-      </div>
+      <div id="overviewSections" class="overview-sections">
+        <section id="summaryPanel" class="dashboard-section" data-section="summary">
+          <div class="section-strip">
+            <button class="section-toggle compact" type="button" data-action="toggle-section" data-section="summary" aria-expanded="true">
+              <span id="summaryFoldIcon">▾</span>
+              <span><strong>Summary</strong><small>At-a-glance hub totals</small></span>
+            </button>
+            <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="summary" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="summary" aria-label="Move section down">▿</button></span>
+          </div>
+          <div id="summaryPanelBody" class="metric-grid">
+            <article class="metric"><span class="metric-label">Containers</span><strong id="metricContainers">–</strong><small id="metricContainerDetail">Loading</small></article>
+            <article class="metric"><span class="metric-label">Host memory</span><strong id="metricMemory">–</strong><small id="metricMemoryDetail">–</small></article>
+            <article class="metric"><span class="metric-label">CPU cores</span><strong id="metricCpu">–</strong><small>Host processor</small></article>
+            <article class="metric"><span class="metric-label">Images</span><strong id="metricImages">–</strong><small>Local images</small></article>
+          </div>
+        </section>
 
-      <section class="panel server-metrics-panel">
-        <div class="panel-head"><div><h2>Server metrics</h2><p class="muted">Host load, CPU, memory, and appdata storage</p></div></div>
-        <div id="serverMetrics" class="server-metrics">
-          <div class="empty">Waiting for host metrics…</div>
-        </div>
-      </section>
+        <section id="serverPanel" class="panel dashboard-section server-metrics-panel" data-section="server">
+          <div class="panel-head section-head">
+            <button class="section-toggle" type="button" data-action="toggle-section" data-section="server" aria-expanded="true">
+              <span id="serverFoldIcon">▾</span>
+              <span><strong>Server metrics</strong><small>Host load, CPU, memory, and shared data mount</small></span>
+            </button>
+            <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="server" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="server" aria-label="Move section down">▿</button></span>
+          </div>
+          <div id="serverPanelBody">
+            <div id="serverMetrics" class="server-metrics">
+              <div class="empty">Waiting for host metrics…</div>
+            </div>
+          </div>
+        </section>
 
-      <div id="containersPanel" class="panel">
-        <div class="panel-head containers-head">
-          <button id="containersFoldBtn" class="section-toggle" type="button" aria-expanded="true">
-            <span id="containersFoldIcon">▾</span>
-            <span><strong>Containers</strong><small>Resource usage and current state</small></span>
-          </button>
-          <input id="containerSearch" class="search" placeholder="Search name, ID, port, image, status…">
-        </div>
-        <div id="containersPanelBody" class="table-wrap">
-          <table>
-            <thead><tr><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th>Ports</th><th>Image</th><th></th></tr></thead>
-            <tbody id="containerRows"><tr><td colspan="7" class="empty">Connecting to Docker…</td></tr></tbody>
-          </table>
-        </div>
+        <section id="webuiPanel" class="panel dashboard-section" data-section="webui">
+          <div class="panel-head section-head">
+            <button class="section-toggle" type="button" data-action="toggle-section" data-section="webui" aria-expanded="true">
+              <span id="webuiFoldIcon">▾</span>
+              <span><strong>WebUI links</strong><small>Published TCP ports opened as browser shortcuts</small></span>
+            </button>
+            <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="webui" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="webui" aria-label="Move section down">▿</button></span>
+          </div>
+          <div id="webuiPanelBody" class="webui-links">
+            <div class="empty">Waiting for containers…</div>
+          </div>
+        </section>
+
+        <section id="portsPanel" class="panel dashboard-section" data-section="ports">
+          <div class="panel-head section-head split-head">
+            <button class="section-toggle" type="button" data-action="toggle-section" data-section="ports" aria-expanded="true">
+              <span id="portsFoldIcon">▾</span>
+              <span><strong>Ports</strong><small>Published Docker ports and available ranges</small></span>
+            </button>
+            <div class="head-actions">
+              <input id="portSearch" class="search" placeholder="Search port, range, container…">
+              <select id="portProtocol" class="select"><option value="all">TCP + UDP</option><option value="tcp">TCP</option><option value="udp">UDP</option></select>
+              <select id="portMode" class="select"><option value="all">Used + free</option><option value="used">Used only</option><option value="free">Free ranges</option></select>
+              <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="ports" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="ports" aria-label="Move section down">▿</button></span>
+            </div>
+          </div>
+          <div id="portsPanelBody">
+            <div id="portSummary" class="port-summary"></div>
+            <div class="table-wrap compact-table">
+              <table>
+                <thead><tr><th>Port / range</th><th>Protocol</th><th>Status</th><th>Container</th><th>Target</th></tr></thead>
+                <tbody id="portRows"><tr><td colspan="5" class="empty">Waiting for port data…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="containersPanel" class="panel dashboard-section" data-section="containers">
+          <div class="panel-head section-head split-head">
+            <button id="containersFoldBtn" class="section-toggle" type="button" data-action="toggle-section" data-section="containers" aria-expanded="true">
+              <span id="containersFoldIcon">▾</span>
+              <span><strong>Containers</strong><small>Monitoring state, resources, ports, and image</small></span>
+            </button>
+            <div class="head-actions">
+              <input id="containerSearch" class="search" placeholder="Search name, ID, port, image, status…">
+              <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="containers" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="containers" aria-label="Move section down">▿</button></span>
+            </div>
+          </div>
+          <div id="containersPanelBody" class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th>Ports</th><th>Image</th><th></th></tr></thead>
+              <tbody id="containerRows"><tr><td colspan="7" class="empty">Connecting to Docker…</td></tr></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </section>
 

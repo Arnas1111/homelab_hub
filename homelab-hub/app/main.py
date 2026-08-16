@@ -14,7 +14,7 @@ from urllib.request import Request as UrlRequest, urlopen
 
 import docker
 from docker.errors import APIError, DockerException, NotFound
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadSignature, URLSafeSerializer
@@ -283,7 +283,7 @@ def mem_values(stats: dict) -> tuple[int, int, float]:
     return actual, limit, pct
 
 
-def collect_container(container) -> dict:
+def collect_container(container, include_stats: bool = True) -> dict:
     attrs = container.attrs
     state = attrs.get("State", {})
     ports = attrs.get("NetworkSettings", {}).get("Ports", {}) or {}
@@ -297,7 +297,7 @@ def collect_container(container) -> dict:
             published_ports.append({"internal": internal, "host_ip": host_ip, "host_port": host_port})
 
     cpu = mem_used = mem_limit = mem_pct = 0
-    if state.get("Running"):
+    if include_stats and state.get("Running"):
         try:
             stats = container.stats(stream=False, one_shot=True)
             cpu = cpu_percent(stats)
@@ -446,7 +446,7 @@ def host_metrics(info: dict) -> dict:
         },
         "cpu": cpu_usage(),
         "memory": read_meminfo(),
-        "appdata_disk": disk_usage(DATA_DIR),
+        "data_mount": disk_usage(DATA_DIR),
     }
 
 
@@ -506,7 +506,12 @@ def index(request: Request):
 
 
 @app.get("/api/overview")
-def overview(request: Request):
+def overview(
+    request: Request,
+    include_containers: bool = Query(True),
+    include_stats: bool = Query(True),
+    include_metrics: bool = Query(True),
+):
     require_auth(request)
     client = docker_client()
     try:
@@ -514,27 +519,27 @@ def overview(request: Request):
         version = client.version()
         containers = client.containers.list(all=True)
         results = []
-        workers = min(max(len(containers), 1), 16)
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(collect_container, c): c.id for c in containers}
-            for future in as_completed(futures):
-                try:
-                    results.append(future.result())
-                except Exception as exc:
-                    results.append({"id": futures[future], "name": "unknown", "status": "error", "error": str(exc)})
-        results.sort(key=lambda x: x.get("name", "").lower())
-        prefs = get_container_prefs()
-        for container in results:
-            pref = prefs.get(container.get("name"), {})
-            container["icon"] = pref.get("icon") or ""
-            container["group_name"] = pref.get("group_name") or ""
-            container["sort_order"] = pref.get("sort_order", 0)
+        if include_containers:
+            workers = min(max(len(containers), 1), 16)
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {pool.submit(collect_container, c, include_stats): c.id for c in containers}
+                for future in as_completed(futures):
+                    try:
+                        results.append(future.result())
+                    except Exception as exc:
+                        results.append({"id": futures[future], "name": "unknown", "status": "error", "error": str(exc)})
+            results.sort(key=lambda x: x.get("name", "").lower())
+            prefs = get_container_prefs()
+            for container in results:
+                pref = prefs.get(container.get("name"), {})
+                container["icon"] = pref.get("icon") or ""
+                container["group_name"] = pref.get("group_name") or ""
+                container["sort_order"] = pref.get("sort_order", 0)
 
-        running = sum(1 for c in results if c.get("status") == "running")
-        paused = sum(1 for c in results if c.get("status") == "paused")
-        stopped = len(results) - running - paused
-        metrics = host_metrics(info)
-        return {
+        running = sum(1 for c in containers if c.status == "running")
+        paused = sum(1 for c in containers if c.status == "paused")
+        stopped = len(containers) - running - paused
+        payload = {
             "server": {
                 "name": SERVER_NAME,
                 "docker_version": version.get("Version"),
@@ -544,17 +549,20 @@ def overview(request: Request):
                 "cpus": info.get("NCPU"),
                 "memory_total": info.get("MemTotal", 0),
                 "memory_total_human": fmt_bytes(info.get("MemTotal", 0)),
-                "containers_total": len(results),
+                "containers_total": len(containers),
                 "containers_running": running,
                 "containers_paused": paused,
                 "containers_stopped": stopped,
                 "images": info.get("Images"),
-                "metrics": metrics,
             },
-            "containers": results,
             "group_order": get_group_order(),
             "settings": get_settings(),
         }
+        if include_metrics:
+            payload["server"]["metrics"] = host_metrics(info)
+        if include_containers:
+            payload["containers"] = results
+        return payload
     except DockerException as exc:
         raise HTTPException(status_code=503, detail=f"Docker unavailable: {exc}") from exc
     finally:
