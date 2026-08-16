@@ -45,7 +45,13 @@ LAST_PROC_TOTAL: int | None = None
 PARTY_MODE_STOP = threading.Event()
 PARTY_MODE_THREAD: threading.Thread | None = None
 PARTY_MODE_DELAY = 1.75
-NORMAL_WHITE_KELVIN = 2700
+WHITE_MODE_KELVIN = {
+    "auto": 4000,
+    "warm": 2700,
+    "neutral": 4000,
+    "cold": 6500,
+    "cold_warm": 4000,
+}
 
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
@@ -125,6 +131,7 @@ class HomeAssistantColorPayload(BaseModel):
 class HomeAssistantPartyPayload(BaseModel):
     enabled: bool
     craziness: int = Field(default=5, ge=1, le=10)
+    white_mode: Literal["auto", "warm", "neutral", "cold", "cold_warm"] = "auto"
 
 
 def db() -> sqlite3.Connection:
@@ -1405,8 +1412,8 @@ def party_delay(craziness: int) -> float:
     return round(3.0 - (normalized * 2.75), 2)
 
 
-def clamp_color_temp(attrs: dict) -> int:
-    value = NORMAL_WHITE_KELVIN
+def clamp_color_temp(attrs: dict, white_mode: str) -> int:
+    value = WHITE_MODE_KELVIN.get(white_mode, WHITE_MODE_KELVIN["auto"])
     minimum = attrs.get("min_color_temp_kelvin")
     maximum = attrs.get("max_color_temp_kelvin")
     if isinstance(minimum, int):
@@ -1427,16 +1434,29 @@ def light_attributes(cfg: dict, entity_id: str) -> dict:
         return {}
 
 
-def restore_light_default(cfg: dict, entity_id: str) -> None:
+def white_channel_payload(white_mode: str, supported: set[str]) -> dict | None:
+    if "rgbww" in supported:
+        if white_mode == "warm":
+            return {"rgbww_color": [0, 0, 0, 0, 255]}
+        if white_mode == "cold":
+            return {"rgbww_color": [0, 0, 0, 255, 0]}
+        return {"rgbww_color": [0, 0, 0, 255, 255]}
+    if "rgbw" in supported:
+        return {"rgbw_color": [0, 0, 0, 255]}
+    return None
+
+
+def restore_light_default(cfg: dict, entity_id: str, white_mode: str) -> None:
     attrs = light_attributes(cfg, entity_id)
     supported = set(attrs.get("supported_color_modes") or [])
     payload = {"entity_id": entity_id, "brightness": 255, "transition": 0}
-    if "color_temp" in supported:
-        payload["color_temp_kelvin"] = clamp_color_temp(attrs)
-    elif "rgbww" in supported:
-        payload["rgbww_color"] = [0, 0, 0, 0, 255]
-    elif "rgbw" in supported:
-        payload["rgbw_color"] = [0, 0, 0, 255]
+    channel_payload = white_channel_payload(white_mode, supported)
+    if white_mode in {"warm", "cold", "cold_warm"} and channel_payload:
+        payload.update(channel_payload)
+    elif "color_temp" in supported:
+        payload["color_temp_kelvin"] = clamp_color_temp(attrs, white_mode)
+    elif channel_payload:
+        payload.update(channel_payload)
     try:
         home_assistant_service(cfg, "light", "turn_on", payload)
     except Exception:
@@ -1504,7 +1524,7 @@ def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
     lights = light_entities(cfg)
     for entity_id in lights:
         try:
-            restore_light_default(cfg, entity_id)
+            restore_light_default(cfg, entity_id, payload.white_mode)
         except Exception:
             pass
     time.sleep(0.35)

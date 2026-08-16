@@ -134,6 +134,7 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .ha-party-pill .mini-link.active { background:rgba(81,216,138,.12); }
 .ha-party-pill label { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:10px; padding-right:6px; }
 .ha-party-pill input { width:56px; padding:0; accent-color:var(--accent2); }
+.ha-party-pill select { width:76px; min-height:26px; padding:2px 6px; border-radius:999px; font-size:11px; background:rgba(255,255,255,.04); color:var(--text); border:1px solid var(--border); outline:none; }
 .ha-party-pill strong { min-width:10px; color:var(--text); font-size:11px; text-align:right; }
 .integration-notice,.soft-empty { color:var(--muted); border:1px dashed var(--border); border-radius:10px; padding:10px; font-size:12px; }
 .integration-notice { margin-bottom:10px; }

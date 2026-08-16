@@ -243,6 +243,15 @@ function partyCraziness() {
   return Math.max(1, Math.min(10, Number(localStorage.getItem('haPartyCraziness') || 5)));
 }
 
+function partyWhiteMode() {
+  const value = localStorage.getItem('haPartyWhiteMode') || 'auto';
+  return ['auto', 'warm', 'neutral', 'cold', 'cold_warm'].includes(value) ? value : 'auto';
+}
+
+function partyPayload(enabled) {
+  return { enabled, craziness: partyCraziness(), white_mode: partyWhiteMode() };
+}
+
 function addMetricHistory(cpuPercent, memoryPercent) {
   const now = Date.now();
   if (Number.isFinite(cpuPercent)) metricHistory.cpu.push({ time: now, value: cpuPercent });
@@ -407,12 +416,20 @@ function renderHomeAssistantCard(home = {}) {
   const sensors = entities.filter(entity => entity.domain !== 'light');
   const partyOn = localStorage.getItem('haPartyMode') === 'true';
   const craziness = partyCraziness();
+  const whiteMode = partyWhiteMode();
   return `<article class="integration-card integration-home">
     <div class="integration-card-head">
       <div><span class="server-card-label">${cardIcon('home')}Home Assistant</span><strong>${entities.length ? `${entities.length} entities` : 'Not connected'}</strong></div>
       ${lights.length ? `<div class="ha-party-pill">
         <button class="mini-link ${partyOn ? 'active' : ''}" type="button" data-action="ha-party">${partyOn ? 'Party on' : 'Party'}</button>
         <label title="Party speed"><span>Speed</span><input type="range" min="1" max="10" value="${craziness}" data-action="ha-craziness"><strong data-party-speed-label>${craziness}</strong></label>
+        <label title="Party-off white mode"><span>White</span><select data-action="ha-white-mode">
+          <option value="auto" ${whiteMode === 'auto' ? 'selected' : ''}>Auto</option>
+          <option value="warm" ${whiteMode === 'warm' ? 'selected' : ''}>Warm</option>
+          <option value="neutral" ${whiteMode === 'neutral' ? 'selected' : ''}>Neutral</option>
+          <option value="cold" ${whiteMode === 'cold' ? 'selected' : ''}>Cold</option>
+          <option value="cold_warm" ${whiteMode === 'cold_warm' ? 'selected' : ''}>C+W</option>
+        </select></label>
       </div>` : ''}
     </div>
     ${integrationNotice(home)}
@@ -497,7 +514,7 @@ function queueHomeAssistantColor(entityId, color) {
 async function togglePartyMode() {
   const next = localStorage.getItem('haPartyMode') !== 'true';
   try {
-    await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify({ enabled: next, craziness: partyCraziness() }) });
+    await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify(partyPayload(next)) });
     localStorage.setItem('haPartyMode', String(next));
     renderIntegrations();
     toast(next ? 'Party mode on' : 'Party mode off');
@@ -513,9 +530,18 @@ async function updatePartyCraziness(value) {
   clearTimeout(partySpeedTimer);
   partySpeedTimer = setTimeout(async () => {
     try {
-      await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify({ enabled: true, craziness }) });
+      await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify(partyPayload(true)) });
     } catch (e) { toast(e.message); }
   }, 300);
+}
+
+async function updatePartyWhiteMode(value) {
+  const whiteMode = ['auto', 'warm', 'neutral', 'cold', 'cold_warm'].includes(value) ? value : 'auto';
+  localStorage.setItem('haPartyWhiteMode', whiteMode);
+  if (localStorage.getItem('haPartyMode') !== 'true') return;
+  try {
+    await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify(partyPayload(true)) });
+  } catch (e) { toast(e.message); }
 }
 
 function fillIntegrationSettingsForm(data) {
@@ -1320,7 +1346,7 @@ $('integrationsPanelBody').addEventListener('click', event => {
   else toggleHomeAssistantEntity(button.dataset.entity);
 });
 $('integrationsPanelBody').addEventListener('pointerdown', event => {
-  if (event.target.closest('[data-action="ha-color"], [data-action="ha-craziness"]')) holdIntegrationControls();
+  if (event.target.closest('[data-action="ha-color"], [data-action="ha-craziness"], [data-action="ha-white-mode"]')) holdIntegrationControls();
 });
 $('integrationsPanelBody').addEventListener('focusin', event => {
   if (event.target.closest('input,button,select,textarea')) holdIntegrationControls();
@@ -1341,6 +1367,12 @@ $('integrationsPanelBody').addEventListener('input', event => {
   }
 });
 $('integrationsPanelBody').addEventListener('change', event => {
+  const whiteMode = event.target.closest('[data-action="ha-white-mode"]');
+  if (whiteMode) {
+    holdIntegrationControls();
+    updatePartyWhiteMode(whiteMode.value);
+    return;
+  }
   const input = event.target.closest('[data-action="ha-color"]');
   if (!input) return;
   queueHomeAssistantColor(input.dataset.entity, input.value);
