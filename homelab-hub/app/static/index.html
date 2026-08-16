@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ settings.title }}</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <aside class="sidebar">
-    <div class="brand"><div class="brand-mark small">H</div><span id="brandTitle">{{ settings.title }}</span></div>
+    <div class="brand"><div class="brand-mark small"><img src="/static/favicon.svg" alt=""></div><span id="brandTitle">{{ settings.title }}</span></div>
     <nav>
-      <button class="nav-item active" data-view="dashboard"><span>◫</span> Overview</button>
-      <button class="nav-item" data-view="docker"><span>⬡</span> Docker</button>
-      <button class="nav-item" data-view="settings"><span>⚙</span> Settings</button>
-      <button class="nav-item" data-view="connectors"><span>◌</span> Connectors</button>
+      <button class="nav-item active" data-view="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4zM14 15h6v4h-6z"/></svg></span> Overview</button>
+      <button class="nav-item" data-view="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/><path d="m19 12 .9-2-2-3.4-2.2.3-1.7-1L13.1 4H9l-.9 1.9-1.7 1-2.2-.3-2 3.4.9 2-.9 2 2 3.4 2.2-.3 1.7 1L9 20h4.1l.9-1.9 1.7-1 2.2.3 2-3.4z"/></svg></span> Settings</button>
+      <button class="nav-item" data-view="connectors"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 7h4v4H7zM13 13h4v4h-4z"/><path d="M11 9h2a2 2 0 0 1 2 2v2M7 11v2a4 4 0 0 0 4 4h2"/></svg></span> Connectors</button>
     </nav>
     <div class="sidebar-bottom">
       <div class="server-pill"><span class="dot"></span><div><strong>{{ server_name }}</strong><small id="dockerVersion">Connecting…</small></div></div>
@@ -37,7 +37,7 @@
           <div class="panel-head section-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="server" aria-expanded="true">
               <span id="serverFoldIcon">▾</span>
-              <span><strong>Server metrics</strong><small>CPU trend, memory trend, and shared data mount</small></span>
+              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M7 3h10v18H7z"/><path d="M9 7h6M9 11h6M9 15h6"/></svg></span><span><strong>Server metrics</strong><small>CPU, memory, network, and top host users</small></span></span>
             </button>
             <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="server" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="server" aria-label="Move section down">▿</button></span>
           </div>
@@ -52,7 +52,7 @@
           <div class="panel-head section-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="integrations" aria-expanded="true">
               <span id="integrationsFoldIcon">▾</span>
-              <span><strong>Live integrations</strong><small>Jellyfin streams, agenda, and Home Assistant</small></span>
+              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/></svg></span><span><strong>Live integrations</strong><small>Jellyfin streams, agenda, and Home Assistant</small></span></span>
             </button>
             <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="integrations" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="integrations" aria-label="Move section down">▿</button></span>
           </div>
@@ -65,7 +65,7 @@
           <div class="panel-head section-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="webui" aria-expanded="true">
               <span id="webuiFoldIcon">▾</span>
-              <span><strong>WebUI links</strong><small>Published TCP ports opened as browser shortcuts</small></span>
+              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M5 6h14v12H5z"/><path d="M5 10h14"/></svg></span><span><strong>WebUI links</strong><small>Published TCP ports opened as browser shortcuts</small></span></span>
             </button>
             <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="webui" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="webui" aria-label="Move section down">▿</button></span>
           </div>
@@ -78,7 +78,7 @@
           <div class="panel-head section-head split-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="ports" aria-expanded="true">
               <span id="portsFoldIcon">▾</span>
-              <span><strong>Ports</strong><small>Published Docker ports and available ranges</small></span>
+              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M6 8h12M6 16h12"/><path d="M8 6v4M16 14v4"/></svg></span><span><strong>Ports</strong><small>Published Docker ports and available ranges</small></span></span>
             </button>
             <div class="head-actions">
               <input id="portSearch" class="search" placeholder="Search port, range, container…">
@@ -102,7 +102,7 @@
           <div class="panel-head section-head split-head">
             <button id="containersFoldBtn" class="section-toggle" type="button" data-action="toggle-section" data-section="containers" aria-expanded="true">
               <span id="containersFoldIcon">▾</span>
-              <span><strong>Containers</strong><small>Monitoring state, resources, ports, and image</small></span>
+              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M7 7V5h10v2M8 17v2M16 17v2"/></svg></span><span><strong>Containers</strong><small>Monitoring state, resources, ports, and image</small></span></span>
             </button>
             <div class="head-actions">
               <input id="containerSearch" class="search" placeholder="Search name, ID, port, image, status…">
@@ -116,13 +116,6 @@
             </table>
           </div>
         </section>
-      </div>
-    </section>
-
-    <section id="dockerView" class="view">
-      <div class="panel">
-        <div class="panel-head"><div><h2>Docker host</h2><p class="muted">Engine details</p></div></div>
-        <div id="dockerDetails" class="details-grid"></div>
       </div>
     </section>
 

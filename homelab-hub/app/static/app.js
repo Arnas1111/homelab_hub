@@ -13,7 +13,7 @@ let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSectio
 if (localStorage.getItem('containersSectionCollapsed') === 'true') collapsedSections.add('containers');
 let sectionOrder = JSON.parse(localStorage.getItem('overviewSectionOrder') || '[]').filter(id => DEFAULT_SECTION_ORDER.includes(id));
 sectionOrder = [...sectionOrder, ...DEFAULT_SECTION_ORDER.filter(id => !sectionOrder.includes(id))];
-let metricHistory = JSON.parse(localStorage.getItem('metricHistory') || '{"cpu":[],"memory":[]}');
+let metricHistory = JSON.parse(localStorage.getItem('metricHistory') || '{"cpu":[],"memory":[],"network":[]}');
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_CONTAINER_ICON = 'docker';
@@ -141,11 +141,21 @@ function metricBar(label, value, detail = '') {
   </div>`;
 }
 
+function trafficBar(label, rate, detail = '') {
+  const mb = Number(rate || 0) / 1024 / 1024;
+  const width = Math.min(mb * 10, 100);
+  return `<div class="server-bar">
+    <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(bytes(rate))}/s</strong></div>
+    <div class="meter wide"><i style="width:${width}%"></i></div>
+    ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+  </div>`;
+}
+
 function addMetricHistory(cpuPercent, memoryPercent) {
   const now = Date.now();
   if (Number.isFinite(cpuPercent)) metricHistory.cpu.push({ time: now, value: cpuPercent });
   if (Number.isFinite(memoryPercent)) metricHistory.memory.push({ time: now, value: memoryPercent });
-  for (const key of ['cpu', 'memory']) {
+  for (const key of ['cpu', 'memory', 'network']) {
     metricHistory[key] = (metricHistory[key] || []).slice(-80);
   }
   localStorage.setItem('metricHistory', JSON.stringify(metricHistory));
@@ -172,8 +182,14 @@ function renderServerMetrics(s) {
   const cpu = metrics.cpu || {};
   const memory = metrics.memory || {};
   const disk = metrics.data_mount || metrics.appdata_disk || {};
+  const network = metrics.network || {};
+  const top = metrics.top_processes || {};
   const cores = (cpu.cores || []).slice(0, 16);
   addMetricHistory(Number(cpu.total_percent), Number(memory.percent));
+  const networkRate = Number(network.rx_rate || 0) + Number(network.tx_rate || 0);
+  metricHistory.network.push({ time: Date.now(), value: Math.min(networkRate / 1024 / 1024, 100) });
+  metricHistory.network = metricHistory.network.slice(-80);
+  localStorage.setItem('metricHistory', JSON.stringify(metricHistory));
   $('serverMetrics').innerHTML = `
     <article class="server-card cpu-card">
       <span class="server-card-label">Processor</span>
@@ -195,7 +211,27 @@ function renderServerMetrics(s) {
       ${metricBar('Used capacity', disk.percent, `${disk.free_human || '–'} free / ${disk.total_human || '–'} total`)}
       <small class="metric-note">Shared Unraid mount capacity, not appdata folder size</small>
     </article>
+    <article class="server-card">
+      <span class="server-card-label">Network</span>
+      <strong>${escapeHtml(network.rx_rate_human || '0 B/s')} ↓</strong>
+      ${sparkline(metricHistory.network, 'Recent network throughput')}
+      ${trafficBar('Receive', network.rx_rate, network.rx_human ? `${network.rx_human} total` : '')}
+      ${trafficBar('Transmit', network.tx_rate, network.tx_human ? `${network.tx_human} total` : '')}
+    </article>
+    <article class="server-card">
+      <span class="server-card-label">Top host users</span>
+      <strong>CPU / Memory</strong>
+      ${topList('CPU', top.cpu || [], 'cpu_percent')}
+      ${topList('Memory', top.memory || [], 'memory_percent')}
+      <small class="metric-note">Host processes, not only Docker containers.</small>
+    </article>
   `;
+}
+
+function topList(label, rows, key) {
+  return `<div class="top-list"><span>${escapeHtml(label)}</span>${rows.slice(0, 3).map(row => `
+    <div class="top-row"><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.user)} · ${key === 'cpu_percent' ? percent(row.cpu_percent) : `${percent(row.memory_percent)} · ${row.memory_human}`}</small></div>
+  `).join('') || '<small class="muted">No process data</small>'}</div>`;
 }
 
 function ticksProgress(position, runtime) {
@@ -788,9 +824,6 @@ function render(data) {
   const s = currentData.server;
   $('dockerVersion').textContent = `Docker ${s.docker_version || 'unknown'}`;
   $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
-  $('dockerDetails').innerHTML = [
-    ['Server', s.name], ['Operating system', s.os], ['Kernel', s.kernel], ['Docker Engine', s.docker_version], ['Docker API', s.api_version], ['CPU cores', s.cpus], ['CPU usage', percent(s.metrics?.cpu?.total_percent)], ['Host memory', s.metrics?.memory?.total_human || s.memory_total_human], ['Containers', s.containers_total], ['Images', s.images]
-  ].map(([k,v]) => `<div class="detail"><span>${k}</span><strong>${escapeHtml(String(v ?? '—'))}</strong></div>`).join('');
   $('settingTitle').value = settings.title;
   $('settingRefresh').value = settings.refresh_seconds;
   $('topRefreshSeconds').value = settings.refresh_seconds;
@@ -1151,7 +1184,6 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     document.querySelectorAll('.view').forEach(x => x.classList.remove('active')); $(`${btn.dataset.view}View`).classList.add('active');
     const names = {
       dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],
-      docker:['Docker','Docker Engine information'],
       settings:['Settings','Configure this hub'],
       connectors:['Connectors','Configure Jellyfin, Nextcloud, and Home Assistant'],
     };

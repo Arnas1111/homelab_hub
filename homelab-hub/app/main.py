@@ -1,5 +1,6 @@
 import json
 import os
+import pwd
 import re
 import secrets
 import shutil
@@ -32,6 +33,11 @@ DASHBOARD_ICON_CDN = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/sv
 ICON_RE = re.compile(r"^[a-z0-9-]{1,90}$")
 CPU_SAMPLE_LOCK = threading.Lock()
 LAST_CPU_SAMPLE: dict[str, tuple[int, int]] | None = None
+NETWORK_SAMPLE_LOCK = threading.Lock()
+LAST_NETWORK_SAMPLE: tuple[float, int, int] | None = None
+PROC_SAMPLE_LOCK = threading.Lock()
+LAST_PROC_SAMPLE: dict[str, tuple[int, int]] | None = None
+LAST_PROC_TOTAL: int | None = None
 
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
@@ -538,11 +544,117 @@ def disk_usage(path: Path) -> dict:
     }
 
 
+def network_usage() -> dict:
+    rx = tx = 0
+    try:
+        with Path("/proc/net/dev").open("r", encoding="utf-8") as handle:
+            for line in handle.readlines()[2:]:
+                name, raw = line.split(":", 1)
+                iface = name.strip()
+                if iface == "lo":
+                    continue
+                parts = raw.split()
+                rx += int(parts[0])
+                tx += int(parts[8])
+    except (OSError, ValueError, IndexError):
+        return {}
+
+    global LAST_NETWORK_SAMPLE
+    now = time.time()
+    with NETWORK_SAMPLE_LOCK:
+        previous = LAST_NETWORK_SAMPLE
+        LAST_NETWORK_SAMPLE = (now, rx, tx)
+
+    rx_rate = tx_rate = 0
+    if previous:
+        then, prev_rx, prev_tx = previous
+        elapsed = max(now - then, 0.001)
+        rx_rate = max(int((rx - prev_rx) / elapsed), 0)
+        tx_rate = max(int((tx - prev_tx) / elapsed), 0)
+
+    return {
+        "rx": rx,
+        "tx": tx,
+        "rx_human": fmt_bytes(rx),
+        "tx_human": fmt_bytes(tx),
+        "rx_rate": rx_rate,
+        "tx_rate": tx_rate,
+        "rx_rate_human": f"{fmt_bytes(rx_rate)}/s",
+        "tx_rate_human": f"{fmt_bytes(tx_rate)}/s",
+    }
+
+
+def process_rows(memory_total: int) -> tuple[int, dict[str, tuple[int, int]], list[dict]]:
+    sample: dict[str, tuple[int, int]] = {}
+    rows = []
+    cpu_sample = read_cpu_sample()
+    total_cpu = cpu_sample.get("cpu", (0, 0))[0]
+    page_size = os.sysconf("SC_PAGE_SIZE")
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            stat = (proc / "stat").read_text(encoding="utf-8")
+            status = (proc / "status").read_text(encoding="utf-8")
+            end = stat.rfind(")")
+            name = stat[stat.find("(") + 1 : end]
+            parts = stat[end + 2 :].split()
+            utime = int(parts[11])
+            stime = int(parts[12])
+            start_time = int(parts[19])
+            rss_pages = int(parts[21])
+            uid = "0"
+            for line in status.splitlines():
+                if line.startswith("Uid:"):
+                    uid = line.split()[1]
+                    break
+            user = pwd.getpwuid(int(uid)).pw_name
+        except (OSError, ValueError, KeyError, IndexError):
+            continue
+        key = f"{proc.name}:{start_time}"
+        cpu_ticks = utime + stime
+        sample[key] = (cpu_ticks, start_time)
+        rss = max(rss_pages, 0) * page_size
+        rows.append(
+            {
+                "key": key,
+                "name": name[:42],
+                "user": user[:32],
+                "cpu_ticks": cpu_ticks,
+                "memory_percent": pct(rss, memory_total),
+                "memory_human": fmt_bytes(rss),
+            }
+        )
+    return total_cpu, sample, rows
+
+
+def top_processes() -> dict:
+    global LAST_PROC_SAMPLE, LAST_PROC_TOTAL
+    memory_total = read_meminfo().get("total", 0)
+    total_cpu, sample, rows = process_rows(memory_total)
+    with PROC_SAMPLE_LOCK:
+        previous = LAST_PROC_SAMPLE
+        previous_total = LAST_PROC_TOTAL
+        LAST_PROC_SAMPLE = sample
+        LAST_PROC_TOTAL = total_cpu
+
+    total_delta = total_cpu - previous_total if previous_total else 0
+    for row in rows:
+        previous_ticks = previous.get(row["key"], (row["cpu_ticks"], 0))[0] if previous else row["cpu_ticks"]
+        row["cpu_percent"] = round(pct(max(row["cpu_ticks"] - previous_ticks, 0), total_delta), 1)
+    return {
+        "cpu": sorted(rows, key=lambda row: row["cpu_percent"], reverse=True)[:5],
+        "memory": sorted(rows, key=lambda row: row["memory_percent"], reverse=True)[:5],
+    }
+
+
 def host_metrics(info: dict) -> dict:
     return {
         "cpu": cpu_usage(),
         "memory": read_meminfo(),
         "data_mount": disk_usage(DATA_DIR),
+        "network": network_usage(),
+        "top_processes": top_processes(),
     }
 
 
@@ -871,15 +983,34 @@ def calendar_events(cfg: dict) -> dict:
 
 
 def home_assistant_state(cfg: dict) -> dict:
+    base_configured = bool(cfg["home_assistant_url"] and cfg["home_assistant_token"])
     result = {
-        "configured": bool(cfg["home_assistant_url"] and cfg["home_assistant_token"] and cfg["home_assistant_entities"]),
+        "configured": base_configured,
         "entities": [],
     }
-    if not result["configured"]:
-        result["message"] = "Configure the Home Assistant URL, token, and entities in Connectors."
+    if not base_configured:
+        result["message"] = "Configure the Home Assistant URL and token in Connectors."
         return result
     headers = {"Authorization": f"Bearer {cfg['home_assistant_token']}"}
-    for entity_id in cfg["home_assistant_entities"][:24]:
+    entity_ids = cfg["home_assistant_entities"][:48]
+    if not entity_ids:
+        try:
+            states = http_json(f"{cfg['home_assistant_url']}/api/states", headers=headers)
+            domains = {"light", "switch", "sensor", "binary_sensor", "climate", "cover", "fan"}
+            entity_ids = [
+                item.get("entity_id", "")
+                for item in (states if isinstance(states, list) else [])
+                if isinstance(item, dict)
+                if item.get("entity_id", "").split(".", 1)[0] in domains
+            ][:60]
+            result["discovered"] = True
+        except HTTPError as exc:
+            result["error"] = f"Home Assistant returned HTTP {exc.code}."
+            return result
+        except (OSError, URLError, ValueError) as exc:
+            result["error"] = f"Could not query Home Assistant entities: {exc}"
+            return result
+    for entity_id in entity_ids:
         try:
             state = http_json(f"{cfg['home_assistant_url']}/api/states/{entity_id}", headers=headers)
             attrs = state.get("attributes", {}) if isinstance(state, dict) else {}
