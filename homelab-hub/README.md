@@ -51,25 +51,39 @@ Set at least:
 - **Admin Password** – password for the Hub WebUI.
 - **Session Secret** – a long random value. Generate one in the Unraid terminal with `openssl rand -hex 32`.
 - **Server Name** – optional display name, e.g. `Tower`.
-- **WebUI Port** – defaults to `8088`.
+- **Network Type** – use `docker-internal` if it is a user-defined internal Docker bridge network.
+- **WebUI Port** – defaults to `3333`. This is the host/LAN port; the container target stays `8080`.
 
 Then click **Apply**.
 
 Open:
 
 ```text
-http://YOUR-UNRAID-IP:8088
+http://YOUR-UNRAID-IP:3333
 ```
 
 ### Template mappings
 
 ```text
-Host 8088                   -> Container 8080
+Host 3333                   -> Container 8080
 /mnt/user/appdata/homelab-hub -> /data
 /var/run/docker.sock        -> /var/run/docker.sock (rw)
 ```
 
 The Docker socket is intentionally read/write because Homelab Hub needs Docker Engine write access for Start/Stop/Restart/Pause actions.
+
+### Network isolation
+
+If you want Homelab Hub reachable as `http://UNRAID-IP:3333` but unable to initiate outbound internet traffic, attach it to a user-defined internal Docker bridge network such as `docker-internal`.
+
+Do not use a `br0`/macvlan/ipvlan network with a fixed container IP for this mode. That makes the container behave like a separate LAN device and the WebUI will be reached via the container's own IP instead of the Unraid host IP.
+
+The desired shape is:
+
+```text
+Browser -> Unraid IP:3333 -> published Docker port -> Homelab Hub container:8080
+Homelab Hub container -> no default outbound internet route
+```
 
 ## Updating this development build
 

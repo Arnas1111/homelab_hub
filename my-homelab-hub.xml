@@ -3,13 +3,13 @@
   <Name>Homelab-Hub</Name>
   <Repository>ghcr.io/arnas1111/homelab-hub:latest</Repository>
   <Registry>https://ghcr.io/arnas1111/homelab-hub</Registry>
-  <Network>bridge</Network>
+  <Network>docker-internal</Network>
   <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
   <Support/>
   <Project/>
-  <Overview>Self-hosted Homelab Hub for monitoring and controlling Docker containers on this Unraid server. Includes container state, health, CPU/RAM usage, logs, search, and start/stop/restart/pause controls.</Overview>
+  <Overview>Self-hosted Homelab Hub for monitoring and controlling Docker containers on this Unraid server. Designed to run on a user-defined internal Docker bridge network named docker-internal, while publishing only the WebUI port on the Unraid host.</Overview>
   <Category>Tools:</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL/>
@@ -20,9 +20,9 @@
   <DateInstalled/>
   <DonateText/>
   <DonateLink/>
-  <Requires>The image is published by GitHub Actions to ghcr.io/arnas1111/homelab-hub.</Requires>
+  <Requires>The image is published by GitHub Actions to ghcr.io/arnas1111/homelab-hub. For no outbound internet access, use a user-defined internal Docker bridge network named docker-internal, not a br0/macvlan network with its own container IP.</Requires>
 
-  <Config Name="WebUI Port" Target="8080" Default="8088" Mode="tcp" Description="Port used to access Homelab Hub from your LAN." Type="Port" Display="always" Required="true" Mask="false">8088</Config>
+  <Config Name="WebUI Port" Target="8080" Default="3333" Mode="tcp" Description="Host port used to access Homelab Hub from your LAN. The container target must remain 8080." Type="Port" Display="always" Required="true" Mask="false">3333</Config>
   <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/homelab-hub" Mode="rw" Description="Persistent database and Hub configuration." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/homelab-hub</Config>
   <Config Name="Docker Socket" Target="/var/run/docker.sock" Default="/var/run/docker.sock" Mode="rw" Description="Direct access to the Unraid Docker Engine. Read/write access is required for container controls." Type="Path" Display="always" Required="true" Mask="false">/var/run/docker.sock</Config>
   <Config Name="Admin Password" Target="HUB_ADMIN_PASSWORD" Default="" Mode="" Description="Password for the Homelab Hub WebUI." Type="Variable" Display="always" Required="true" Mask="true"></Config>
