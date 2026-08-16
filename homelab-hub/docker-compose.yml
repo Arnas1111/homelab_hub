@@ -1,0 +1,16 @@
+services:
+  homelab-hub:
+    build: .
+    container_name: homelab-hub
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    environment:
+      HUB_ADMIN_PASSWORD: "${HUB_ADMIN_PASSWORD:-}"
+      HUB_SESSION_SECRET: "${HUB_SESSION_SECRET:-}"
+      HUB_SERVER_NAME: "${HUB_SERVER_NAME:-Unraid}"
+      HUB_DATA_DIR: /data
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock

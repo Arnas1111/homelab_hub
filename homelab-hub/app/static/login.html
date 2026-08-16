@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Homelab Hub – Login</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <div class="brand-mark">H</div>
+    <h1>Homelab Hub</h1>
+    <p class="muted">Sign in to manage your infrastructure.</p>
+    {% if not password_configured %}
+      <div class="alert danger">HUB_ADMIN_PASSWORD is not configured. Set it on the container and restart.</div>
+    {% endif %}
+    <form method="post" action="/login" class="login-form">
+      <label>Password</label>
+      <input name="password" type="password" autocomplete="current-password" required autofocus>
+      <button class="btn primary" type="submit">Sign in</button>
+    </form>
+    <p class="tiny muted">The Docker socket grants administrative control over the Docker host. Keep this UI private.</p>
+  </main>
+</body>
+</html>

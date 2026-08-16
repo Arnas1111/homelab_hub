@@ -1,0 +1,116 @@
+# Homelab Hub – Docker/Unraid MVP
+
+A self-hosted web dashboard for managing Docker containers on an Unraid host.
+
+## Current features
+
+- Password-protected Web UI
+- Docker host overview
+- Container state, health, image and published ports
+- Per-container CPU and memory usage
+- Start / stop / restart / pause / unpause containers
+- Tail container logs
+- Search/filter containers
+- Settings stored in SQLite
+- Configurable dashboard title, refresh interval and confirmation prompts
+
+## Recommended deployment on Unraid: native XML template
+
+This project includes a normal Unraid Docker user template:
+
+```text
+unraid/my-homelab-hub.xml
+```
+
+The template pulls the published image:
+
+```text
+ghcr.io/arnas1111/homelab-hub:latest
+```
+
+GitHub Actions publishes that image automatically when changes are pushed to `main`.
+
+### 1. Install the Unraid template
+
+Copy or install this template in Unraid:
+
+```text
+unraid/my-homelab-hub.xml
+```
+
+### 2. Create the container through the normal Unraid WebUI
+
+Go to:
+
+```text
+Docker -> Add Container -> Template -> Homelab-Hub
+```
+
+Set at least:
+
+- **Admin Password** – password for the Hub WebUI.
+- **Session Secret** – a long random value. Generate one in the Unraid terminal with `openssl rand -hex 32`.
+- **Server Name** – optional display name, e.g. `Tower`.
+- **WebUI Port** – defaults to `8088`.
+
+Then click **Apply**.
+
+Open:
+
+```text
+http://YOUR-UNRAID-IP:8088
+```
+
+### Template mappings
+
+```text
+Host 8088                   -> Container 8080
+/mnt/user/appdata/homelab-hub -> /data
+/var/run/docker.sock        -> /var/run/docker.sock (rw)
+```
+
+The Docker socket is intentionally read/write because Homelab Hub needs Docker Engine write access for Start/Stop/Restart/Pause actions.
+
+## Updating this development build
+
+Push changes to `main`. After GitHub Actions publishes a new `latest` image, update/recreate the container in Unraid so it pulls the new image.
+
+If you ever want to build directly on Unraid instead, the local installer is still available:
+
+```bash
+./unraid-install.sh
+```
+
+## Docker Compose deployment (optional)
+
+Compose is still included for testing or deployment outside Unraid:
+
+1. Copy `.env.example` to `.env`.
+2. Set a strong `HUB_ADMIN_PASSWORD`.
+3. Set a long random `HUB_SESSION_SECRET`.
+4. Run:
+
+```bash
+docker compose up -d --build
+```
+
+## Security
+
+Mounting `/var/run/docker.sock` gives this application administrative control over Docker and effectively powerful control over the Docker host. Do not expose this dashboard directly to the public Internet. Put it behind a trusted reverse proxy/authentication layer if remote access is needed.
+
+The Unraid template stores configured environment values in Unraid's Docker template configuration, so treat the flash/config backup as sensitive when it contains passwords or secrets.
+
+## Planned next integrations
+
+- Unraid API connector (Unraid 7.2+) for array state, disks, shares and system information
+- VM management
+- Disk temperatures / SMART health
+- UPS data
+- Notifications / alerts
+- Service tiles that contain live information rather than simple bookmarks
+- Multiple servers / remote hosts
+- Role-based permissions
+- Authentik/OIDC login
+- Web terminal/exec with explicit permissions (optional)
+- Docker update status and image update actions
+- Compose stack grouping and stack controls

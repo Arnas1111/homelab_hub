@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ settings.title }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark small">H</div><span id="brandTitle">{{ settings.title }}</span></div>
+    <nav>
+      <button class="nav-item active" data-view="dashboard"><span>◫</span> Overview</button>
+      <button class="nav-item" data-view="docker"><span>⬡</span> Docker</button>
+      <button class="nav-item" data-view="settings"><span>⚙</span> Settings</button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="server-pill"><span class="dot"></span><div><strong>{{ server_name }}</strong><small id="dockerVersion">Connecting…</small></div></div>
+      <form method="post" action="/logout"><button class="nav-item logout" type="submit">Sign out</button></form>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><h1 id="pageTitle">Overview</h1><p id="pageSubtitle" class="muted">Live Docker status from {{ server_name }}</p></div>
+      <div class="top-actions"><span id="lastUpdated" class="muted tiny"></span><button id="refreshBtn" class="btn">Refresh</button></div>
+    </header>
+
+    <section id="dashboardView" class="view active">
+      <div class="metric-grid">
+        <article class="metric"><span class="metric-label">Containers</span><strong id="metricContainers">–</strong><small id="metricContainerDetail">Loading</small></article>
+        <article class="metric"><span class="metric-label">Host memory</span><strong id="metricMemory">–</strong><small id="metricMemoryDetail">–</small></article>
+        <article class="metric"><span class="metric-label">CPU cores</span><strong id="metricCpu">–</strong><small>Docker host</small></article>
+        <article class="metric"><span class="metric-label">Images</span><strong id="metricImages">–</strong><small>Local Docker images</small></article>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><div><h2>Containers</h2><p class="muted">Resource usage and current state</p></div><input id="containerSearch" class="search" placeholder="Search containers…"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th>Ports</th><th>Image</th><th></th></tr></thead>
+            <tbody id="containerRows"><tr><td colspan="7" class="empty">Connecting to Docker…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="dockerView" class="view">
+      <div class="panel">
+        <div class="panel-head"><div><h2>Docker host</h2><p class="muted">Engine details</p></div></div>
+        <div id="dockerDetails" class="details-grid"></div>
+      </div>
+    </section>
+
+    <section id="settingsView" class="view">
+      <div class="panel narrow">
+        <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div></div>
+        <form id="settingsForm" class="settings-form">
+          <label>Hub title<input id="settingTitle" maxlength="80" required></label>
+          <label>Refresh interval (seconds)<input id="settingRefresh" type="number" min="2" max="60" required></label>
+          <label class="check"><input id="settingConfirm" type="checkbox"><span>Confirm Docker actions before executing</span></label>
+          <div><button class="btn primary" type="submit">Save settings</button> <span id="settingsSaved" class="tiny muted"></span></div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><div><h2 id="modalTitle">Container</h2><p id="modalMeta" class="muted"></p></div><button id="modalClose" class="icon-btn">×</button></div>
+      <div class="container-actions" id="modalActions"></div>
+      <h3>Logs</h3>
+      <pre id="modalLogs" class="logs">Loading…</pre>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
