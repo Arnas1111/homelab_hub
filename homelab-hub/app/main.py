@@ -128,10 +128,14 @@ class HomeAssistantColorPayload(BaseModel):
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
 
 
+class HomeAssistantWhitePayload(BaseModel):
+    entity_id: str = Field(min_length=1, max_length=160)
+    mode: Literal["warm", "cold", "cold_warm"]
+
+
 class HomeAssistantPartyPayload(BaseModel):
     enabled: bool
     craziness: int = Field(default=5, ge=1, le=10)
-    white_mode: Literal["auto", "warm", "neutral", "cold", "cold_warm"] = "auto"
 
 
 def db() -> sqlite3.Connection:
@@ -1506,6 +1510,22 @@ def home_assistant_color(payload: HomeAssistantColorPayload, request: Request):
         raise HTTPException(status_code=502, detail=f"Could not reach Home Assistant: {exc}") from exc
 
 
+@app.post("/api/home-assistant/white")
+def home_assistant_white(payload: HomeAssistantWhitePayload, request: Request):
+    require_auth(request)
+    cfg = integration_config()
+    ensure_home_assistant(cfg)
+    if not payload.entity_id.startswith("light."):
+        raise HTTPException(status_code=400, detail="Only light entities can receive white channel commands from Homelab Hub.")
+    try:
+        restore_light_default(cfg, payload.entity_id, payload.mode)
+        return {"ok": True, "home_assistant": home_assistant_state(cfg)}
+    except HTTPError as exc:
+        raise HTTPException(status_code=exc.code, detail=f"Home Assistant returned HTTP {exc.code}.") from exc
+    except (OSError, URLError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Home Assistant: {exc}") from exc
+
+
 @app.post("/api/home-assistant/party")
 def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
     require_auth(request)
@@ -1524,7 +1544,7 @@ def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
     lights = light_entities(cfg)
     for entity_id in lights:
         try:
-            restore_light_default(cfg, entity_id, payload.white_mode)
+            restore_light_default(cfg, entity_id, "auto")
         except Exception:
             pass
     time.sleep(0.35)

@@ -117,8 +117,8 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .stream-state.paused { color:var(--yellow); background:rgba(243,201,105,.09); }
 .agenda-row { display:grid; grid-template-columns:92px minmax(0,1fr); gap:10px; padding:10px; }
 .agenda-row time { color:var(--accent2); font-size:11px; line-height:1.35; }
-.ha-lights { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); margin-bottom:10px; }
-.ha-light { display:grid; grid-template-columns:minmax(0,1fr) 34px; align-items:center; gap:8px; padding:8px; color:var(--text); }
+.ha-lights { grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); margin-bottom:10px; }
+.ha-light { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; padding:8px; color:var(--text); }
 .ha-light:hover { border-color:rgba(139,211,255,.42); }
 .ha-light.on { background:rgba(81,216,138,.08); border-color:rgba(81,216,138,.28); }
 .ha-light button { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:2px; color:var(--text); background:transparent; border:0; cursor:pointer; }
@@ -126,6 +126,10 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .ha-light strong { flex:0 0 auto; color:var(--muted); font-size:11px; text-transform:uppercase; }
 .ha-light.on strong { color:var(--green); }
 .ha-light input[type="color"] { width:32px; height:32px; padding:2px; border-radius:8px; cursor:pointer; }
+.ha-light-tools { display:inline-flex; align-items:center; gap:6px; }
+.ha-white-buttons { display:inline-flex; align-items:center; gap:3px; padding:3px; border:1px solid var(--border); border-radius:999px; background:rgba(255,255,255,.025); }
+.ha-white-buttons button { min-height:24px; display:inline-flex; align-items:center; justify-content:center; padding:2px 7px; color:var(--muted); border:0; border-radius:999px; font-size:10px; background:transparent; }
+.ha-white-buttons button:hover { color:var(--text); background:rgba(139,211,255,.1); }
 .sensor-grid { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
 .sensor-chip { padding:10px; }
 .sensor-chip strong { margin-top:4px; color:var(--text); }
@@ -134,7 +138,6 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .ha-party-pill .mini-link.active { background:rgba(81,216,138,.12); }
 .ha-party-pill label { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:10px; padding-right:6px; }
 .ha-party-pill input { width:56px; padding:0; accent-color:var(--accent2); }
-.ha-party-pill select { width:76px; min-height:26px; padding:2px 6px; border-radius:999px; font-size:11px; background:rgba(255,255,255,.04); color:var(--text); border:1px solid var(--border); outline:none; }
 .ha-party-pill strong { min-width:10px; color:var(--text); font-size:11px; text-align:right; }
 .integration-notice,.soft-empty { color:var(--muted); border:1px dashed var(--border); border-radius:10px; padding:10px; font-size:12px; }
 .integration-notice { margin-bottom:10px; }
