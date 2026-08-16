@@ -66,6 +66,21 @@ class OrderPayload(BaseModel):
     containers: dict[str, list[str]] = Field(default_factory=dict)
 
 
+class WebuiLinkPayload(BaseModel):
+    link_key: str = Field(min_length=1, max_length=160)
+    label: str = Field(min_length=1, max_length=80)
+    url: str = Field(min_length=1, max_length=500)
+    icon: str = Field(default="", max_length=90, pattern=r"^[a-z0-9-]*$")
+    container_name: str = Field(default="", max_length=120)
+    enabled: bool = True
+    sort_order: int = 0
+    source: Literal["auto", "manual"] = "manual"
+
+
+class WebuiLinksPayload(BaseModel):
+    links: list[WebuiLinkPayload] = Field(default_factory=list)
+
+
 def db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -100,6 +115,20 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS group_prefs (
                 group_name TEXT PRIMARY KEY,
                 sort_order INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS webui_links (
+                link_key TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                url TEXT NOT NULL,
+                icon TEXT NOT NULL DEFAULT '',
+                container_name TEXT NOT NULL DEFAULT '',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'manual'
             )
             """
         )
@@ -196,6 +225,53 @@ def save_order(payload: OrderPayload) -> dict:
     return {"ok": True}
 
 
+def get_webui_links() -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT link_key, label, url, icon, container_name, enabled, sort_order, source
+            FROM webui_links
+            ORDER BY sort_order, label
+            """
+        ).fetchall()
+    return [
+        {
+            "link_key": row["link_key"],
+            "label": row["label"],
+            "url": row["url"],
+            "icon": row["icon"],
+            "container_name": row["container_name"],
+            "enabled": bool(row["enabled"]),
+            "sort_order": row["sort_order"],
+            "source": row["source"],
+        }
+        for row in rows
+    ]
+
+
+def save_webui_links(payload: WebuiLinksPayload) -> dict:
+    with db() as conn:
+        conn.execute("DELETE FROM webui_links")
+        for index, link in enumerate(payload.links):
+            conn.execute(
+                """
+                INSERT INTO webui_links(link_key, label, url, icon, container_name, enabled, sort_order, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    link.link_key.strip(),
+                    link.label.strip(),
+                    link.url.strip(),
+                    link.icon.strip().lower(),
+                    link.container_name.strip(),
+                    1 if link.enabled else 0,
+                    link.sort_order if link.sort_order >= 0 else index,
+                    link.source,
+                ),
+            )
+    return {"links": get_webui_links()}
+
+
 def icon_slugs() -> list[str]:
     icons = set()
     for icon_dir in (BUNDLED_ICON_DIR, USER_ICON_DIR):
@@ -288,12 +364,17 @@ def collect_container(container, include_stats: bool = True) -> dict:
     state = attrs.get("State", {})
     ports = attrs.get("NetworkSettings", {}).get("Ports", {}) or {}
     published_ports = []
+    seen_ports = set()
     for internal, bindings in ports.items():
         if not bindings:
             continue
         for binding in bindings:
             host_ip = binding.get("HostIp", "")
             host_port = binding.get("HostPort", "")
+            port_key = (internal, host_port)
+            if port_key in seen_ports:
+                continue
+            seen_ports.add(port_key)
             published_ports.append({"internal": internal, "host_ip": host_ip, "host_port": host_port})
 
     cpu = mem_used = mem_limit = mem_pct = 0
@@ -557,6 +638,7 @@ def overview(
             },
             "group_order": get_group_order(),
             "settings": get_settings(),
+            "webui_links": get_webui_links(),
         }
         if include_metrics:
             payload["server"]["metrics"] = host_metrics(info)
@@ -591,6 +673,12 @@ def icon_download(payload: IconDownloadPayload, request: Request):
 def order_put(payload: OrderPayload, request: Request):
     require_auth(request)
     return save_order(payload)
+
+
+@app.put("/api/webui-links")
+def webui_links_put(payload: WebuiLinksPayload, request: Request):
+    require_auth(request)
+    return save_webui_links(payload)
 
 
 @app.put("/api/containers/{container_id}/prefs")

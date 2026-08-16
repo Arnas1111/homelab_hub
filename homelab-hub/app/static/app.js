@@ -13,6 +13,27 @@ sectionOrder = [...sectionOrder, ...DEFAULT_SECTION_ORDER.filter(id => !sectionO
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_CONTAINER_ICON = 'docker';
+const WEBUI_RULES = [
+  { terms: ['bazarr'], ports: ['6767'] },
+  { terms: ['ddns-updater'], ports: ['8000', '211'] },
+  { terms: ['goStatic', 'gostatic'], anyTcp: true },
+  { terms: ['homeassistant', 'home-assistant'], ports: ['8123'] },
+  { terms: ['homelab-hub'], ports: ['8080'] },
+  { terms: ['homepage'], ports: ['3000', '3015'] },
+  { terms: ['jellyfin'], ports: ['8096', '8920'] },
+  { terms: ['jellystat'], ports: ['3000'] },
+  { terms: ['lidarr'], ports: ['8686'] },
+  { terms: ['nextcloud-aio-apache'], ports: ['11000'] },
+  { terms: ['nextcloud-aio-mastercontainer'], ports: ['8080', '8443', '7282'] },
+  { terms: ['prowlarr'], ports: ['9696'] },
+  { terms: ['radarr'], ports: ['7878'] },
+  { terms: ['seerr', 'jellyseerr', 'overseerr'], ports: ['5055'] },
+  { terms: ['sonarr'], ports: ['8989'] },
+  { terms: ['traefik'], ports: ['8080'] },
+  { terms: ['uptimekuma', 'uptime-kuma', 'uptime kuma'], ports: ['3001'] },
+  { terms: ['vaultwarden'], ports: ['80', '8080'] },
+];
+const NON_WEBUI_TERMS = ['gluetun', 'postgres', 'mariadb', 'redis', 'nextcloud-aio-talk'];
 
 function bytes(v) {
   if (!v) return '0 B';
@@ -69,6 +90,10 @@ function sanitizeIcon(value) {
   return value.trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
+function safeKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9:/._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+
 function containerSearchText(c) {
   const portParts = (c.ports || []).flatMap(p => [p.host_ip, p.host_port, p.internal, `${p.host_port}:${p.internal}`]);
   return [
@@ -77,6 +102,7 @@ function containerSearchText(c) {
     c.name,
     c.image,
     c.status,
+    monitorStatus(c).label,
     c.health,
     c.project,
     c.service,
@@ -169,10 +195,10 @@ function toggleSection(section) {
 function applySectionOrder() {
   const parent = $('overviewSections');
   if (!parent) return;
-  for (const section of sectionOrder) {
+  sectionOrder.forEach((section, index) => {
     const el = document.querySelector(`[data-section="${section}"].dashboard-section`);
-    if (el) parent.appendChild(el);
-  }
+    if (el && parent.children[index] !== el) parent.insertBefore(el, parent.children[index] || null);
+  });
 }
 
 function moveSection(section, direction) {
@@ -290,29 +316,156 @@ async function persistOrder() {
   } catch (e) { toast(e.message); }
 }
 
-function webLinks(containers) {
+function containerIdentity(c) {
+  return `${c.name || ''} ${c.image || ''}`.toLowerCase().replace(/[_\s]+/g, '-');
+}
+
+function webuiRuleFor(c, p) {
+  const identity = containerIdentity(c);
+  if (NON_WEBUI_TERMS.some(term => identity.includes(term))) return null;
+  const [internalPort, protocol = 'tcp'] = String(p.internal || '').split('/');
+  if (protocol !== 'tcp' || !p.host_port) return null;
+  return WEBUI_RULES.find(rule => {
+    const nameMatch = rule.terms.some(term => identity.includes(term.toLowerCase().replace(/\s+/g, '-')));
+    return nameMatch && (rule.anyTcp || rule.ports.includes(String(internalPort)) || rule.ports.includes(String(p.host_port)));
+  }) || null;
+}
+
+function autoWebLinks(containers) {
   const links = [];
+  const seen = new Set();
   for (const c of containers || []) {
     for (const p of c.ports || []) {
       const [internalPort, protocol = 'tcp'] = String(p.internal || '').split('/');
-      if (protocol !== 'tcp' || !p.host_port) continue;
+      const rule = webuiRuleFor(c, p);
+      if (!rule) continue;
       const port = Number(p.host_port);
       const scheme = port === 443 || port === 8443 || Number(internalPort) === 443 ? 'https' : 'http';
-      links.push({ container: c, port, url: `${scheme}://${location.hostname}:${p.host_port}` });
+      const linkKey = `auto:${safeKey(c.name)}:${safeKey(p.host_port)}:${safeKey(p.internal)}`;
+      if (seen.has(linkKey)) continue;
+      seen.add(linkKey);
+      links.push({
+        link_key: linkKey,
+        label: c.name,
+        url: `${scheme}://${location.hostname}:${p.host_port}`,
+        icon: containerIcon(c),
+        container_name: c.name,
+        enabled: true,
+        source: 'auto',
+        sort_order: 999999,
+        port,
+      });
     }
   }
-  return links.sort((a, b) => a.container.name.localeCompare(b.container.name) || a.port - b.port);
+  return links.sort((a, b) => a.label.localeCompare(b.label) || a.port - b.port);
+}
+
+function storedWebLinks() {
+  return currentData?.webui_links || [];
+}
+
+function mergedWebLinks({ includeDisabled = false } = {}) {
+  const stored = storedWebLinks();
+  const overrides = new Map(stored.map(link => [link.link_key, link]));
+  const autos = autoWebLinks(currentData?.containers || []).map(link => ({ ...link, ...(overrides.get(link.link_key) || {}) }));
+  const manual = stored.filter(link => link.source === 'manual');
+  const autoKeys = new Set(autos.map(link => link.link_key));
+  const orphanOverrides = stored.filter(link => link.source === 'auto' && !autoKeys.has(link.link_key));
+  return [...autos, ...manual, ...orphanOverrides]
+    .filter(link => includeDisabled || link.enabled)
+    .sort((a, b) => sortValue(a.sort_order, a.label).localeCompare(sortValue(b.sort_order, b.label)));
+}
+
+async function saveWebuiLinks(links) {
+  const payload = links.map((link, index) => ({
+    link_key: link.link_key || `manual:${Date.now()}:${index}`,
+    label: link.label || 'WebUI',
+    url: link.url || '#',
+    icon: sanitizeIcon(link.icon || ''),
+    container_name: link.container_name || '',
+    enabled: link.enabled !== false,
+    sort_order: index,
+    source: link.source === 'auto' ? 'auto' : 'manual',
+  }));
+  const result = await api('/api/webui-links', { method: 'PUT', body: JSON.stringify({ links: payload }) });
+  currentData.webui_links = result.links || [];
+  renderWebLinks();
+}
+
+function webuiEditorRow(link) {
+  return `<form class="webui-edit-row" data-link-key="${escapeHtml(link.link_key)}">
+    <input name="label" value="${escapeHtml(link.label)}" maxlength="80" placeholder="Label">
+    <input name="url" value="${escapeHtml(link.url)}" maxlength="500" placeholder="http://server:port">
+    <input name="icon" value="${escapeHtml(link.icon || '')}" maxlength="90" placeholder="icon">
+    <button class="btn" type="submit">Save</button>
+    <button class="icon-btn small" type="button" data-action="webui-toggle" title="${link.enabled ? 'Hide link' : 'Show link'}">${link.enabled ? '×' : '+'}</button>
+    ${link.source === 'manual' ? '<button class="icon-btn small" type="button" data-action="webui-delete" title="Delete link">−</button>' : ''}
+  </form>`;
 }
 
 function renderWebLinks() {
-  const links = webLinks(currentData?.containers || []);
-  $('webuiPanelBody').innerHTML = links.length ? links.map(link => `
-    <a class="webui-pill" href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(link.url)}">
-      <span class="container-icon mini"><img src="${iconPath(containerIcon(link.container))}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')"></span>
-      <span>${escapeHtml(link.container.name)}</span>
-      <small>${escapeHtml(String(link.port))}</small>
-    </a>
-  `).join('') : '<div class="empty">No published TCP ports found.</div>';
+  const editorOpen = $('webuiPanelBody')?.querySelector('.webui-editor')?.open;
+  const visible = mergedWebLinks();
+  const editable = mergedWebLinks({ includeDisabled: true });
+  $('webuiPanelBody').innerHTML = `
+    <div class="webui-links">
+      ${visible.length ? visible.map(link => `
+        <a class="webui-pill" href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(link.url)}">
+          <span class="container-icon mini"><img src="${iconPath(link.icon || DEFAULT_CONTAINER_ICON)}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')"></span>
+          <span>${escapeHtml(link.label)}</span>
+        </a>
+      `).join('') : '<div class="empty compact-empty">No WebUI links enabled.</div>'}
+    </div>
+    <details class="webui-editor" ${editorOpen ? 'open' : ''}>
+      <summary>Manage links</summary>
+      <form id="webuiAddForm" class="webui-edit-row add">
+        <input name="label" maxlength="80" placeholder="Label">
+        <input name="url" maxlength="500" placeholder="http://server:port">
+        <input name="icon" maxlength="90" placeholder="icon">
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+      <div class="webui-edit-list">
+        ${editable.length ? editable.map(webuiEditorRow).join('') : '<div class="tiny muted">No discovered links yet.</div>'}
+      </div>
+    </details>
+  `;
+}
+
+function linkFromForm(form, existing = {}) {
+  const values = new FormData(form);
+  return {
+    ...existing,
+    link_key: existing.link_key || `manual:${Date.now()}`,
+    label: String(values.get('label') || '').trim(),
+    url: String(values.get('url') || '').trim(),
+    icon: sanitizeIcon(String(values.get('icon') || '')),
+    container_name: existing.container_name || '',
+    enabled: existing.enabled !== false,
+    source: existing.source || 'manual',
+  };
+}
+
+async function saveWebuiForm(form) {
+  const key = form.dataset.linkKey;
+  const links = mergedWebLinks({ includeDisabled: true });
+  const existing = links.find(link => link.link_key === key);
+  const updated = linkFromForm(form, existing);
+  if (!updated.label || !updated.url) return toast('WebUI link needs a label and URL.');
+  const next = existing
+    ? links.map(link => link.link_key === key ? updated : link)
+    : [...links, updated];
+  await saveWebuiLinks(next);
+}
+
+async function toggleWebuiLink(key) {
+  const links = mergedWebLinks({ includeDisabled: true });
+  const next = links.map(link => link.link_key === key ? { ...link, enabled: !link.enabled } : link);
+  await saveWebuiLinks(next);
+}
+
+async function deleteWebuiLink(key) {
+  const links = mergedWebLinks({ includeDisabled: true });
+  await saveWebuiLinks(links.filter(link => link.link_key !== key));
 }
 
 function portProtocol(port) {
@@ -447,7 +600,12 @@ function render(data) {
 }
 
 async function refresh() {
-  try { render(await api(`/api/overview?${overviewQuery()}`)); }
+  const preserveScroll = ['containerSearch', 'portSearch'].includes(document.activeElement?.id);
+  const scrollY = window.scrollY;
+  try {
+    render(await api(`/api/overview?${overviewQuery()}`));
+    if (preserveScroll) requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0 }));
+  }
   catch (e) { $('containerRows').innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(e.message)}</td></tr>`; toast(e.message); }
 }
 
@@ -687,6 +845,24 @@ $('dashboardIconGrid').addEventListener('click', event => {
 });
 $('iconDownloadBtn').addEventListener('click', downloadIcon);
 $('refreshBtn').addEventListener('click', refresh);
+$('webuiPanelBody').addEventListener('submit', async event => {
+  const form = event.target.closest('.webui-edit-row');
+  if (!form) return;
+  event.preventDefault();
+  try { await saveWebuiForm(form); }
+  catch (e) { toast(e.message); }
+});
+$('webuiPanelBody').addEventListener('click', async event => {
+  const button = event.target.closest('[data-action="webui-toggle"], [data-action="webui-delete"]');
+  if (!button) return;
+  event.preventDefault();
+  const key = button.closest('.webui-edit-row')?.dataset.linkKey;
+  if (!key) return;
+  try {
+    if (button.dataset.action === 'webui-toggle') await toggleWebuiLink(key);
+    if (button.dataset.action === 'webui-delete') await deleteWebuiLink(key);
+  } catch (e) { toast(e.message); }
+});
 $('overviewSections').addEventListener('click', event => {
   const sectionButton = event.target.closest('[data-action^="section-"], [data-action="toggle-section"]');
   if (!sectionButton) return;
@@ -696,8 +872,8 @@ $('overviewSections').addEventListener('click', event => {
   if (sectionButton.dataset.action === 'section-up') moveSection(section, -1);
   if (sectionButton.dataset.action === 'section-down') moveSection(section, 1);
 });
-$('containerSearch').addEventListener('input', () => { renderContainers(); refresh(); });
-$('portSearch').addEventListener('input', () => { renderPorts(); refresh(); });
+$('containerSearch').addEventListener('input', renderContainers);
+$('portSearch').addEventListener('input', renderPorts);
 $('portProtocol').addEventListener('change', renderPorts);
 $('portMode').addEventListener('change', renderPorts);
 $('containerRows').addEventListener('click', event => {

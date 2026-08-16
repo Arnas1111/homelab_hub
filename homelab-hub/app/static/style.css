@@ -85,8 +85,16 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .webui-pill:hover { border-color:rgba(139,211,255,.42); background:rgba(139,211,255,.08); }
 .webui-pill span:not(.container-icon) { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .webui-pill small { color:var(--muted); font-size:11px; }
+.webui-editor { padding:0 18px 16px; }
+.webui-editor summary { color:var(--muted); cursor:pointer; font-size:12px; padding:2px 0 10px; }
+.webui-edit-list { display:grid; gap:8px; }
+.webui-edit-row { display:grid; grid-template-columns:minmax(120px,1fr) minmax(220px,2fr) minmax(90px,.6fr) auto auto auto; gap:8px; align-items:center; }
+.webui-edit-row.add { margin-bottom:10px; }
+.webui-edit-row input { min-width:0; }
+.icon-btn.small { width:34px; height:34px; display:grid; place-items:center; font-size:18px; border:1px solid var(--border); border-radius:9px; background:rgba(255,255,255,.025); }
 .container-icon.mini { width:28px; height:28px; border-radius:999px; }
 .container-icon.mini img { width:18px; height:18px; }
+.compact-empty { padding:8px 0; }
 .port-summary { display:flex; flex-wrap:wrap; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); }
 .port-summary span { padding:4px 9px; border-radius:999px; color:#c5ced8; background:rgba(255,255,255,.04); border:1px solid var(--border); font-size:11px; }
 .compact-table table { min-width:760px; }
@@ -185,4 +193,4 @@ tbody tr:hover { background:rgba(255,255,255,.015); }
 .alert { padding:10px 12px; border-radius:9px; font-size:12px; margin:14px 0; }.alert.danger { background:rgba(255,107,122,.09); color:#ff9aa5; border:1px solid rgba(255,107,122,.2); }
 @media(max-width:1200px){.server-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.server-card:nth-child(2){border-right:0}.server-card:nth-child(-n+2){border-bottom:1px solid var(--border)}}
 @media(max-width:1000px){.metric-grid{grid-template-columns:repeat(2,1fr)}.details-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:720px){.sidebar{position:static;width:auto;height:auto;flex-direction:row;align-items:center;overflow:auto}.sidebar nav{display:flex}.sidebar-bottom{display:none}.brand{margin:0 10px 0 0}.nav-item{white-space:nowrap}.main{margin-left:0;padding:20px}.metric-grid{grid-template-columns:1fr 1fr}.server-metrics{grid-template-columns:1fr}.server-card{border-right:0;border-bottom:1px solid var(--border)}.server-card:last-child{border-bottom:0}.core-grid{grid-template-columns:1fr}.topbar{align-items:flex-start}.top-actions{flex-direction:column;align-items:flex-end}.panel-head,.split-head{align-items:flex-start;flex-direction:column}.section-head{padding-bottom:14px}.section-toggle{width:100%;min-width:0}.head-actions{width:100%;flex-wrap:wrap;padding:0 18px}.split-head .search{width:100%}.search{width:100%}.prefs-form{grid-template-columns:1fr}.icon-library-actions{align-items:flex-start;flex-direction:column}.log-row{grid-template-columns:155px 52px minmax(0,1fr)}.modal{padding:12px}.modal-card{padding:14px}}
+@media(max-width:720px){.sidebar{position:static;width:auto;height:auto;flex-direction:row;align-items:center;overflow:auto}.sidebar nav{display:flex}.sidebar-bottom{display:none}.brand{margin:0 10px 0 0}.nav-item{white-space:nowrap}.main{margin-left:0;padding:20px}.metric-grid{grid-template-columns:1fr 1fr}.server-metrics{grid-template-columns:1fr}.server-card{border-right:0;border-bottom:1px solid var(--border)}.server-card:last-child{border-bottom:0}.core-grid{grid-template-columns:1fr}.topbar{align-items:flex-start}.top-actions{flex-direction:column;align-items:flex-end}.panel-head,.split-head{align-items:flex-start;flex-direction:column}.section-head{padding-bottom:14px}.section-toggle{width:100%;min-width:0}.head-actions{width:100%;flex-wrap:wrap;padding:0 18px}.split-head .search{width:100%}.search{width:100%}.webui-edit-row{grid-template-columns:1fr}.prefs-form{grid-template-columns:1fr}.icon-library-actions{align-items:flex-start;flex-direction:column}.log-row{grid-template-columns:155px 52px minmax(0,1fr)}.modal{padding:12px}.modal-card{padding:14px}}
