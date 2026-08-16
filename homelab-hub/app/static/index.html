@@ -34,9 +34,22 @@
         <article class="metric"><span class="metric-label">Images</span><strong id="metricImages">–</strong><small>Local Docker images</small></article>
       </div>
 
-      <div class="panel">
-        <div class="panel-head"><div><h2>Containers</h2><p class="muted">Resource usage and current state</p></div><input id="containerSearch" class="search" placeholder="Search containers…"></div>
-        <div class="table-wrap">
+      <section class="panel server-metrics-panel">
+        <div class="panel-head"><div><h2>Server metrics</h2><p class="muted">Host load, CPU, memory, and appdata storage</p></div></div>
+        <div id="serverMetrics" class="server-metrics">
+          <div class="empty">Waiting for host metrics…</div>
+        </div>
+      </section>
+
+      <div id="containersPanel" class="panel">
+        <div class="panel-head containers-head">
+          <button id="containersFoldBtn" class="section-toggle" type="button" aria-expanded="true">
+            <span id="containersFoldIcon">▾</span>
+            <span><strong>Containers</strong><small>Resource usage and current state</small></span>
+          </button>
+          <input id="containerSearch" class="search" placeholder="Search name, ID, port, image, status…">
+        </div>
+        <div id="containersPanelBody" class="table-wrap">
           <table>
             <thead><tr><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th>Ports</th><th>Image</th><th></th></tr></thead>
             <tbody id="containerRows"><tr><td colspan="7" class="empty">Connecting to Docker…</td></tr></tbody>

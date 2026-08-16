@@ -2,7 +2,9 @@ import json
 import os
 import re
 import secrets
+import shutil
 import sqlite3
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -27,6 +29,8 @@ BUNDLED_ICON_DIR = APP_DIR / "static" / "icons" / "dashboard"
 USER_ICON_DIR = DATA_DIR / "icons" / "dashboard"
 DASHBOARD_ICON_CDN = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg"
 ICON_RE = re.compile(r"^[a-z0-9-]{1,90}$")
+CPU_SAMPLE_LOCK = threading.Lock()
+LAST_CPU_SAMPLE: dict[str, tuple[int, int]] | None = None
 
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
@@ -332,6 +336,120 @@ def fmt_bytes(value: int) -> str:
     return f"{value} B"
 
 
+def pct(part: int | float, total: int | float) -> float:
+    if not total:
+        return 0.0
+    return round(min(max((part / total) * 100.0, 0.0), 100.0), 1)
+
+
+def read_meminfo() -> dict:
+    values: dict[str, int] = {}
+    try:
+        with Path("/proc/meminfo").open("r", encoding="utf-8") as handle:
+            for line in handle:
+                key, raw = line.split(":", 1)
+                values[key] = int(raw.strip().split()[0]) * 1024
+    except (OSError, ValueError):
+        return {}
+
+    total = values.get("MemTotal", 0)
+    available = values.get("MemAvailable", 0)
+    used = max(total - available, 0)
+    return {
+        "total": total,
+        "used": used,
+        "available": available,
+        "percent": pct(used, total),
+        "total_human": fmt_bytes(total),
+        "used_human": fmt_bytes(used),
+        "available_human": fmt_bytes(available),
+    }
+
+
+def read_cpu_sample() -> dict[str, tuple[int, int]]:
+    sample: dict[str, tuple[int, int]] = {}
+    try:
+        with Path("/proc/stat").open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.startswith("cpu"):
+                    break
+                parts = line.split()
+                name = parts[0]
+                if name != "cpu" and not name[3:].isdigit():
+                    continue
+                values = [int(value) for value in parts[1:]]
+                idle = values[3] + (values[4] if len(values) > 4 else 0)
+                total = sum(values)
+                sample[name] = (total, idle)
+    except (OSError, ValueError):
+        return {}
+    return sample
+
+
+def cpu_usage() -> dict:
+    global LAST_CPU_SAMPLE
+    sample = read_cpu_sample()
+    if not sample:
+        return {"total_percent": 0.0, "cores": []}
+
+    with CPU_SAMPLE_LOCK:
+        previous = LAST_CPU_SAMPLE
+        LAST_CPU_SAMPLE = sample
+
+    def usage_for(name: str) -> float:
+        if not previous or name not in previous:
+            return 0.0
+        total, idle = sample[name]
+        prev_total, prev_idle = previous[name]
+        total_delta = total - prev_total
+        idle_delta = idle - prev_idle
+        if total_delta <= 0:
+            return 0.0
+        return round(min(max((1 - idle_delta / total_delta) * 100.0, 0.0), 100.0), 1)
+
+    cores = [
+        {"name": f"CPU {name[3:]}", "percent": usage_for(name)}
+        for name in sorted((key for key in sample if key != "cpu"), key=lambda value: int(value[3:]))
+    ]
+    return {"total_percent": usage_for("cpu"), "cores": cores}
+
+
+def disk_usage(path: Path) -> dict:
+    try:
+        usage = shutil.disk_usage(path)
+    except OSError:
+        return {}
+    used = usage.total - usage.free
+    return {
+        "path": str(path),
+        "total": usage.total,
+        "used": used,
+        "free": usage.free,
+        "percent": pct(used, usage.total),
+        "total_human": fmt_bytes(usage.total),
+        "used_human": fmt_bytes(used),
+        "free_human": fmt_bytes(usage.free),
+    }
+
+
+def host_metrics(info: dict) -> dict:
+    cpus = int(info.get("NCPU") or os.cpu_count() or 1)
+    load_one, load_five, load_fifteen = os.getloadavg()
+    return {
+        "load": {
+            "one": round(load_one, 2),
+            "five": round(load_five, 2),
+            "fifteen": round(load_fifteen, 2),
+            "one_percent": pct(load_one, cpus),
+            "five_percent": pct(load_five, cpus),
+            "fifteen_percent": pct(load_fifteen, cpus),
+        },
+        "cpu": cpu_usage(),
+        "memory": read_meminfo(),
+        "appdata_disk": disk_usage(DATA_DIR),
+    }
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -415,6 +533,7 @@ def overview(request: Request):
         running = sum(1 for c in results if c.get("status") == "running")
         paused = sum(1 for c in results if c.get("status") == "paused")
         stopped = len(results) - running - paused
+        metrics = host_metrics(info)
         return {
             "server": {
                 "name": SERVER_NAME,
@@ -430,6 +549,7 @@ def overview(request: Request):
                 "containers_paused": paused,
                 "containers_stopped": stopped,
                 "images": info.get("Images"),
+                "metrics": metrics,
             },
             "containers": results,
             "group_order": get_group_order(),

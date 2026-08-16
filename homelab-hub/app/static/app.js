@@ -5,6 +5,7 @@ let logRefreshTimer = null;
 let activeContainer = null;
 let dashboardIcons = [];
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
+let containersSectionCollapsed = localStorage.getItem('containersSectionCollapsed') === 'true';
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_CONTAINER_ICON = 'docker';
@@ -51,11 +52,96 @@ function sanitizeIcon(value) {
   return value.trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
+function containerSearchText(c) {
+  const portParts = (c.ports || []).flatMap(p => [p.host_ip, p.host_port, p.internal, `${p.host_port}:${p.internal}`]);
+  return [
+    c.id,
+    c.short_id,
+    c.name,
+    c.image,
+    c.status,
+    c.health,
+    c.project,
+    c.service,
+    c.group_name,
+    c.restart_policy,
+    ...portParts,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function percent(value) {
+  return `${Number(value || 0).toFixed(1)}%`;
+}
+
+function metricBar(label, value, detail = '') {
+  const width = Math.min(Number(value || 0), 100);
+  return `<div class="server-bar">
+    <div><span>${escapeHtml(label)}</span><strong>${percent(value)}</strong></div>
+    <div class="meter wide"><i style="width:${width}%"></i></div>
+    ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+  </div>`;
+}
+
+function renderServerMetrics(s) {
+  const metrics = s.metrics || {};
+  const load = metrics.load || {};
+  const cpu = metrics.cpu || {};
+  const memory = metrics.memory || {};
+  const disk = metrics.appdata_disk || {};
+  const cores = (cpu.cores || []).slice(0, 16);
+  $('serverMetrics').innerHTML = `
+    <article class="server-card">
+      <span class="server-card-label">Load average</span>
+      <strong>${escapeHtml(String(load.one ?? '–'))}</strong>
+      ${metricBar('1 min', load.one_percent, `${load.one ?? '–'} load`)}
+      ${metricBar('5 min', load.five_percent, `${load.five ?? '–'} load`)}
+      ${metricBar('15 min', load.fifteen_percent, `${load.fifteen ?? '–'} load`)}
+    </article>
+    <article class="server-card cpu-card">
+      <span class="server-card-label">Processor</span>
+      <strong>${percent(cpu.total_percent)}</strong>
+      ${metricBar('Overall', cpu.total_percent, `${s.cpus ?? cores.length} cores`)}
+      <div class="core-grid">${cores.map(core => metricBar(core.name, core.percent)).join('') || '<small class="muted">CPU sample pending</small>'}</div>
+    </article>
+    <article class="server-card">
+      <span class="server-card-label">Memory</span>
+      <strong>${percent(memory.percent)}</strong>
+      ${metricBar('RAM usage', memory.percent, `${memory.used_human || '–'} / ${memory.total_human || s.memory_total_human || '–'}`)}
+      <small class="metric-note">${escapeHtml(memory.available_human || '–')} available</small>
+    </article>
+    <article class="server-card">
+      <span class="server-card-label">Appdata storage</span>
+      <strong>${percent(disk.percent)}</strong>
+      ${metricBar('Disk usage', disk.percent, `${disk.used_human || '–'} / ${disk.total_human || '–'}`)}
+      <small class="metric-note">${escapeHtml(disk.free_human || '–')} free on /data</small>
+    </article>
+  `;
+}
+
+function applyContainersFoldState() {
+  const body = $('containersPanelBody');
+  const button = $('containersFoldBtn');
+  const icon = $('containersFoldIcon');
+  if (!body || !button || !icon) return;
+  const searchActive = Boolean($('containerSearch')?.value.trim());
+  const bodyHidden = containersSectionCollapsed && !searchActive;
+  body.classList.toggle('hidden', bodyHidden);
+  button.setAttribute('aria-expanded', String(!bodyHidden));
+  icon.textContent = bodyHidden ? '▸' : '▾';
+}
+
+function toggleContainersSection() {
+  containersSectionCollapsed = !containersSectionCollapsed;
+  localStorage.setItem('containersSectionCollapsed', String(containersSectionCollapsed));
+  applyContainersFoldState();
+}
+
 function renderContainers() {
   if (!currentData) return;
   const q = $('containerSearch').value.trim().toLowerCase();
   const isSearching = Boolean(q);
-  const rows = currentData.containers.filter(c => !q || `${c.name} ${c.image} ${c.project || ''} ${c.group_name || ''}`.toLowerCase().includes(q));
+  const terms = q.split(/\s+/).filter(Boolean);
+  const rows = currentData.containers.filter(c => !terms.length || terms.every(term => containerSearchText(c).includes(term)));
   $('containerRows').innerHTML = rows.length ? groupedContainers(rows).map(group => `
     <tr class="group-row ${collapsedGroups.has(group.name) && !isSearching ? 'collapsed' : ''}" data-group="${escapeHtml(group.name)}">
       <td colspan="7">
@@ -84,6 +170,7 @@ function renderContainers() {
       <td>${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="container-up" data-name="${escapeHtml(c.name)}" aria-label="Move container up">▵</button><button class="order-btn" type="button" data-action="container-down" data-name="${escapeHtml(c.name)}" aria-label="Move container down">▿</button></span>` : ''}<button class="kebab" type="button" title="More options">•••</button></td>
     </tr>`).join('')}
   `).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
+  applyContainersFoldState();
 }
 
 function groupedContainers(containers) {
@@ -161,14 +248,14 @@ function render(data) {
   const s = data.server;
   $('metricContainers').textContent = s.containers_total;
   $('metricContainerDetail').textContent = `${s.containers_running} running · ${s.containers_stopped} stopped${s.containers_paused ? ` · ${s.containers_paused} paused` : ''}`;
-  $('metricMemory').textContent = s.memory_total_human || bytes(s.memory_total);
+  $('metricMemory').textContent = s.metrics?.memory?.total_human || s.memory_total_human || bytes(s.memory_total);
   $('metricMemoryDetail').textContent = s.os || 'Docker host';
   $('metricCpu').textContent = s.cpus ?? '–';
   $('metricImages').textContent = s.images ?? '–';
   $('dockerVersion').textContent = `Docker ${s.docker_version || 'unknown'}`;
   $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   $('dockerDetails').innerHTML = [
-    ['Server', s.name], ['Operating system', s.os], ['Kernel', s.kernel], ['Docker Engine', s.docker_version], ['Docker API', s.api_version], ['CPU cores', s.cpus], ['Host memory', s.memory_total_human], ['Containers', s.containers_total], ['Images', s.images]
+    ['Server', s.name], ['Operating system', s.os], ['Kernel', s.kernel], ['Docker Engine', s.docker_version], ['Docker API', s.api_version], ['CPU cores', s.cpus], ['CPU usage', percent(s.metrics?.cpu?.total_percent)], ['Load average', s.metrics?.load ? `${s.metrics.load.one} / ${s.metrics.load.five} / ${s.metrics.load.fifteen}` : '—'], ['Host memory', s.metrics?.memory?.total_human || s.memory_total_human], ['Containers', s.containers_total], ['Images', s.images]
   ].map(([k,v]) => `<div class="detail"><span>${k}</span><strong>${escapeHtml(String(v ?? '—'))}</strong></div>`).join('');
   $('settingTitle').value = settings.title;
   $('settingRefresh').value = settings.refresh_seconds;
@@ -176,7 +263,9 @@ function render(data) {
   $('brandTitle').textContent = settings.title;
   document.title = settings.title;
   renderOptionLists();
+  renderServerMetrics(s);
   renderContainers();
+  applyContainersFoldState();
   scheduleRefresh();
 }
 
@@ -421,6 +510,7 @@ $('dashboardIconGrid').addEventListener('click', event => {
 });
 $('iconDownloadBtn').addEventListener('click', downloadIcon);
 $('refreshBtn').addEventListener('click', refresh);
+$('containersFoldBtn').addEventListener('click', toggleContainersSection);
 $('containerSearch').addEventListener('input', renderContainers);
 $('containerRows').addEventListener('click', event => {
   const orderButton = event.target.closest('.order-btn');
