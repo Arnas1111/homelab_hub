@@ -39,6 +39,14 @@ Copy or install this template in Unraid:
 unraid/my-homelab-hub.xml
 ```
 
+Or, from a clone/copy of this repository on the Unraid server, import only the template without building anything:
+
+```bash
+./import-unraid-template.sh
+```
+
+The importer installs the template with the optional Jellyfin, Nextcloud, and Home Assistant fields blank.
+
 ### 2. Create the container through the normal Unraid WebUI
 
 Go to:
