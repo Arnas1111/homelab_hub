@@ -51,8 +51,20 @@ async function api(url, options = {}) {
   const response = await fetch(url, { credentials: 'same-origin', ...options, headers: { 'Content-Type':'application/json', ...(options.headers || {}) } });
   if (response.status === 401) { location.href = '/login'; throw new Error('Authentication required'); }
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
+  if (!response.ok) throw new Error(apiErrorMessage(body, response.status));
   return body;
+}
+
+function apiErrorMessage(body, status) {
+  if (typeof body.detail === 'string') return body.detail;
+  if (Array.isArray(body.detail)) {
+    return body.detail.map(error => {
+      const field = Array.isArray(error.loc) ? error.loc.filter(x => x !== 'body').join('.') : '';
+      return [field, error.msg].filter(Boolean).join(': ');
+    }).join(' · ');
+  }
+  if (body.detail && typeof body.detail === 'object') return JSON.stringify(body.detail);
+  return `HTTP ${status}`;
 }
 
 function monitorStatus(c) {

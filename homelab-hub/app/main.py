@@ -48,7 +48,7 @@ signer = URLSafeSerializer(SESSION_SECRET, salt="homelab-hub-session")
 
 class SettingsPayload(BaseModel):
     title: str = Field(min_length=1, max_length=80)
-    refresh_seconds: int = Field(ge=2, le=60)
+    refresh_seconds: int = Field(ge=1, le=60)
     confirm_actions: bool
 
 

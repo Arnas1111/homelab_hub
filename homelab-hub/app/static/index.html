@@ -24,7 +24,7 @@
     <header class="topbar">
       <div><h1 id="pageTitle">Overview</h1><p id="pageSubtitle" class="muted">Homelab data, shortcuts, ports, and monitoring</p></div>
       <div class="top-actions">
-        <label class="refresh-control">Update <input id="topRefreshSeconds" type="number" min="2" max="60" step="1" value="{{ settings.refresh_seconds }}"> s</label>
+        <label class="refresh-control">Update <input id="topRefreshSeconds" type="number" min="1" max="60" step="1" value="{{ settings.refresh_seconds }}"> s</label>
         <span id="lastUpdated" class="muted tiny"></span>
         <button id="refreshBtn" class="btn">Refresh</button>
       </div>
@@ -133,7 +133,7 @@
         <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div></div>
         <form id="settingsForm" class="settings-form">
           <label>Hub title<input id="settingTitle" maxlength="80" required></label>
-          <label>Refresh interval (seconds)<input id="settingRefresh" type="number" min="2" max="60" required></label>
+          <label>Refresh interval (seconds)<input id="settingRefresh" type="number" min="1" max="60" required></label>
           <label class="check"><input id="settingConfirm" type="checkbox"><span>Confirm Docker actions before executing</span></label>
           <div><button class="btn primary" type="submit">Save settings</button> <span id="settingsSaved" class="tiny muted"></span></div>
         </form>
