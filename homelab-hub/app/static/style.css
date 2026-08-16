@@ -129,10 +129,12 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .sensor-grid { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
 .sensor-chip { padding:10px; }
 .sensor-chip strong { margin-top:4px; color:var(--text); }
-.ha-party-control { margin-bottom:12px; padding:10px; border:1px solid rgba(255,255,255,.07); border-radius:10px; background:rgba(255,255,255,.025); }
-.ha-party-control label { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--muted); font-size:12px; }
-.ha-party-control strong { color:var(--text); font-size:12px; }
-.ha-party-control input { width:100%; margin-top:8px; accent-color:var(--accent2); }
+.ha-party-pill { display:inline-flex; align-items:center; gap:7px; padding:3px; border:1px solid var(--border); border-radius:999px; background:rgba(255,255,255,.025); }
+.ha-party-pill .mini-link { border:0; background:transparent; }
+.ha-party-pill .mini-link.active { background:rgba(81,216,138,.12); }
+.ha-party-pill label { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:10px; padding-right:6px; }
+.ha-party-pill input { width:56px; padding:0; accent-color:var(--accent2); }
+.ha-party-pill strong { min-width:10px; color:var(--text); font-size:11px; text-align:right; }
 .integration-notice,.soft-empty { color:var(--muted); border:1px dashed var(--border); border-radius:10px; padding:10px; font-size:12px; }
 .integration-notice { margin-bottom:10px; }
 .integration-notice.error { color:var(--red); border-color:rgba(255,107,122,.22); }

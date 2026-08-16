@@ -11,6 +11,8 @@ let colorPickerActive = false;
 let colorPickerHoldTimer = null;
 let colorSendTimer = null;
 let partySpeedTimer = null;
+let webuiEditorActive = false;
+let webuiEditorHoldTimer = null;
 let haColorChoices = JSON.parse(localStorage.getItem('haColorChoices') || '{}');
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
 const DEFAULT_SECTION_ORDER = ['server', 'integrations', 'ports', 'containers'];
@@ -188,6 +190,17 @@ function releaseColorPickerSoon(ms = 1800) {
   colorPickerHoldTimer = setTimeout(() => { colorPickerActive = false; }, ms);
 }
 
+function holdWebuiEditor(ms = 9000) {
+  webuiEditorActive = true;
+  clearTimeout(webuiEditorHoldTimer);
+  webuiEditorHoldTimer = setTimeout(() => { webuiEditorActive = false; }, ms);
+}
+
+function releaseWebuiEditorSoon(ms = 1800) {
+  clearTimeout(webuiEditorHoldTimer);
+  webuiEditorHoldTimer = setTimeout(() => { webuiEditorActive = false; }, ms);
+}
+
 function rgbToHex(rgb) {
   if (!Array.isArray(rgb) || rgb.length < 3) return '';
   const parts = rgb.slice(0, 3).map(value => Math.max(0, Math.min(255, Number(value) || 0)).toString(16).padStart(2, '0'));
@@ -206,11 +219,6 @@ function entityColor(entity) {
 
 function partyCraziness() {
   return Math.max(1, Math.min(10, Number(localStorage.getItem('haPartyCraziness') || 5)));
-}
-
-function partyDelayLabel(craziness = partyCraziness()) {
-  const delay = 3 - (((craziness - 1) / 9) * 2.75);
-  return `${delay.toFixed(delay < 1 ? 2 : 1)}s`;
 }
 
 function addMetricHistory(cpuPercent, memoryPercent) {
@@ -380,13 +388,12 @@ function renderHomeAssistantCard(home = {}) {
   return `<article class="integration-card integration-home">
     <div class="integration-card-head">
       <div><span class="server-card-label">${cardIcon('home')}Home Assistant</span><strong>${entities.length ? `${entities.length} entities` : 'Not connected'}</strong></div>
-      ${lights.length ? `<button class="mini-link ${partyOn ? 'active' : ''}" type="button" data-action="ha-party">${partyOn ? 'Party on' : 'Party'}</button>` : ''}
+      ${lights.length ? `<div class="ha-party-pill">
+        <button class="mini-link ${partyOn ? 'active' : ''}" type="button" data-action="ha-party">${partyOn ? 'Party on' : 'Party'}</button>
+        <label title="Party speed"><span>Speed</span><input type="range" min="1" max="10" value="${craziness}" data-action="ha-craziness"><strong data-party-speed-label>${craziness}</strong></label>
+      </div>` : ''}
     </div>
     ${integrationNotice(home)}
-    ${lights.length ? `<div class="ha-party-control">
-      <label for="haPartyCraziness"><span>Craziness</span><strong data-party-speed-label>${craziness}/10 · ${partyDelayLabel(craziness)}</strong></label>
-      <input id="haPartyCraziness" type="range" min="1" max="10" value="${craziness}" data-action="ha-craziness">
-    </div>` : ''}
     <div class="ha-lights">
       ${lights.length ? lights.map(entity => `
         <div class="ha-light ${entity.state === 'on' ? 'on' : ''}" title="${escapeHtml(entity.entity_id)}">
@@ -479,7 +486,7 @@ async function updatePartyCraziness(value) {
   const craziness = Math.max(1, Math.min(10, Number(value) || 5));
   localStorage.setItem('haPartyCraziness', String(craziness));
   const label = document.querySelector('[data-party-speed-label]');
-  if (label) label.textContent = `${craziness}/10 · ${partyDelayLabel(craziness)}`;
+  if (label) label.textContent = String(craziness);
   if (localStorage.getItem('haPartyMode') !== 'true') return;
   clearTimeout(partySpeedTimer);
   partySpeedTimer = setTimeout(async () => {
@@ -789,6 +796,7 @@ async function saveWebuiLinks(links) {
   }));
   const result = await api('/api/webui-links', { method: 'PUT', body: JSON.stringify({ links: payload }) });
   currentData.webui_links = result.links || [];
+  webuiEditorActive = false;
   renderWebLinks();
   renderContainers();
 }
@@ -981,7 +989,7 @@ function render(data) {
   renderOptionLists();
   if (s.metrics) renderServerMetrics(s);
   renderContainers();
-  renderWebLinks();
+  if (!webuiEditorActive) renderWebLinks();
   renderPorts();
   if (!colorPickerActive) renderIntegrations();
   applySectionOrder();
@@ -1261,6 +1269,15 @@ $('webuiPanelBody').addEventListener('submit', async event => {
   event.preventDefault();
   try { await saveWebuiForm(form); }
   catch (e) { toast(e.message); }
+});
+$('webuiPanelBody').addEventListener('focusin', event => {
+  if (event.target.closest('.webui-editor')) holdWebuiEditor();
+});
+$('webuiPanelBody').addEventListener('focusout', event => {
+  if (event.target.closest('.webui-editor')) releaseWebuiEditorSoon();
+});
+$('webuiPanelBody').addEventListener('input', event => {
+  if (event.target.closest('.webui-editor')) holdWebuiEditor();
 });
 $('webuiPanelBody').addEventListener('click', async event => {
   const button = event.target.closest('[data-action="webui-toggle"], [data-action="webui-delete"]');
