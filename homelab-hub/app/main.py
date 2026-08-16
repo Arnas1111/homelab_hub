@@ -1,6 +1,7 @@
 import json
 import os
 import pwd
+import random
 import re
 import secrets
 import shutil
@@ -20,7 +21,7 @@ from urllib.request import Request as UrlRequest, urlopen
 import docker
 from docker.errors import APIError, DockerException, NotFound
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadSignature, URLSafeSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -41,6 +42,8 @@ LAST_NETWORK_SAMPLE: tuple[float, int, int] | None = None
 PROC_SAMPLE_LOCK = threading.Lock()
 LAST_PROC_SAMPLE: dict[str, tuple[int, int]] | None = None
 LAST_PROC_TOTAL: int | None = None
+PARTY_MODE_STOP = threading.Event()
+PARTY_MODE_THREAD: threading.Thread | None = None
 
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
@@ -110,6 +113,15 @@ class IntegrationSettingsPayload(BaseModel):
 
 class HomeAssistantTogglePayload(BaseModel):
     entity_id: str = Field(min_length=1, max_length=160)
+
+
+class HomeAssistantColorPayload(BaseModel):
+    entity_id: str = Field(min_length=1, max_length=160)
+    color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class HomeAssistantPartyPayload(BaseModel):
+    enabled: bool
 
 
 def db() -> sqlite3.Connection:
@@ -858,6 +870,8 @@ def jellyfin_sessions(client, request: Request, cfg: dict) -> dict:
         state = session.get("PlayState", {}) or {}
         result["active"].append(
             {
+                "user_id": session.get("UserId") or "",
+                "avatar_url": f"/api/jellyfin/users/{session.get('UserId')}/avatar" if session.get("UserId") else "",
                 "user": session.get("UserName") or "Unknown user",
                 "client": session.get("Client") or "",
                 "device": session.get("DeviceName") or "",
@@ -1315,26 +1329,135 @@ def integrations(request: Request):
             pass
 
 
+@app.get("/api/jellyfin/users/{user_id}/avatar")
+def jellyfin_user_avatar(user_id: str, request: Request):
+    require_auth(request)
+    cfg = integration_config()
+    base_url = cfg["jellyfin_url"]
+    client = None
+    if not base_url:
+        client = docker_client()
+        base_url = discover_service_url(client, request, ["jellyfin"], {"8096", "8920"})
+    if not base_url or not cfg["jellyfin_api_key"]:
+        raise HTTPException(status_code=404, detail="Jellyfin is not configured.")
+    safe_user = re.sub(r"[^A-Za-z0-9_-]", "", user_id)
+    if not safe_user:
+        raise HTTPException(status_code=404, detail="Invalid Jellyfin user.")
+    try:
+        with http_request(
+            f"{base_url}/Users/{safe_user}/Images/Primary",
+            headers={"X-Emby-Token": cfg["jellyfin_api_key"]},
+            timeout=8,
+        ) as response:
+            return Response(content=response.read(1024 * 1024), media_type=response.headers.get("Content-Type", "image/jpeg"))
+    except (HTTPError, OSError, URLError) as exc:
+        raise HTTPException(status_code=404, detail=f"Jellyfin avatar unavailable: {exc}") from exc
+    finally:
+        if client:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+
+def home_assistant_headers(cfg: dict) -> dict:
+    return {
+        "Authorization": f"Bearer {cfg['home_assistant_token']}",
+        "Content-Type": "application/json",
+    }
+
+
+def home_assistant_service(cfg: dict, domain: str, service: str, payload: dict):
+    return http_json(
+        f"{cfg['home_assistant_url']}/api/services/{domain}/{service}",
+        headers=home_assistant_headers(cfg),
+        data=json.dumps(payload).encode("utf-8"),
+    )
+
+
+def light_entities(cfg: dict) -> list[str]:
+    configured = [entity for entity in cfg["home_assistant_entities"] if entity.startswith("light.")]
+    if configured:
+        return configured
+    try:
+        states = http_json(f"{cfg['home_assistant_url']}/api/states", headers=home_assistant_headers(cfg))
+        return [
+            item.get("entity_id", "")
+            for item in (states if isinstance(states, list) else [])
+            if isinstance(item, dict) and item.get("entity_id", "").startswith("light.")
+        ][:24]
+    except Exception:
+        return []
+
+
+def ensure_home_assistant(cfg: dict) -> None:
+    if not cfg["home_assistant_url"] or not cfg["home_assistant_token"]:
+        raise HTTPException(status_code=400, detail="Home Assistant URL and token are not configured.")
+
+
+def hex_to_rgb(color: str) -> list[int]:
+    clean = color.lstrip("#")
+    return [int(clean[index : index + 2], 16) for index in (0, 2, 4)]
+
+
+def party_worker(cfg: dict):
+    colors = [[255, 0, 80], [255, 140, 0], [255, 255, 0], [0, 255, 120], [0, 180, 255], [120, 70, 255], [255, 0, 220]]
+    while not PARTY_MODE_STOP.is_set():
+        for entity_id in light_entities(cfg):
+            try:
+                home_assistant_service(cfg, "light", "turn_on", {"entity_id": entity_id, "rgb_color": random.choice(colors), "brightness": random.randint(90, 255)})
+            except Exception:
+                pass
+        PARTY_MODE_STOP.wait(2.5)
+
+
 @app.post("/api/home-assistant/toggle")
 def home_assistant_toggle(payload: HomeAssistantTogglePayload, request: Request):
     require_auth(request)
     cfg = integration_config()
-    if not cfg["home_assistant_url"] or not cfg["home_assistant_token"]:
-        raise HTTPException(status_code=400, detail="Home Assistant URL and token are not configured.")
+    ensure_home_assistant(cfg)
     if not payload.entity_id.startswith("light."):
         raise HTTPException(status_code=400, detail="Only light entities can be toggled from Homelab Hub.")
-    headers = {
-        "Authorization": f"Bearer {cfg['home_assistant_token']}",
-        "Content-Type": "application/json",
-    }
-    body = json.dumps({"entity_id": payload.entity_id}).encode("utf-8")
     try:
-        http_json(f"{cfg['home_assistant_url']}/api/services/light/toggle", headers=headers, data=body)
+        home_assistant_service(cfg, "light", "toggle", {"entity_id": payload.entity_id})
         return {"ok": True, "home_assistant": home_assistant_state(cfg)}
     except HTTPError as exc:
         raise HTTPException(status_code=exc.code, detail=f"Home Assistant returned HTTP {exc.code}.") from exc
     except (OSError, URLError, ValueError) as exc:
         raise HTTPException(status_code=502, detail=f"Could not reach Home Assistant: {exc}") from exc
+
+
+@app.post("/api/home-assistant/color")
+def home_assistant_color(payload: HomeAssistantColorPayload, request: Request):
+    require_auth(request)
+    cfg = integration_config()
+    ensure_home_assistant(cfg)
+    if not payload.entity_id.startswith("light."):
+        raise HTTPException(status_code=400, detail="Only light entities can receive colors from Homelab Hub.")
+    try:
+        home_assistant_service(cfg, "light", "turn_on", {"entity_id": payload.entity_id, "rgb_color": hex_to_rgb(payload.color)})
+        return {"ok": True, "home_assistant": home_assistant_state(cfg)}
+    except HTTPError as exc:
+        raise HTTPException(status_code=exc.code, detail=f"Home Assistant returned HTTP {exc.code}.") from exc
+    except (OSError, URLError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Home Assistant: {exc}") from exc
+
+
+@app.post("/api/home-assistant/party")
+def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
+    require_auth(request)
+    cfg = integration_config()
+    ensure_home_assistant(cfg)
+    global PARTY_MODE_THREAD
+    if payload.enabled:
+        if PARTY_MODE_THREAD and PARTY_MODE_THREAD.is_alive():
+            return {"ok": True, "enabled": True}
+        PARTY_MODE_STOP.clear()
+        PARTY_MODE_THREAD = threading.Thread(target=party_worker, args=(cfg,), daemon=True)
+        PARTY_MODE_THREAD.start()
+        return {"ok": True, "enabled": True}
+    PARTY_MODE_STOP.set()
+    return {"ok": True, "enabled": False}
 
 
 @app.get("/api/integration-settings")

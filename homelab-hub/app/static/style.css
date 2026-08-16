@@ -94,6 +94,9 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .integration-list,.agenda-list,.sensor-grid,.ha-lights { display:grid; gap:8px; }
 .stream-row,.agenda-row,.sensor-chip,.ha-light { min-width:0; border:1px solid var(--border); border-radius:10px; background:rgba(255,255,255,.03); }
 .stream-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; padding:10px; }
+.stream-main { min-width:0; display:flex; align-items:center; gap:10px; }
+.user-avatar { width:32px; height:32px; border-radius:999px; object-fit:cover; background:rgba(255,255,255,.06); border:1px solid var(--border); flex:0 0 auto; }
+.user-avatar.missing::after { content:""; display:block; width:14px; height:14px; margin:8px; border-radius:999px; background:var(--muted); opacity:.45; }
 .stream-row .meter { grid-column:1/-1; }
 .stream-row strong,.agenda-row strong,.sensor-chip strong,.ha-light strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .stream-row small,.agenda-row small,.sensor-chip span { display:block; color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -103,12 +106,14 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .agenda-row { display:grid; grid-template-columns:92px minmax(0,1fr); gap:10px; padding:10px; }
 .agenda-row time { color:var(--accent2); font-size:11px; line-height:1.35; }
 .ha-lights { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); margin-bottom:10px; }
-.ha-light { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px; color:var(--text); cursor:pointer; }
+.ha-light { display:grid; grid-template-columns:minmax(0,1fr) 34px; align-items:center; gap:8px; padding:8px; color:var(--text); }
 .ha-light:hover { border-color:rgba(139,211,255,.42); }
 .ha-light.on { background:rgba(81,216,138,.08); border-color:rgba(81,216,138,.28); }
+.ha-light button { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:2px; color:var(--text); background:transparent; border:0; cursor:pointer; }
 .ha-light span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ha-light strong { flex:0 0 auto; color:var(--muted); font-size:11px; text-transform:uppercase; }
 .ha-light.on strong { color:var(--green); }
+.ha-light input[type="color"] { width:32px; height:32px; padding:2px; border-radius:8px; cursor:pointer; }
 .sensor-grid { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
 .sensor-chip { padding:10px; }
 .sensor-chip strong { margin-top:4px; color:var(--text); }

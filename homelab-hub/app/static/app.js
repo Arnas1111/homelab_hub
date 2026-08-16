@@ -183,7 +183,6 @@ function renderServerMetrics(s) {
   const memory = metrics.memory || {};
   const disk = metrics.data_mount || metrics.appdata_disk || {};
   const network = metrics.network || {};
-  const top = metrics.top_processes || {};
   const cores = (cpu.cores || []).slice(0, 16);
   addMetricHistory(Number(cpu.total_percent), Number(memory.percent));
   const networkRate = Number(network.rx_rate || 0) + Number(network.tx_rate || 0);
@@ -219,13 +218,26 @@ function renderServerMetrics(s) {
       ${trafficBar('Transmit', network.tx_rate, network.tx_human ? `${network.tx_human} total` : '')}
     </article>
     <article class="server-card">
-      <span class="server-card-label">Top host users</span>
+      <span class="server-card-label">Top containers</span>
       <strong>CPU / Memory</strong>
-      ${topList('CPU', top.cpu || [], 'cpu_percent')}
-      ${topList('Memory', top.memory || [], 'memory_percent')}
-      <small class="metric-note">Host processes, not only Docker containers.</small>
+      ${containerTopList('CPU', topContainers('cpu_percent'), 'cpu_percent')}
+      ${containerTopList('Memory', topContainers('memory_percent'), 'memory_percent')}
+      <small class="metric-note">Docker container stats. Host process view inside this container is limited.</small>
     </article>
   `;
+}
+
+function topContainers(key) {
+  return (currentData?.containers || [])
+    .filter(c => Number(c[key]) > 0)
+    .sort((a, b) => Number(b[key] || 0) - Number(a[key] || 0))
+    .slice(0, 3);
+}
+
+function containerTopList(label, rows, key) {
+  return `<div class="top-list"><span>${escapeHtml(label)}</span>${rows.map(row => `
+    <div class="top-row"><strong>${escapeHtml(row.name)}</strong><small>${key === 'cpu_percent' ? percent(row.cpu_percent) : `${percent(row.memory_percent)} · ${bytes(row.memory_used)}`}</small></div>
+  `).join('') || '<small class="muted">Open Containers section for stats</small>'}</div>`;
 }
 
 function topList(label, rows, key) {
@@ -265,7 +277,10 @@ function renderJellyfinCard(jellyfin = {}) {
     <div class="integration-list">
       ${active.length ? active.map(stream => `
         <div class="stream-row">
-          <div><strong>${escapeHtml(stream.item)}</strong><small>${escapeHtml([stream.series, stream.user, stream.device || stream.client].filter(Boolean).join(' · '))}</small></div>
+          <div class="stream-main">
+            ${stream.avatar_url ? `<img class="user-avatar" src="${escapeHtml(stream.avatar_url)}" alt="">` : '<span class="user-avatar missing"></span>'}
+            <div><strong>${escapeHtml(stream.item)}</strong><small>${escapeHtml([stream.series, stream.user, stream.device || stream.client].filter(Boolean).join(' · '))}</small></div>
+          </div>
           <span class="stream-state ${stream.paused ? 'paused' : 'playing'}">${stream.paused ? 'Paused' : 'Playing'}</span>
           ${ticksProgress(stream.position_ticks, stream.runtime_ticks)}
         </div>
@@ -304,13 +319,15 @@ function renderHomeAssistantCard(home = {}) {
   return `<article class="integration-card">
     <div class="integration-card-head">
       <div><span class="server-card-label">Home Assistant</span><strong>${entities.length ? `${entities.length} entities` : 'Not connected'}</strong></div>
+      ${lights.length ? '<button class="mini-link" type="button" data-action="ha-party">Party</button>' : ''}
     </div>
     ${integrationNotice(home)}
     <div class="ha-lights">
       ${lights.length ? lights.map(entity => `
-        <button class="ha-light ${entity.state === 'on' ? 'on' : ''}" type="button" data-action="ha-toggle" data-entity="${escapeHtml(entity.entity_id)}" title="${escapeHtml(entity.entity_id)}">
-          <span>${escapeHtml(entity.name)}</span><strong>${escapeHtml(entity.state)}</strong>
-        </button>
+        <div class="ha-light ${entity.state === 'on' ? 'on' : ''}" title="${escapeHtml(entity.entity_id)}">
+          <button type="button" data-action="ha-toggle" data-entity="${escapeHtml(entity.entity_id)}"><span>${escapeHtml(entity.name)}</span><strong>${escapeHtml(entity.state)}</strong></button>
+          <input type="color" data-action="ha-color" data-entity="${escapeHtml(entity.entity_id)}" value="#8bd3ff" title="Set color">
+        </div>
       `).join('') : ''}
     </div>
     <div class="sensor-grid">
@@ -360,6 +377,26 @@ async function toggleHomeAssistantEntity(entityId) {
     });
     integrationData = { ...(integrationData || {}), home_assistant: result.home_assistant };
     renderIntegrations();
+  } catch (e) { toast(e.message); }
+}
+
+async function colorHomeAssistantEntity(entityId, color) {
+  try {
+    const result = await api('/api/home-assistant/color', {
+      method: 'POST',
+      body: JSON.stringify({ entity_id: entityId, color }),
+    });
+    integrationData = { ...(integrationData || {}), home_assistant: result.home_assistant };
+    renderIntegrations();
+  } catch (e) { toast(e.message); }
+}
+
+async function togglePartyMode() {
+  const next = localStorage.getItem('haPartyMode') !== 'true';
+  try {
+    await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify({ enabled: next }) });
+    localStorage.setItem('haPartyMode', String(next));
+    toast(next ? 'Party mode on' : 'Party mode off');
   } catch (e) { toast(e.message); }
 }
 
@@ -815,8 +852,8 @@ function overviewQuery() {
   const containerSearchActive = Boolean($('containerSearch')?.value.trim());
   const portSearchActive = Boolean($('portSearch')?.value.trim());
   const includeMetrics = isSectionOpen('server');
-  const includeContainers = isSectionOpen('containers') || isSectionOpen('webui') || isSectionOpen('ports') || containerSearchActive || portSearchActive;
-  const includeStats = isSectionOpen('containers') || containerSearchActive;
+  const includeContainers = isSectionOpen('server') || isSectionOpen('containers') || isSectionOpen('webui') || isSectionOpen('ports') || containerSearchActive || portSearchActive;
+  const includeStats = isSectionOpen('server') || isSectionOpen('containers') || containerSearchActive;
   return new URLSearchParams({
     include_metrics: String(includeMetrics),
     include_containers: String(includeContainers),
@@ -1137,10 +1174,16 @@ $('webuiPanelBody').addEventListener('click', async event => {
   } catch (e) { toast(e.message); }
 });
 $('integrationsPanelBody').addEventListener('click', event => {
-  const button = event.target.closest('[data-action="ha-toggle"]');
+  const button = event.target.closest('[data-action="ha-toggle"], [data-action="ha-party"]');
   if (!button) return;
   event.preventDefault();
-  toggleHomeAssistantEntity(button.dataset.entity);
+  if (button.dataset.action === 'ha-party') togglePartyMode();
+  else toggleHomeAssistantEntity(button.dataset.entity);
+});
+$('integrationsPanelBody').addEventListener('change', event => {
+  const input = event.target.closest('[data-action="ha-color"]');
+  if (!input) return;
+  colorHomeAssistantEntity(input.dataset.entity, input.value);
 });
 $('overviewSections').addEventListener('click', event => {
   const sectionButton = event.target.closest('[data-action^="section-"], [data-action="toggle-section"]');
