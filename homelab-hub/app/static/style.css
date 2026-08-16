@@ -184,7 +184,9 @@ tbody tr:hover { background:rgba(255,255,255,.015); }
 .settings-form { padding:20px; display:grid; gap:16px; }
 .settings-form label:not(.check) { display:grid; gap:7px; color:#c5ced8; font-size:12px; }
 .check { display:flex; align-items:center; gap:9px; font-size:12px; color:#c5ced8; }.check input { width:auto; }
-.settings-panel { margin-top:16px; max-width:1120px; }
+.settings-panel { max-width:1120px; }
+.sub-panel-head { padding:18px 18px 0; border-top:1px solid var(--border); }
+.sub-panel-head p { margin-bottom:0; font-size:12px; }
 .connector-form { padding:18px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 .connector-card { min-width:0; display:grid; gap:11px; padding:14px; border:1px solid var(--border); border-radius:10px; background:rgba(255,255,255,.025); }
 .connector-card h3 { margin-top:0; }

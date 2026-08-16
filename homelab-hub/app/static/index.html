@@ -32,22 +32,6 @@
 
     <section id="dashboardView" class="view active">
       <div id="overviewSections" class="overview-sections">
-        <section id="summaryPanel" class="dashboard-section" data-section="summary">
-          <div class="section-strip">
-            <button class="section-toggle compact" type="button" data-action="toggle-section" data-section="summary" aria-expanded="true">
-              <span id="summaryFoldIcon">▾</span>
-              <span><strong>Summary</strong><small>At-a-glance hub totals</small></span>
-            </button>
-            <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="summary" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="summary" aria-label="Move section down">▿</button></span>
-          </div>
-          <div id="summaryPanelBody" class="metric-grid">
-            <article class="metric"><span class="metric-label">Containers</span><strong id="metricContainers">–</strong><small id="metricContainerDetail">Loading</small></article>
-            <article class="metric"><span class="metric-label">Host memory</span><strong id="metricMemory">–</strong><small id="metricMemoryDetail">–</small></article>
-            <article class="metric"><span class="metric-label">CPU cores</span><strong id="metricCpu">–</strong><small>Host processor</small></article>
-            <article class="metric"><span class="metric-label">Images</span><strong id="metricImages">–</strong><small>Local images</small></article>
-          </div>
-        </section>
-
         <section id="serverPanel" class="panel dashboard-section server-metrics-panel" data-section="server">
           <div class="panel-head section-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="server" aria-expanded="true">
@@ -142,7 +126,7 @@
     </section>
 
     <section id="settingsView" class="view">
-      <div class="panel narrow">
+      <div class="panel settings-panel">
         <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div></div>
         <form id="settingsForm" class="settings-form">
           <label>Hub title<input id="settingTitle" maxlength="80" required></label>
@@ -150,9 +134,7 @@
           <label class="check"><input id="settingConfirm" type="checkbox"><span>Confirm Docker actions before executing</span></label>
           <div><button class="btn primary" type="submit">Save settings</button> <span id="settingsSaved" class="tiny muted"></span></div>
         </form>
-      </div>
-      <div class="panel settings-panel">
-        <div class="panel-head"><div><h2>Connectors</h2><p class="muted">Stored locally in appdata</p></div></div>
+        <div class="sub-panel-head"><h2>Connectors</h2><p class="muted">Stored locally in appdata</p></div>
         <form id="integrationSettingsForm" class="connector-form">
           <article class="connector-card">
             <h3>Jellyfin</h3>

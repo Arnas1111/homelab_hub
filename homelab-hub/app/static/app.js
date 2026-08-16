@@ -8,13 +8,8 @@ let integrationData = null;
 let integrationLoading = false;
 let integrationSettings = null;
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
-const DEFAULT_SECTION_ORDER = ['summary', 'server', 'integrations', 'webui', 'ports', 'containers'];
+const DEFAULT_SECTION_ORDER = ['server', 'integrations', 'webui', 'ports', 'containers'];
 let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSections') || '[]'));
-if (!localStorage.getItem('summaryDefaultApplied')) {
-  collapsedSections.add('summary');
-  localStorage.setItem('summaryDefaultApplied', 'true');
-  localStorage.setItem('collapsedSections', JSON.stringify([...collapsedSections]));
-}
 if (localStorage.getItem('containersSectionCollapsed') === 'true') collapsedSections.add('containers');
 let sectionOrder = JSON.parse(localStorage.getItem('overviewSectionOrder') || '[]').filter(id => DEFAULT_SECTION_ORDER.includes(id));
 sectionOrder = [...sectionOrder, ...DEFAULT_SECTION_ORDER.filter(id => !sectionOrder.includes(id))];
@@ -791,12 +786,6 @@ function render(data) {
   };
   settings = data.settings || settings;
   const s = currentData.server;
-  $('metricContainers').textContent = s.containers_total;
-  $('metricContainerDetail').textContent = containerStatusSummary(currentData.containers, s);
-  $('metricMemory').textContent = s.metrics?.memory?.total_human || s.memory_total_human || bytes(s.memory_total);
-  $('metricMemoryDetail').textContent = s.os || 'Docker host';
-  $('metricCpu').textContent = s.cpus ?? '–';
-  $('metricImages').textContent = s.images ?? '–';
   $('dockerVersion').textContent = `Docker ${s.docker_version || 'unknown'}`;
   $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   $('dockerDetails').innerHTML = [
