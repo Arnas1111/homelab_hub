@@ -4,8 +4,10 @@ let refreshTimer = null;
 let logRefreshTimer = null;
 let activeContainer = null;
 let dashboardIcons = [];
+let integrationData = null;
+let integrationLoading = false;
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
-const DEFAULT_SECTION_ORDER = ['summary', 'server', 'webui', 'ports', 'containers'];
+const DEFAULT_SECTION_ORDER = ['summary', 'server', 'integrations', 'webui', 'ports', 'containers'];
 let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSections') || '[]'));
 if (!localStorage.getItem('summaryDefaultApplied')) {
   collapsedSections.add('summary');
@@ -200,6 +202,135 @@ function renderServerMetrics(s) {
   `;
 }
 
+function ticksProgress(position, runtime) {
+  const total = Number(runtime || 0);
+  if (!total) return '';
+  const pct = Math.min(Math.max((Number(position || 0) / total) * 100, 0), 100);
+  return `<div class="meter wide"><i style="width:${pct}%"></i></div>`;
+}
+
+function formatEventTime(event) {
+  const start = new Date(event.start);
+  if (Number.isNaN(start.getTime())) return 'Upcoming';
+  if (event.all_day) return start.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' });
+  return start.toLocaleString([], { weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function integrationNotice(block) {
+  if (block?.error) return `<div class="integration-notice error">${escapeHtml(block.error)}</div>`;
+  if (block?.message) return `<div class="integration-notice">${escapeHtml(block.message)}</div>`;
+  return '';
+}
+
+function renderJellyfinCard(jellyfin = {}) {
+  const active = jellyfin.active || [];
+  return `<article class="integration-card">
+    <div class="integration-card-head">
+      <div><span class="server-card-label">Jellyfin</span><strong>${active.length ? `${active.length} active` : 'No active streams'}</strong></div>
+      ${jellyfin.url ? `<a class="mini-link" href="${escapeHtml(jellyfin.url)}" target="_blank" rel="noreferrer">Open</a>` : ''}
+    </div>
+    ${integrationNotice(jellyfin)}
+    <div class="integration-list">
+      ${active.length ? active.map(stream => `
+        <div class="stream-row">
+          <div><strong>${escapeHtml(stream.item)}</strong><small>${escapeHtml([stream.series, stream.user, stream.device || stream.client].filter(Boolean).join(' · '))}</small></div>
+          <span class="stream-state ${stream.paused ? 'paused' : 'playing'}">${stream.paused ? 'Paused' : 'Playing'}</span>
+          ${ticksProgress(stream.position_ticks, stream.runtime_ticks)}
+        </div>
+      `).join('') : '<div class="soft-empty">Nothing is streaming right now.</div>'}
+    </div>
+  </article>`;
+}
+
+function renderCalendarCard(calendar = {}) {
+  const events = calendar.events || [];
+  return `<article class="integration-card">
+    <div class="integration-card-head">
+      <div><span class="server-card-label">Agenda</span><strong>${events.length ? 'This week' : 'No events'}</strong></div>
+    </div>
+    ${integrationNotice(calendar)}
+    <div class="agenda-list">
+      ${events.length ? events.map(event => `
+        <div class="agenda-row">
+          <time>${escapeHtml(formatEventTime(event))}</time>
+          <div><strong>${escapeHtml(event.summary)}</strong>${event.location ? `<small>${escapeHtml(event.location)}</small>` : ''}</div>
+        </div>
+      `).join('') : '<div class="soft-empty">No calendar items in the next 7 days.</div>'}
+    </div>
+  </article>`;
+}
+
+function entityValue(entity) {
+  if (entity.error) return entity.error;
+  return `${entity.state}${entity.unit || ''}`;
+}
+
+function renderHomeAssistantCard(home = {}) {
+  const entities = home.entities || [];
+  const lights = entities.filter(entity => entity.domain === 'light');
+  const sensors = entities.filter(entity => entity.domain !== 'light');
+  return `<article class="integration-card">
+    <div class="integration-card-head">
+      <div><span class="server-card-label">Home Assistant</span><strong>${entities.length ? `${entities.length} entities` : 'Not connected'}</strong></div>
+    </div>
+    ${integrationNotice(home)}
+    <div class="ha-lights">
+      ${lights.length ? lights.map(entity => `
+        <button class="ha-light ${entity.state === 'on' ? 'on' : ''}" type="button" data-action="ha-toggle" data-entity="${escapeHtml(entity.entity_id)}" title="${escapeHtml(entity.entity_id)}">
+          <span>${escapeHtml(entity.name)}</span><strong>${escapeHtml(entity.state)}</strong>
+        </button>
+      `).join('') : ''}
+    </div>
+    <div class="sensor-grid">
+      ${sensors.length ? sensors.map(entity => `
+        <div class="sensor-chip" title="${escapeHtml(entity.entity_id)}">
+          <span>${escapeHtml(entity.name)}</span><strong>${escapeHtml(entityValue(entity))}</strong>
+        </div>
+      `).join('') : (!lights.length ? '<div class="soft-empty">No Home Assistant entities configured.</div>' : '')}
+    </div>
+  </article>`;
+}
+
+function renderIntegrations() {
+  const target = $('integrationsPanelBody');
+  if (!target) return;
+  if (!integrationData) {
+    target.innerHTML = '<div class="empty">Waiting for integrations…</div>';
+    return;
+  }
+  target.innerHTML = [
+    renderJellyfinCard(integrationData.jellyfin),
+    renderCalendarCard(integrationData.calendar),
+    renderHomeAssistantCard(integrationData.home_assistant),
+  ].join('');
+}
+
+async function loadIntegrations({ force = false } = {}) {
+  if (!isSectionOpen('integrations') || integrationLoading) return;
+  integrationLoading = true;
+  if (force || !integrationData) renderIntegrations();
+  try {
+    integrationData = await api('/api/integrations');
+    renderIntegrations();
+  } catch (e) {
+    const target = $('integrationsPanelBody');
+    if (target) target.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
+  } finally {
+    integrationLoading = false;
+  }
+}
+
+async function toggleHomeAssistantEntity(entityId) {
+  try {
+    const result = await api('/api/home-assistant/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ entity_id: entityId }),
+    });
+    integrationData = { ...(integrationData || {}), home_assistant: result.home_assistant };
+    renderIntegrations();
+  } catch (e) { toast(e.message); }
+}
+
 function sectionSearchActive(section) {
   if (section === 'containers') return Boolean($('containerSearch')?.value.trim());
   if (section === 'ports') return Boolean($('portSearch')?.value.trim());
@@ -228,6 +359,7 @@ function toggleSection(section) {
   else collapsedSections.add(section);
   localStorage.setItem('collapsedSections', JSON.stringify([...collapsedSections]));
   applySectionState();
+  if (section === 'integrations' && isSectionOpen('integrations')) loadIntegrations({ force: true });
   refresh();
 }
 
@@ -634,6 +766,7 @@ function render(data) {
   renderContainers();
   renderWebLinks();
   renderPorts();
+  renderIntegrations();
   applySectionOrder();
   applySectionState();
   scheduleRefresh();
@@ -663,6 +796,7 @@ async function refresh() {
   const scrollY = window.scrollY;
   try {
     render(await api(`/api/overview?${overviewQuery()}`));
+    if (isSectionOpen('integrations')) loadIntegrations();
     if (preserveScroll) requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0 }));
   }
   catch (e) { $('containerRows').innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(e.message)}</td></tr>`; toast(e.message); }
@@ -921,6 +1055,12 @@ $('webuiPanelBody').addEventListener('click', async event => {
     if (button.dataset.action === 'webui-toggle') await toggleWebuiLink(key);
     if (button.dataset.action === 'webui-delete') await deleteWebuiLink(key);
   } catch (e) { toast(e.message); }
+});
+$('integrationsPanelBody').addEventListener('click', event => {
+  const button = event.target.closest('[data-action="ha-toggle"]');
+  if (!button) return;
+  event.preventDefault();
+  toggleHomeAssistantEntity(button.dataset.entity);
 });
 $('overviewSections').addEventListener('click', event => {
   const sectionButton = event.target.closest('[data-action^="section-"], [data-action="toggle-section"]');

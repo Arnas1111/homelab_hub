@@ -63,6 +63,19 @@
           </div>
         </section>
 
+        <section id="integrationsPanel" class="panel dashboard-section" data-section="integrations">
+          <div class="panel-head section-head">
+            <button class="section-toggle" type="button" data-action="toggle-section" data-section="integrations" aria-expanded="true">
+              <span id="integrationsFoldIcon">▾</span>
+              <span><strong>Live integrations</strong><small>Jellyfin streams, agenda, and Home Assistant</small></span>
+            </button>
+            <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="integrations" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="integrations" aria-label="Move section down">▿</button></span>
+          </div>
+          <div id="integrationsPanelBody" class="integration-grid">
+            <div class="empty">Waiting for integrations…</div>
+          </div>
+        </section>
+
         <section id="webuiPanel" class="panel dashboard-section" data-section="webui">
           <div class="panel-head section-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="webui" aria-expanded="true">

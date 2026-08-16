@@ -115,6 +115,14 @@ Mounting `/var/run/docker.sock` gives this application administrative control ov
 
 The Unraid template stores configured environment values in Unraid's Docker template configuration, so treat the flash/config backup as sensitive when it contains passwords or secrets.
 
+## Optional live integrations
+
+Live integration credentials are runtime-only environment variables in the Unraid template. Do not commit real values to this repository.
+
+- `HUB_JELLYFIN_API_KEY` enables the active Jellyfin streams card. `HUB_JELLYFIN_URL` is optional when the Jellyfin container publishes TCP 8096/8920 and can be discovered from Docker. `HUB_JELLYFIN_PUBLIC_URL` controls the Open link.
+- `HUB_NEXTCLOUD_CALENDAR_URL` accepts a public Nextcloud ICS export/subscription URL for the weekly agenda card.
+- `HUB_HOME_ASSISTANT_URL`, `HUB_HOME_ASSISTANT_TOKEN`, and `HUB_HOME_ASSISTANT_ENTITIES` enable Home Assistant sensors and `light.*` toggles. In Home Assistant, create a long-lived access token from your user profile page, then paste it into the masked Unraid field.
+
 ## Planned next integrations
 
 - Unraid API connector (Unraid 7.2+) for array state, disks, shares and system information

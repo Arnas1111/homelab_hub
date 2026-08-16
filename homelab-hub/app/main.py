@@ -7,6 +7,7 @@ import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 from urllib.error import HTTPError, URLError
@@ -79,6 +80,10 @@ class WebuiLinkPayload(BaseModel):
 
 class WebuiLinksPayload(BaseModel):
     links: list[WebuiLinkPayload] = Field(default_factory=list)
+
+
+class HomeAssistantTogglePayload(BaseModel):
+    entity_id: str = Field(min_length=1, max_length=160)
 
 
 def db() -> sqlite3.Connection:
@@ -521,6 +526,290 @@ def host_metrics(info: dict) -> dict:
     }
 
 
+def env_value(name: str, default: str = "") -> str:
+    return os.getenv(name, default).strip()
+
+
+def integration_config() -> dict:
+    return {
+        "jellyfin_url": env_value("HUB_JELLYFIN_URL").rstrip("/"),
+        "jellyfin_public_url": env_value("HUB_JELLYFIN_PUBLIC_URL").rstrip("/"),
+        "jellyfin_api_key": env_value("HUB_JELLYFIN_API_KEY"),
+        "nextcloud_calendar_url": env_value("HUB_NEXTCLOUD_CALENDAR_URL"),
+        "home_assistant_url": env_value("HUB_HOME_ASSISTANT_URL").rstrip("/"),
+        "home_assistant_token": env_value("HUB_HOME_ASSISTANT_TOKEN"),
+        "home_assistant_entities": [
+            item.strip()
+            for item in env_value("HUB_HOME_ASSISTANT_ENTITIES").split(",")
+            if item.strip()
+        ],
+    }
+
+
+def http_request(url: str, headers: dict | None = None, data: bytes | None = None, timeout: int = 7):
+    request = UrlRequest(url, data=data, headers={"User-Agent": "Homelab-Hub/1.0", **(headers or {})})
+    return urlopen(request, timeout=timeout)
+
+
+def http_json(url: str, headers: dict | None = None, data: bytes | None = None, timeout: int = 7) -> dict | list:
+    with http_request(url, headers=headers, data=data, timeout=timeout) as response:
+        return json.loads(response.read(1024 * 1024).decode("utf-8", errors="replace"))
+
+
+def http_text(url: str, headers: dict | None = None, timeout: int = 7) -> str:
+    with http_request(url, headers=headers, timeout=timeout) as response:
+        return response.read(2 * 1024 * 1024).decode("utf-8", errors="replace")
+
+
+def host_base_url(request: Request) -> str:
+    hostname = request.url.hostname or "localhost"
+    return hostname
+
+
+def discover_service_url(client, request: Request, terms: list[str], ports: set[str]) -> str:
+    hostname = host_base_url(request)
+    for container in client.containers.list(all=True):
+        try:
+            attrs = container.attrs
+            identity = f"{container.name} {attrs.get('Config', {}).get('Image', '')}".lower()
+            if not any(term in identity for term in terms):
+                continue
+            published = attrs.get("NetworkSettings", {}).get("Ports", {}) or {}
+            for internal, bindings in published.items():
+                internal_port, protocol = StringPort(internal).parts()
+                if protocol != "tcp" or internal_port not in ports or not bindings:
+                    continue
+                host_port = bindings[0].get("HostPort")
+                if host_port:
+                    return f"http://{hostname}:{host_port}"
+        except Exception:
+            continue
+    return ""
+
+
+class StringPort:
+    def __init__(self, value: str):
+        self.value = str(value or "")
+
+    def parts(self) -> tuple[str, str]:
+        port, _, protocol = self.value.partition("/")
+        return port, protocol or "tcp"
+
+
+def jellyfin_sessions(client, request: Request, cfg: dict) -> dict:
+    configured_url = cfg["jellyfin_url"]
+    discovered_url = "" if configured_url else discover_service_url(client, request, ["jellyfin"], {"8096", "8920"})
+    base_url = configured_url or discovered_url
+    public_url = cfg["jellyfin_public_url"] or base_url
+    result = {
+        "configured": bool(base_url and cfg["jellyfin_api_key"]),
+        "url": public_url,
+        "active": [],
+        "source": "configured" if configured_url else ("docker" if discovered_url else ""),
+    }
+    if not base_url or not cfg["jellyfin_api_key"]:
+        result["message"] = "Add HUB_JELLYFIN_API_KEY. HUB_JELLYFIN_URL is optional if Jellyfin publishes port 8096/8920."
+        return result
+    try:
+        sessions = http_json(f"{base_url}/Sessions", headers={"X-Emby-Token": cfg["jellyfin_api_key"]})
+    except HTTPError as exc:
+        result["error"] = f"Jellyfin returned HTTP {exc.code}."
+        return result
+    except (OSError, URLError, ValueError) as exc:
+        result["error"] = f"Could not reach Jellyfin: {exc}"
+        return result
+    for session in sessions if isinstance(sessions, list) else []:
+        item = session.get("NowPlayingItem")
+        if not item:
+            continue
+        state = session.get("PlayState", {}) or {}
+        result["active"].append(
+            {
+                "user": session.get("UserName") or "Unknown user",
+                "client": session.get("Client") or "",
+                "device": session.get("DeviceName") or "",
+                "item": item.get("Name") or "Unknown media",
+                "series": item.get("SeriesName") or "",
+                "type": item.get("Type") or "",
+                "paused": bool(state.get("IsPaused")),
+                "position_ticks": state.get("PositionTicks") or 0,
+                "runtime_ticks": item.get("RunTimeTicks") or 0,
+            }
+        )
+    return result
+
+
+def unfold_ics_lines(text: str) -> list[str]:
+    lines: list[str] = []
+    for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if raw.startswith((" ", "\t")) and lines:
+            lines[-1] += raw[1:]
+        elif raw:
+            lines.append(raw)
+    return lines
+
+
+def split_ics_line(line: str) -> tuple[str, dict[str, str], str]:
+    head, _, value = line.partition(":")
+    parts = head.split(";")
+    name = parts[0].upper()
+    params = {}
+    for part in parts[1:]:
+        key, _, param_value = part.partition("=")
+        params[key.upper()] = param_value
+    return name, params, ics_unescape(value)
+
+
+def ics_unescape(value: str) -> str:
+    return (
+        value.replace(r"\n", " ")
+        .replace(r"\N", " ")
+        .replace(r"\,", ",")
+        .replace(r"\;", ";")
+        .replace(r"\\", "\\")
+    )
+
+
+def parse_ics_datetime(value: str, params: dict[str, str]) -> datetime | None:
+    try:
+        if params.get("VALUE") == "DATE" or (len(value) == 8 and value.isdigit()):
+            return datetime.strptime(value[:8], "%Y%m%d").replace(tzinfo=timezone.utc)
+        clean = value.rstrip("Z")
+        fmt = "%Y%m%dT%H%M%S" if len(clean) >= 15 else "%Y%m%dT%H%M"
+        dt = datetime.strptime(clean[:15 if fmt.endswith("%S") else 13], fmt)
+        return dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def parse_rrule(value: str) -> dict[str, str]:
+    rule = {}
+    for chunk in value.split(";"):
+        key, _, raw = chunk.partition("=")
+        if key and raw:
+            rule[key.upper()] = raw
+    return rule
+
+
+def recurrence_delta(rule: dict[str, str]) -> timedelta | None:
+    try:
+        interval = max(int(rule.get("INTERVAL", "1") or "1"), 1)
+    except ValueError:
+        interval = 1
+    freq = rule.get("FREQ", "").upper()
+    if freq == "DAILY":
+        return timedelta(days=interval)
+    if freq == "WEEKLY":
+        return timedelta(weeks=interval)
+    return None
+
+
+def calendar_events(cfg: dict) -> dict:
+    result = {"configured": bool(cfg["nextcloud_calendar_url"]), "events": []}
+    if not cfg["nextcloud_calendar_url"]:
+        result["message"] = "Add HUB_NEXTCLOUD_CALENDAR_URL with the public Nextcloud calendar export link."
+        return result
+    try:
+        text = http_text(cfg["nextcloud_calendar_url"])
+    except HTTPError as exc:
+        result["error"] = f"Calendar returned HTTP {exc.code}."
+        return result
+    except (OSError, URLError) as exc:
+        result["error"] = f"Could not reach calendar: {exc}"
+        return result
+
+    now = datetime.now(timezone.utc)
+    horizon = now + timedelta(days=7)
+    events = []
+    current: dict | None = None
+    for line in unfold_ics_lines(text):
+        name, params, value = split_ics_line(line)
+        if name == "BEGIN" and value == "VEVENT":
+            current = {}
+        elif name == "END" and value == "VEVENT" and current is not None:
+            start = current.get("start")
+            if start:
+                duration = (current.get("end") or start) - start
+                rule = current.get("rrule") or {}
+                step = recurrence_delta(rule)
+                try:
+                    count = int(rule.get("COUNT", "0") or "0")
+                except ValueError:
+                    count = 0
+                occurrence = start
+                emitted = 0
+                if step and occurrence < now:
+                    skip = max(int((now - occurrence) // step) - 1, 0)
+                    if count and skip >= count:
+                        current = None
+                        continue
+                    occurrence += step * skip
+                    emitted += skip
+                while occurrence <= horizon and emitted < 80:
+                    if occurrence >= now:
+                        events.append({**current, "start": occurrence, "end": occurrence + duration})
+                    emitted += 1
+                    if not step:
+                        break
+                    if count and emitted >= count:
+                        break
+                    occurrence += step
+            current = None
+        elif current is not None:
+            if name == "DTSTART":
+                current["start"] = parse_ics_datetime(value, params)
+                current["all_day"] = params.get("VALUE") == "DATE"
+            elif name == "DTEND":
+                current["end"] = parse_ics_datetime(value, params)
+            elif name == "SUMMARY":
+                current["summary"] = value
+            elif name == "LOCATION":
+                current["location"] = value
+            elif name == "RRULE":
+                current["rrule"] = parse_rrule(value)
+
+    result["events"] = [
+        {
+            "summary": event.get("summary") or "Untitled event",
+            "location": event.get("location") or "",
+            "start": event["start"].isoformat(),
+            "end": event.get("end").isoformat() if event.get("end") else "",
+            "all_day": bool(event.get("all_day")),
+        }
+        for event in sorted(events, key=lambda item: item["start"])[:12]
+    ]
+    return result
+
+
+def home_assistant_state(cfg: dict) -> dict:
+    result = {
+        "configured": bool(cfg["home_assistant_url"] and cfg["home_assistant_token"] and cfg["home_assistant_entities"]),
+        "entities": [],
+    }
+    if not result["configured"]:
+        result["message"] = "Add HUB_HOME_ASSISTANT_URL, HUB_HOME_ASSISTANT_TOKEN, and HUB_HOME_ASSISTANT_ENTITIES."
+        return result
+    headers = {"Authorization": f"Bearer {cfg['home_assistant_token']}"}
+    for entity_id in cfg["home_assistant_entities"][:24]:
+        try:
+            state = http_json(f"{cfg['home_assistant_url']}/api/states/{entity_id}", headers=headers)
+            attrs = state.get("attributes", {}) if isinstance(state, dict) else {}
+            result["entities"].append(
+                {
+                    "entity_id": entity_id,
+                    "state": state.get("state", "unknown") if isinstance(state, dict) else "unknown",
+                    "name": attrs.get("friendly_name") or entity_id,
+                    "unit": attrs.get("unit_of_measurement") or "",
+                    "domain": entity_id.split(".", 1)[0],
+                }
+            )
+        except HTTPError as exc:
+            result["entities"].append({"entity_id": entity_id, "state": "error", "name": entity_id, "error": f"HTTP {exc.code}"})
+        except (OSError, URLError, ValueError) as exc:
+            result["entities"].append({"entity_id": entity_id, "state": "error", "name": entity_id, "error": str(exc)})
+    return result
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -642,6 +931,46 @@ def overview(
             client.close()
         except Exception:
             pass
+
+
+@app.get("/api/integrations")
+def integrations(request: Request):
+    require_auth(request)
+    cfg = integration_config()
+    client = docker_client()
+    try:
+        return {
+            "jellyfin": jellyfin_sessions(client, request, cfg),
+            "calendar": calendar_events(cfg),
+            "home_assistant": home_assistant_state(cfg),
+        }
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+
+
+@app.post("/api/home-assistant/toggle")
+def home_assistant_toggle(payload: HomeAssistantTogglePayload, request: Request):
+    require_auth(request)
+    cfg = integration_config()
+    if not cfg["home_assistant_url"] or not cfg["home_assistant_token"]:
+        raise HTTPException(status_code=400, detail="Home Assistant URL and token are not configured.")
+    if not payload.entity_id.startswith("light."):
+        raise HTTPException(status_code=400, detail="Only light entities can be toggled from Homelab Hub.")
+    headers = {
+        "Authorization": f"Bearer {cfg['home_assistant_token']}",
+        "Content-Type": "application/json",
+    }
+    body = json.dumps({"entity_id": payload.entity_id}).encode("utf-8")
+    try:
+        http_json(f"{cfg['home_assistant_url']}/api/services/light/toggle", headers=headers, data=body)
+        return {"ok": True, "home_assistant": home_assistant_state(cfg)}
+    except HTTPError as exc:
+        raise HTTPException(status_code=exc.code, detail=f"Home Assistant returned HTTP {exc.code}.") from exc
+    except (OSError, URLError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Home Assistant: {exc}") from exc
 
 
 Action = Literal["start", "stop", "restart", "pause", "unpause"]
