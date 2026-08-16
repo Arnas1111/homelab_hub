@@ -61,19 +61,6 @@
           </div>
         </section>
 
-        <section id="webuiPanel" class="panel dashboard-section" data-section="webui">
-          <div class="panel-head section-head">
-            <button class="section-toggle" type="button" data-action="toggle-section" data-section="webui" aria-expanded="true">
-              <span id="webuiFoldIcon">▾</span>
-              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M5 6h14v12H5z"/><path d="M5 10h14"/></svg></span><span><strong>WebUI links</strong><small>Published TCP ports opened as browser shortcuts</small></span></span>
-            </button>
-            <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="webui" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="webui" aria-label="Move section down">▿</button></span>
-          </div>
-          <div id="webuiPanelBody" class="webui-links">
-            <div class="empty">Waiting for containers…</div>
-          </div>
-        </section>
-
         <section id="portsPanel" class="panel dashboard-section" data-section="ports">
           <div class="panel-head section-head split-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="ports" aria-expanded="true">
@@ -114,6 +101,9 @@
               <thead><tr><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th>Ports</th><th>Image</th><th></th></tr></thead>
               <tbody id="containerRows"><tr><td colspan="7" class="empty">Connecting to Docker…</td></tr></tbody>
             </table>
+          </div>
+          <div id="webuiPanelBody" class="webui-manager">
+            <div class="empty compact-empty">Waiting for WebUI links…</div>
           </div>
         </section>
       </div>

@@ -8,8 +8,12 @@ let integrationData = null;
 let integrationLoading = false;
 let integrationSettings = null;
 let colorPickerActive = false;
+let colorPickerHoldTimer = null;
+let colorSendTimer = null;
+let partySpeedTimer = null;
+let haColorChoices = JSON.parse(localStorage.getItem('haColorChoices') || '{}');
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
-const DEFAULT_SECTION_ORDER = ['server', 'integrations', 'webui', 'ports', 'containers'];
+const DEFAULT_SECTION_ORDER = ['server', 'integrations', 'ports', 'containers'];
 let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSections') || '[]'));
 if (localStorage.getItem('containersSectionCollapsed') === 'true') collapsedSections.add('containers');
 let sectionOrder = JSON.parse(localStorage.getItem('overviewSectionOrder') || '[]').filter(id => DEFAULT_SECTION_ORDER.includes(id));
@@ -171,6 +175,42 @@ function cardIcon(name) {
     home: '<path d="m4 11 8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
   };
   return `<span class="card-glyph"><svg viewBox="0 0 24 24">${paths[name] || paths.cpu}</svg></span>`;
+}
+
+function holdColorPicker(ms = 9000) {
+  colorPickerActive = true;
+  clearTimeout(colorPickerHoldTimer);
+  colorPickerHoldTimer = setTimeout(() => { colorPickerActive = false; }, ms);
+}
+
+function releaseColorPickerSoon(ms = 1800) {
+  clearTimeout(colorPickerHoldTimer);
+  colorPickerHoldTimer = setTimeout(() => { colorPickerActive = false; }, ms);
+}
+
+function rgbToHex(rgb) {
+  if (!Array.isArray(rgb) || rgb.length < 3) return '';
+  const parts = rgb.slice(0, 3).map(value => Math.max(0, Math.min(255, Number(value) || 0)).toString(16).padStart(2, '0'));
+  return `#${parts.join('')}`;
+}
+
+function rememberEntityColor(entityId, color) {
+  if (!entityId || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+  haColorChoices[entityId] = color.toLowerCase();
+  localStorage.setItem('haColorChoices', JSON.stringify(haColorChoices));
+}
+
+function entityColor(entity) {
+  return haColorChoices[entity.entity_id] || rgbToHex(entity.rgb_color) || '#ffffff';
+}
+
+function partyCraziness() {
+  return Math.max(1, Math.min(10, Number(localStorage.getItem('haPartyCraziness') || 5)));
+}
+
+function partyDelayLabel(craziness = partyCraziness()) {
+  const delay = 3 - (((craziness - 1) / 9) * 2.75);
+  return `${delay.toFixed(delay < 1 ? 2 : 1)}s`;
 }
 
 function addMetricHistory(cpuPercent, memoryPercent) {
@@ -336,17 +376,22 @@ function renderHomeAssistantCard(home = {}) {
   const lights = entities.filter(entity => entity.domain === 'light');
   const sensors = entities.filter(entity => entity.domain !== 'light');
   const partyOn = localStorage.getItem('haPartyMode') === 'true';
+  const craziness = partyCraziness();
   return `<article class="integration-card integration-home">
     <div class="integration-card-head">
       <div><span class="server-card-label">${cardIcon('home')}Home Assistant</span><strong>${entities.length ? `${entities.length} entities` : 'Not connected'}</strong></div>
       ${lights.length ? `<button class="mini-link ${partyOn ? 'active' : ''}" type="button" data-action="ha-party">${partyOn ? 'Party on' : 'Party'}</button>` : ''}
     </div>
     ${integrationNotice(home)}
+    ${lights.length ? `<div class="ha-party-control">
+      <label for="haPartyCraziness"><span>Craziness</span><strong data-party-speed-label>${craziness}/10 · ${partyDelayLabel(craziness)}</strong></label>
+      <input id="haPartyCraziness" type="range" min="1" max="10" value="${craziness}" data-action="ha-craziness">
+    </div>` : ''}
     <div class="ha-lights">
       ${lights.length ? lights.map(entity => `
         <div class="ha-light ${entity.state === 'on' ? 'on' : ''}" title="${escapeHtml(entity.entity_id)}">
           <button type="button" data-action="ha-toggle" data-entity="${escapeHtml(entity.entity_id)}"><span>${escapeHtml(entity.name)}</span><strong>${escapeHtml(entity.state)}</strong></button>
-          <input type="color" data-action="ha-color" data-entity="${escapeHtml(entity.entity_id)}" value="#8bd3ff" title="Set color">
+          <input type="color" data-action="ha-color" data-entity="${escapeHtml(entity.entity_id)}" value="${escapeHtml(entityColor(entity))}" title="Set color">
         </div>
       `).join('') : ''}
     </div>
@@ -401,24 +446,47 @@ async function toggleHomeAssistantEntity(entityId) {
 }
 
 async function colorHomeAssistantEntity(entityId, color) {
+  rememberEntityColor(entityId, color);
+  holdColorPicker(4000);
   try {
     const result = await api('/api/home-assistant/color', {
       method: 'POST',
       body: JSON.stringify({ entity_id: entityId, color }),
     });
     integrationData = { ...(integrationData || {}), home_assistant: result.home_assistant };
-    renderIntegrations();
+    releaseColorPickerSoon();
   } catch (e) { toast(e.message); }
+}
+
+function queueHomeAssistantColor(entityId, color) {
+  rememberEntityColor(entityId, color);
+  holdColorPicker();
+  clearTimeout(colorSendTimer);
+  colorSendTimer = setTimeout(() => colorHomeAssistantEntity(entityId, color), 220);
 }
 
 async function togglePartyMode() {
   const next = localStorage.getItem('haPartyMode') !== 'true';
   try {
-    await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify({ enabled: next }) });
+    await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify({ enabled: next, craziness: partyCraziness() }) });
     localStorage.setItem('haPartyMode', String(next));
     renderIntegrations();
     toast(next ? 'Party mode on' : 'Party mode off');
   } catch (e) { toast(e.message); }
+}
+
+async function updatePartyCraziness(value) {
+  const craziness = Math.max(1, Math.min(10, Number(value) || 5));
+  localStorage.setItem('haPartyCraziness', String(craziness));
+  const label = document.querySelector('[data-party-speed-label]');
+  if (label) label.textContent = `${craziness}/10 · ${partyDelayLabel(craziness)}`;
+  if (localStorage.getItem('haPartyMode') !== 'true') return;
+  clearTimeout(partySpeedTimer);
+  partySpeedTimer = setTimeout(async () => {
+    try {
+      await api('/api/home-assistant/party', { method: 'POST', body: JSON.stringify({ enabled: true, craziness }) });
+    } catch (e) { toast(e.message); }
+  }, 300);
 }
 
 function fillIntegrationSettingsForm(data) {
@@ -545,11 +613,14 @@ function renderContainers() {
         ${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="group-up" data-group="${escapeHtml(group.name)}" aria-label="Move group up">▵</button><button class="order-btn" type="button" data-action="group-down" data-group="${escapeHtml(group.name)}" aria-label="Move group down">▿</button></span>` : ''}
       </td>
     </tr>
-    ${collapsedGroups.has(group.name) && !isSearching ? '' : group.containers.map(c => `
+    ${collapsedGroups.has(group.name) && !isSearching ? '' : group.containers.map(c => {
+      const webuiLink = webuiLinkForContainer(c);
+      const icon = `<img src="${iconPath(containerIcon(c))}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')">`;
+      return `
     <tr class="container-row" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">
       <td class="name-cell">
         <div class="container-title">
-          <span class="container-icon"><img src="${iconPath(containerIcon(c))}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')"></span>
+          ${webuiLink ? `<a class="container-icon webui-icon" href="${escapeHtml(webuiLink.url)}" target="_blank" rel="noreferrer" title="Open ${escapeHtml(webuiLink.label)} WebUI">${icon}</a>` : `<span class="container-icon">${icon}</span>`}
           <div><strong>${escapeHtml(c.name)}</strong><small>${c.project ? escapeHtml(c.project) : c.short_id}</small></div>
         </div>
       </td>
@@ -559,7 +630,8 @@ function renderContainers() {
       <td>${portText(c.ports)}</td>
       <td><div class="image-text" title="${escapeHtml(c.image)}">${escapeHtml(c.image)}</div></td>
       <td>${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="container-up" data-name="${escapeHtml(c.name)}" aria-label="Move container up">▵</button><button class="order-btn" type="button" data-action="container-down" data-name="${escapeHtml(c.name)}" aria-label="Move container down">▿</button></span>` : ''}<button class="kebab" type="button" title="More options">•••</button></td>
-    </tr>`).join('')}
+    </tr>`;
+    }).join('')}
   `).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
   applySectionState();
 }
@@ -694,6 +766,16 @@ function mergedWebLinks({ includeDisabled = false } = {}) {
     .sort((a, b) => sortValue(a.sort_order, a.label).localeCompare(sortValue(b.sort_order, b.label)));
 }
 
+function webuiLinkForContainer(container) {
+  const name = String(container.name || '').toLowerCase();
+  const links = mergedWebLinks().filter(link => {
+    const containerName = String(link.container_name || '').toLowerCase();
+    const label = String(link.label || '').toLowerCase();
+    return containerName === name || label === name;
+  });
+  return links[0] || null;
+}
+
 async function saveWebuiLinks(links) {
   const payload = links.map((link, index) => ({
     link_key: link.link_key || `manual:${Date.now()}:${index}`,
@@ -708,12 +790,14 @@ async function saveWebuiLinks(links) {
   const result = await api('/api/webui-links', { method: 'PUT', body: JSON.stringify({ links: payload }) });
   currentData.webui_links = result.links || [];
   renderWebLinks();
+  renderContainers();
 }
 
 function webuiEditorRow(link) {
   return `<form class="webui-edit-row" data-link-key="${escapeHtml(link.link_key)}">
     <input name="label" value="${escapeHtml(link.label)}" maxlength="80" placeholder="Label">
     <input name="url" value="${escapeHtml(link.url)}" maxlength="500" placeholder="http://server:port">
+    <input name="container_name" value="${escapeHtml(link.container_name || '')}" maxlength="120" placeholder="Container">
     <input name="icon" value="${escapeHtml(link.icon || '')}" maxlength="90" placeholder="icon">
     <button class="btn" type="submit">Save</button>
     <button class="icon-btn small" type="button" data-action="webui-toggle" title="${link.enabled ? 'Hide link' : 'Show link'}">${link.enabled ? '×' : '+'}</button>
@@ -722,23 +806,18 @@ function webuiEditorRow(link) {
 }
 
 function renderWebLinks() {
-  const editorOpen = $('webuiPanelBody')?.querySelector('.webui-editor')?.open;
+  const target = $('webuiPanelBody');
+  if (!target) return;
+  const editorOpen = target.querySelector('.webui-editor')?.open;
   const visible = mergedWebLinks();
   const editable = mergedWebLinks({ includeDisabled: true });
-  $('webuiPanelBody').innerHTML = `
-    <div class="webui-links">
-      ${visible.length ? visible.map(link => `
-        <a class="webui-pill" href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(link.url)}">
-          <span class="container-icon mini"><img src="${iconPath(link.icon || DEFAULT_CONTAINER_ICON)}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')"></span>
-          <span>${escapeHtml(link.label)}</span>
-        </a>
-      `).join('') : '<div class="empty compact-empty">No WebUI links enabled.</div>'}
-    </div>
+  target.innerHTML = `
     <details class="webui-editor" ${editorOpen ? 'open' : ''}>
-      <summary>Manage links</summary>
+      <summary>Manage WebUI links <span>${visible.length} enabled</span></summary>
       <form id="webuiAddForm" class="webui-edit-row add">
         <input name="label" maxlength="80" placeholder="Label">
         <input name="url" maxlength="500" placeholder="http://server:port">
+        <input name="container_name" maxlength="120" placeholder="Container">
         <input name="icon" maxlength="90" placeholder="icon">
         <button class="btn primary" type="submit">Add</button>
       </form>
@@ -757,7 +836,7 @@ function linkFromForm(form, existing = {}) {
     label: String(values.get('label') || '').trim(),
     url: String(values.get('url') || '').trim(),
     icon: sanitizeIcon(String(values.get('icon') || '')),
-    container_name: existing.container_name || '',
+    container_name: String(values.get('container_name') || existing.container_name || '').trim(),
     enabled: existing.enabled !== false,
     source: existing.source || 'manual',
   };
@@ -873,7 +952,7 @@ function overviewQuery() {
   const containerSearchActive = Boolean($('containerSearch')?.value.trim());
   const portSearchActive = Boolean($('portSearch')?.value.trim());
   const includeMetrics = isSectionOpen('server');
-  const includeContainers = isSectionOpen('server') || isSectionOpen('containers') || isSectionOpen('webui') || isSectionOpen('ports') || containerSearchActive || portSearchActive;
+  const includeContainers = isSectionOpen('server') || isSectionOpen('containers') || isSectionOpen('ports') || containerSearchActive || portSearchActive;
   const includeStats = isSectionOpen('server') || isSectionOpen('containers') || containerSearchActive;
   return new URLSearchParams({
     include_metrics: String(includeMetrics),
@@ -1201,17 +1280,28 @@ $('integrationsPanelBody').addEventListener('click', event => {
   if (button.dataset.action === 'ha-party') togglePartyMode();
   else toggleHomeAssistantEntity(button.dataset.entity);
 });
+$('integrationsPanelBody').addEventListener('pointerdown', event => {
+  if (event.target.closest('[data-action="ha-color"]')) holdColorPicker();
+});
 $('integrationsPanelBody').addEventListener('focusin', event => {
-  if (event.target.closest('[data-action="ha-color"]')) colorPickerActive = true;
+  if (event.target.closest('[data-action="ha-color"]')) holdColorPicker();
 });
 $('integrationsPanelBody').addEventListener('focusout', event => {
-  if (event.target.closest('[data-action="ha-color"]')) setTimeout(() => { colorPickerActive = false; }, 800);
+  if (event.target.closest('[data-action="ha-color"]')) releaseColorPickerSoon();
+});
+$('integrationsPanelBody').addEventListener('input', event => {
+  const colorInput = event.target.closest('[data-action="ha-color"]');
+  if (colorInput) {
+    queueHomeAssistantColor(colorInput.dataset.entity, colorInput.value);
+    return;
+  }
+  const slider = event.target.closest('[data-action="ha-craziness"]');
+  if (slider) updatePartyCraziness(slider.value);
 });
 $('integrationsPanelBody').addEventListener('change', event => {
   const input = event.target.closest('[data-action="ha-color"]');
   if (!input) return;
-  colorHomeAssistantEntity(input.dataset.entity, input.value);
-  setTimeout(() => { colorPickerActive = false; }, 800);
+  queueHomeAssistantColor(input.dataset.entity, input.value);
 });
 $('overviewSections').addEventListener('click', event => {
   const sectionButton = event.target.closest('[data-action^="section-"], [data-action="toggle-section"]');
@@ -1241,6 +1331,7 @@ $('topRefreshSeconds').addEventListener('keydown', event => {
   if (event.key === 'Enter') $('topRefreshSeconds').blur();
 });
 $('containerRows').addEventListener('click', event => {
+  if (event.target.closest('.webui-icon')) return;
   const orderButton = event.target.closest('.order-btn');
   if (orderButton) {
     event.stopPropagation();

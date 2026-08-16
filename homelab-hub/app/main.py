@@ -44,6 +44,7 @@ LAST_PROC_SAMPLE: dict[str, tuple[int, int]] | None = None
 LAST_PROC_TOTAL: int | None = None
 PARTY_MODE_STOP = threading.Event()
 PARTY_MODE_THREAD: threading.Thread | None = None
+PARTY_MODE_DELAY = 1.75
 
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
@@ -122,6 +123,7 @@ class HomeAssistantColorPayload(BaseModel):
 
 class HomeAssistantPartyPayload(BaseModel):
     enabled: bool
+    craziness: int = Field(default=5, ge=1, le=10)
 
 
 def db() -> sqlite3.Connection:
@@ -1173,6 +1175,9 @@ def home_assistant_state(cfg: dict) -> dict:
                     "name": attrs.get("friendly_name") or entity_id,
                     "unit": attrs.get("unit_of_measurement") or "",
                     "domain": entity_id.split(".", 1)[0],
+                    "rgb_color": attrs.get("rgb_color") or [],
+                    "brightness": attrs.get("brightness"),
+                    "supported_color_modes": sorted(attrs.get("supported_color_modes") or []),
                 }
             )
         except HTTPError as exc:
@@ -1394,15 +1399,27 @@ def hex_to_rgb(color: str) -> list[int]:
     return [int(clean[index : index + 2], 16) for index in (0, 2, 4)]
 
 
+def party_delay(craziness: int) -> float:
+    normalized = (max(1, min(craziness, 10)) - 1) / 9
+    return round(3.0 - (normalized * 2.75), 2)
+
+
+def set_light_white(cfg: dict, entity_id: str) -> None:
+    try:
+        home_assistant_service(cfg, "light", "turn_on", {"entity_id": entity_id, "brightness": 255, "color_temp_kelvin": 4000, "transition": 0})
+    except Exception:
+        home_assistant_service(cfg, "light", "turn_on", {"entity_id": entity_id, "rgb_color": [255, 255, 255], "brightness": 255, "transition": 0})
+
+
 def party_worker(cfg: dict):
     colors = [[255, 0, 80], [255, 140, 0], [255, 255, 0], [0, 255, 120], [0, 180, 255], [120, 70, 255], [255, 0, 220]]
     while not PARTY_MODE_STOP.is_set():
         for entity_id in light_entities(cfg):
             try:
-                home_assistant_service(cfg, "light", "turn_on", {"entity_id": entity_id, "rgb_color": random.choice(colors), "brightness": random.randint(90, 255)})
+                home_assistant_service(cfg, "light", "turn_on", {"entity_id": entity_id, "rgb_color": random.choice(colors), "brightness": 255, "transition": 0})
             except Exception:
                 pass
-        PARTY_MODE_STOP.wait(2.5)
+        PARTY_MODE_STOP.wait(PARTY_MODE_DELAY)
 
 
 @app.post("/api/home-assistant/toggle")
@@ -1429,7 +1446,7 @@ def home_assistant_color(payload: HomeAssistantColorPayload, request: Request):
     if not payload.entity_id.startswith("light."):
         raise HTTPException(status_code=400, detail="Only light entities can receive colors from Homelab Hub.")
     try:
-        home_assistant_service(cfg, "light", "turn_on", {"entity_id": payload.entity_id, "rgb_color": hex_to_rgb(payload.color)})
+        home_assistant_service(cfg, "light", "turn_on", {"entity_id": payload.entity_id, "rgb_color": hex_to_rgb(payload.color), "brightness": 255, "transition": 0})
         return {"ok": True, "home_assistant": home_assistant_state(cfg)}
     except HTTPError as exc:
         raise HTTPException(status_code=exc.code, detail=f"Home Assistant returned HTTP {exc.code}.") from exc
@@ -1442,21 +1459,29 @@ def home_assistant_party(payload: HomeAssistantPartyPayload, request: Request):
     require_auth(request)
     cfg = integration_config()
     ensure_home_assistant(cfg)
-    global PARTY_MODE_THREAD
+    global PARTY_MODE_DELAY, PARTY_MODE_THREAD
+    PARTY_MODE_DELAY = party_delay(payload.craziness)
     if payload.enabled:
         if PARTY_MODE_THREAD and PARTY_MODE_THREAD.is_alive():
-            return {"ok": True, "enabled": True}
+            return {"ok": True, "enabled": True, "delay_seconds": PARTY_MODE_DELAY}
         PARTY_MODE_STOP.clear()
         PARTY_MODE_THREAD = threading.Thread(target=party_worker, args=(cfg,), daemon=True)
         PARTY_MODE_THREAD.start()
-        return {"ok": True, "enabled": True}
+        return {"ok": True, "enabled": True, "delay_seconds": PARTY_MODE_DELAY}
     PARTY_MODE_STOP.set()
-    for entity_id in light_entities(cfg):
+    lights = light_entities(cfg)
+    for entity_id in lights:
         try:
-            home_assistant_service(cfg, "light", "turn_on", {"entity_id": entity_id, "rgb_color": [255, 255, 255]})
+            set_light_white(cfg, entity_id)
         except Exception:
             pass
-    return {"ok": True, "enabled": False}
+    time.sleep(0.35)
+    for entity_id in lights:
+        try:
+            home_assistant_service(cfg, "light", "turn_off", {"entity_id": entity_id, "transition": 0})
+        except Exception:
+            pass
+    return {"ok": True, "enabled": False, "delay_seconds": PARTY_MODE_DELAY}
 
 
 @app.get("/api/integration-settings")
