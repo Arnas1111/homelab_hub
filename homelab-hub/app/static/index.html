@@ -70,7 +70,13 @@
       <div class="modal-head"><div><h2 id="modalTitle">Container</h2><p id="modalMeta" class="muted"></p></div><button id="modalClose" class="icon-btn">×</button></div>
       <div class="container-actions" id="modalActions"></div>
       <h3>Logs</h3>
-      <pre id="modalLogs" class="logs">Loading…</pre>
+      <div class="log-toolbar">
+        <span id="logStatus" class="log-status loading"><i></i><span>Loading</span></span>
+        <button id="logRefreshBtn" class="btn" type="button">Refresh</button>
+      </div>
+      <div id="modalLogs" class="logs">
+        <div class="log-empty">Loading logs...</div>
+      </div>
     </div>
   </div>
 

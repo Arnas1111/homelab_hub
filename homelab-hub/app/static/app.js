@@ -1,6 +1,7 @@
 let currentData = null;
 let settings = { title: 'Homelab Hub', refresh_seconds: 5, confirm_actions: true };
 let refreshTimer = null;
+let logRefreshTimer = null;
 let activeContainer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -96,9 +97,103 @@ window.openContainer = async function(id) {
   $('modalTitle').textContent = c.name;
   $('modalMeta').textContent = `${c.image} · ${c.status}`;
   $('modalActions').innerHTML = actionsFor(c).map(a => `<button class="btn ${a === 'stop' ? 'danger' : ''}" onclick="doAction('${a}')">${a[0].toUpperCase()+a.slice(1)}</button>`).join('');
-  $('modal').classList.remove('hidden'); $('modalLogs').textContent = 'Loading logs…';
-  try { const result = await api(`/api/containers/${id}/logs?tail=300`); $('modalLogs').textContent = result.logs || '(No logs)'; }
-  catch (e) { $('modalLogs').textContent = e.message; }
+  $('modal').classList.remove('hidden');
+  await loadLogs({ forceBottom: true });
+  scheduleLogRefresh();
+}
+
+async function loadLogs({ forceBottom = false } = {}) {
+  if (!activeContainer) return;
+  const logsEl = $('modalLogs');
+  const wasPinned = forceBottom || isLogPinnedToBottom(logsEl);
+  setLogStatus('loading', 'Refreshing');
+  try {
+    const result = await api(`/api/containers/${activeContainer.id}/logs?tail=500`);
+    renderLogs(result.logs || '', logsEl);
+    if (wasPinned) logsEl.scrollTop = logsEl.scrollHeight;
+    setLogStatus('current', `Updated ${new Date().toLocaleTimeString()}`);
+  } catch (e) {
+    logsEl.innerHTML = `<div class="log-empty error">${escapeHtml(e.message)}</div>`;
+    setLogStatus('stale', 'Update failed');
+  }
+}
+
+function scheduleLogRefresh() {
+  if (logRefreshTimer) clearTimeout(logRefreshTimer);
+  if (!activeContainer || $('modal').classList.contains('hidden')) return;
+  logRefreshTimer = setTimeout(async () => {
+    await loadLogs();
+    scheduleLogRefresh();
+  }, 10000);
+}
+
+function setLogStatus(state, text) {
+  const el = $('logStatus');
+  el.className = `log-status ${state}`;
+  el.querySelector('span').textContent = text;
+}
+
+function isLogPinnedToBottom(el) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 36;
+}
+
+function renderLogs(raw, target) {
+  const lines = raw.split(/\r?\n/).filter(line => line.length);
+  if (!lines.length) {
+    target.innerHTML = '<div class="log-empty">(No logs)</div>';
+    return;
+  }
+  target.innerHTML = `<div class="log-table">${lines.map(line => {
+    const entry = parseLogLine(line);
+    return `<div class="log-row ${entry.levelClass}">
+      <time>${escapeHtml(entry.timestamp)}</time>
+      <span class="log-level">${escapeHtml(entry.level)}</span>
+      <code>${escapeHtml(entry.message)}</code>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function parseLogLine(line) {
+  const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s*(.*)$/);
+  const iso = match?.[1] || '';
+  const message = (match?.[2] || line).trim();
+  const level = detectLogLevel(message);
+  return {
+    timestamp: iso ? formatLogTime(iso) : 'No timestamp',
+    level,
+    levelClass: `level-${level.toLowerCase()}`,
+    message: message || '(empty line)',
+  };
+}
+
+function formatLogTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const pad = (n, size = 2) => String(n).padStart(size, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+}
+
+function detectLogLevel(message) {
+  const patterns = [
+    ['ERROR', /\b(error|fatal|critical|exception|traceback|failed|failure)\b/i],
+    ['WARN', /\b(warn|warning|unauthorized|denied|refused)\b/i],
+    ['INFO', /\b(info|started|running|listening|request|response|connected|complete)\b/i],
+    ['DEBUG', /\b(debug|trace|verbose)\b/i],
+  ];
+  const explicit = message.match(/^\s*(?:\[[^\]]+\]\s*)?(TRACE|DEBUG|INFO|NOTICE|WARN|WARNING|ERROR|ERR|FATAL|CRITICAL)\b[:\]]?/i);
+  if (explicit) return normalizeLogLevel(explicit[1]);
+  for (const [level, pattern] of patterns) {
+    if (pattern.test(message)) return level;
+  }
+  return 'LOG';
+}
+
+function normalizeLogLevel(level) {
+  const value = level.toUpperCase();
+  if (value === 'WARNING') return 'WARN';
+  if (value === 'ERR' || value === 'FATAL' || value === 'CRITICAL') return 'ERROR';
+  if (value === 'TRACE') return 'DEBUG';
+  return value;
 }
 
 window.doAction = async function(action) {
@@ -112,9 +207,14 @@ window.doAction = async function(action) {
   } catch (e) { toast(e.message); }
 }
 
-function closeModal(){ $('modal').classList.add('hidden'); activeContainer = null; }
+function closeModal(){
+  $('modal').classList.add('hidden');
+  activeContainer = null;
+  if (logRefreshTimer) clearTimeout(logRefreshTimer);
+}
 $('modalClose').addEventListener('click', closeModal);
 $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
+$('logRefreshBtn').addEventListener('click', () => loadLogs({ forceBottom: true }));
 $('refreshBtn').addEventListener('click', refresh);
 $('containerSearch').addEventListener('input', renderContainers);
 
