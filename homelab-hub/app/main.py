@@ -7,10 +7,13 @@ import shutil
 import sqlite3
 import threading
 import time
+import xml.etree.ElementTree as ET
+from base64 import b64encode
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote, urljoin, urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 
@@ -94,6 +97,11 @@ class IntegrationSettingsPayload(BaseModel):
     jellyfin_api_key: str = Field(default="", max_length=5000)
     jellyfin_api_key_clear: bool = False
     nextcloud_calendar_url: str = Field(default="", max_length=1000)
+    nextcloud_url: str = Field(default="", max_length=500)
+    nextcloud_username: str = Field(default="", max_length=200)
+    nextcloud_app_password: str = Field(default="", max_length=5000)
+    nextcloud_app_password_clear: bool = False
+    nextcloud_calendar_name: str = Field(default="", max_length=200)
     home_assistant_url: str = Field(default="", max_length=500)
     home_assistant_token: str = Field(default="", max_length=5000)
     home_assistant_token_clear: bool = False
@@ -663,11 +671,15 @@ INTEGRATION_ENV = {
     "jellyfin_public_url": "HUB_JELLYFIN_PUBLIC_URL",
     "jellyfin_api_key": "HUB_JELLYFIN_API_KEY",
     "nextcloud_calendar_url": "HUB_NEXTCLOUD_CALENDAR_URL",
+    "nextcloud_url": "HUB_NEXTCLOUD_URL",
+    "nextcloud_username": "HUB_NEXTCLOUD_USERNAME",
+    "nextcloud_app_password": "HUB_NEXTCLOUD_APP_PASSWORD",
+    "nextcloud_calendar_name": "HUB_NEXTCLOUD_CALENDAR_NAME",
     "home_assistant_url": "HUB_HOME_ASSISTANT_URL",
     "home_assistant_token": "HUB_HOME_ASSISTANT_TOKEN",
     "home_assistant_entities": "HUB_HOME_ASSISTANT_ENTITIES",
 }
-SECRET_INTEGRATION_KEYS = {"jellyfin_api_key", "home_assistant_token"}
+SECRET_INTEGRATION_KEYS = {"jellyfin_api_key", "nextcloud_app_password", "home_assistant_token"}
 
 
 def env_value(name: str, default: str = "") -> str:
@@ -691,6 +703,10 @@ def public_integration_settings() -> dict:
         "jellyfin_public_url": values["jellyfin_public_url"],
         "jellyfin_api_key_configured": bool(values["jellyfin_api_key"]),
         "nextcloud_calendar_url": values["nextcloud_calendar_url"],
+        "nextcloud_url": values["nextcloud_url"],
+        "nextcloud_username": values["nextcloud_username"],
+        "nextcloud_app_password_configured": bool(values["nextcloud_app_password"]),
+        "nextcloud_calendar_name": values["nextcloud_calendar_name"],
         "home_assistant_url": values["home_assistant_url"],
         "home_assistant_token_configured": bool(values["home_assistant_token"]),
         "home_assistant_entities": values["home_assistant_entities"],
@@ -702,6 +718,9 @@ def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
         "jellyfin_url": payload.jellyfin_url.strip().rstrip("/"),
         "jellyfin_public_url": payload.jellyfin_public_url.strip().rstrip("/"),
         "nextcloud_calendar_url": payload.nextcloud_calendar_url.strip(),
+        "nextcloud_url": payload.nextcloud_url.strip().rstrip("/"),
+        "nextcloud_username": payload.nextcloud_username.strip(),
+        "nextcloud_calendar_name": payload.nextcloud_calendar_name.strip(),
         "home_assistant_url": payload.home_assistant_url.strip().rstrip("/"),
         "home_assistant_entities": ",".join(
             item.strip() for item in payload.home_assistant_entities.split(",") if item.strip()
@@ -712,6 +731,10 @@ def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
         secrets_to_write["jellyfin_api_key"] = ""
     elif payload.jellyfin_api_key.strip():
         secrets_to_write["jellyfin_api_key"] = payload.jellyfin_api_key.strip()
+    if payload.nextcloud_app_password_clear:
+        secrets_to_write["nextcloud_app_password"] = ""
+    elif payload.nextcloud_app_password.strip():
+        secrets_to_write["nextcloud_app_password"] = payload.nextcloud_app_password.strip()
     if payload.home_assistant_token_clear:
         secrets_to_write["home_assistant_token"] = ""
     elif payload.home_assistant_token.strip():
@@ -737,6 +760,10 @@ def integration_config() -> dict:
         "jellyfin_public_url": values["jellyfin_public_url"].rstrip("/"),
         "jellyfin_api_key": values["jellyfin_api_key"],
         "nextcloud_calendar_url": values["nextcloud_calendar_url"],
+        "nextcloud_url": values["nextcloud_url"].rstrip("/"),
+        "nextcloud_username": values["nextcloud_username"],
+        "nextcloud_app_password": values["nextcloud_app_password"],
+        "nextcloud_calendar_name": values["nextcloud_calendar_name"],
         "home_assistant_url": values["home_assistant_url"].rstrip("/"),
         "home_assistant_token": values["home_assistant_token"],
         "home_assistant_entities": [
@@ -747,8 +774,8 @@ def integration_config() -> dict:
     }
 
 
-def http_request(url: str, headers: dict | None = None, data: bytes | None = None, timeout: int = 7):
-    request = UrlRequest(url, data=data, headers={"User-Agent": "Homelab-Hub/1.0", **(headers or {})})
+def http_request(url: str, headers: dict | None = None, data: bytes | None = None, timeout: int = 7, method: str | None = None):
+    request = UrlRequest(url, data=data, headers={"User-Agent": "Homelab-Hub/1.0", **(headers or {})}, method=method)
     return urlopen(request, timeout=timeout)
 
 
@@ -760,6 +787,11 @@ def http_json(url: str, headers: dict | None = None, data: bytes | None = None, 
 def http_text(url: str, headers: dict | None = None, timeout: int = 7) -> str:
     with http_request(url, headers=headers, timeout=timeout) as response:
         return response.read(2 * 1024 * 1024).decode("utf-8", errors="replace")
+
+
+def basic_auth_header(username: str, password: str) -> str:
+    raw = f"{username}:{password}".encode("utf-8")
+    return f"Basic {b64encode(raw).decode('ascii')}"
 
 
 def host_base_url(request: Request) -> str:
@@ -905,20 +937,7 @@ def recurrence_delta(rule: dict[str, str]) -> timedelta | None:
     return None
 
 
-def calendar_events(cfg: dict) -> dict:
-    result = {"configured": bool(cfg["nextcloud_calendar_url"]), "events": []}
-    if not cfg["nextcloud_calendar_url"]:
-        result["message"] = "Configure the Nextcloud calendar export link in Connectors."
-        return result
-    try:
-        text = http_text(cfg["nextcloud_calendar_url"])
-    except HTTPError as exc:
-        result["error"] = f"Calendar returned HTTP {exc.code}."
-        return result
-    except (OSError, URLError) as exc:
-        result["error"] = f"Could not reach calendar: {exc}"
-        return result
-
+def parse_calendar_text(text: str) -> list[dict]:
     now = datetime.now(timezone.utc)
     horizon = now + timedelta(days=7)
     events = []
@@ -969,7 +988,7 @@ def calendar_events(cfg: dict) -> dict:
             elif name == "RRULE":
                 current["rrule"] = parse_rrule(value)
 
-    result["events"] = [
+    return [
         {
             "summary": event.get("summary") or "Untitled event",
             "location": event.get("location") or "",
@@ -979,6 +998,131 @@ def calendar_events(cfg: dict) -> dict:
         }
         for event in sorted(events, key=lambda item: item["start"])[:12]
     ]
+
+
+def caldav_headers(cfg: dict) -> dict:
+    return {
+        "Authorization": basic_auth_header(cfg["nextcloud_username"], cfg["nextcloud_app_password"]),
+        "Content-Type": "application/xml; charset=utf-8",
+        "Depth": "1",
+    }
+
+
+def caldav_home_url(cfg: dict) -> str:
+    base = cfg["nextcloud_url"].rstrip("/") + "/"
+    user = quote(cfg["nextcloud_username"].strip("/"), safe="")
+    return urljoin(base, f"remote.php/dav/calendars/{user}/")
+
+
+def caldav_request(url: str, body: str, cfg: dict, method: str = "REPORT") -> str:
+    with http_request(
+        url,
+        headers=caldav_headers(cfg),
+        data=body.encode("utf-8"),
+        timeout=10,
+        method=method,
+    ) as response:
+        return response.read(4 * 1024 * 1024).decode("utf-8", errors="replace")
+
+
+def caldav_href_url(base_url: str, href: str) -> str:
+    if href.startswith(("http://", "https://")):
+        return href
+    parsed = urlparse(base_url)
+    if href.startswith("/"):
+        return f"{parsed.scheme}://{parsed.netloc}{href}"
+    return urljoin(base_url.rstrip("/") + "/", href)
+
+
+def caldav_calendars(cfg: dict) -> list[dict]:
+    body = """
+<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <d:displayname />
+    <d:resourcetype />
+  </d:prop>
+</d:propfind>
+"""
+    xml = caldav_request(caldav_home_url(cfg), body, cfg, method="PROPFIND")
+    root = ET.fromstring(xml)
+    calendars = []
+    ns = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
+    for response in root.findall("d:response", ns):
+        href = response.findtext("d:href", default="", namespaces=ns)
+        resource = response.find(".//d:resourcetype", ns)
+        if resource is None or resource.find("c:calendar", ns) is None:
+            continue
+        display = response.findtext(".//d:displayname", default="", namespaces=ns)
+        calendars.append({"href": href, "name": display or href.strip("/").split("/")[-1]})
+    return calendars
+
+
+def caldav_calendar_events(cfg: dict) -> dict:
+    result = {"configured": True, "events": [], "source": "caldav"}
+    try:
+        calendars = caldav_calendars(cfg)
+        wanted = cfg["nextcloud_calendar_name"].strip().lower()
+        if wanted:
+            calendars = [
+                item for item in calendars
+                if item["name"].lower() == wanted or item["href"].rstrip("/").split("/")[-1].lower() == wanted
+            ]
+        if not calendars:
+            result["message"] = "No matching Nextcloud calendars found."
+            return result
+        now = datetime.now(timezone.utc)
+        horizon = now + timedelta(days=7)
+        body = f"""
+<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <d:getetag />
+    <c:calendar-data />
+  </d:prop>
+  <c:filter>
+    <c:comp-filter name="VCALENDAR">
+      <c:comp-filter name="VEVENT">
+        <c:time-range start="{now.strftime('%Y%m%dT%H%M%SZ')}" end="{horizon.strftime('%Y%m%dT%H%M%SZ')}" />
+      </c:comp-filter>
+    </c:comp-filter>
+  </c:filter>
+</c:calendar-query>
+"""
+        events = []
+        ns = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
+        base = cfg["nextcloud_url"].rstrip("/")
+        for calendar in calendars[:8]:
+            url = caldav_href_url(base, calendar["href"])
+            xml = caldav_request(url, body, cfg)
+            root = ET.fromstring(xml)
+            for data in root.findall(".//c:calendar-data", ns):
+                if data.text:
+                    for event in parse_calendar_text(data.text):
+                        event["calendar"] = calendar["name"]
+                        events.append(event)
+        result["events"] = sorted(events, key=lambda item: item["start"])[:12]
+        result["calendars"] = [item["name"] for item in calendars]
+    except HTTPError as exc:
+        result["error"] = f"Nextcloud CalDAV returned HTTP {exc.code}."
+    except (OSError, URLError, ValueError, ET.ParseError) as exc:
+        result["error"] = f"Could not query Nextcloud CalDAV: {exc}"
+    return result
+
+
+def calendar_events(cfg: dict) -> dict:
+    caldav_ready = bool(cfg["nextcloud_url"] and cfg["nextcloud_username"] and cfg["nextcloud_app_password"])
+    if caldav_ready:
+        return caldav_calendar_events(cfg)
+
+    result = {"configured": bool(cfg["nextcloud_calendar_url"]), "events": [], "source": "public"}
+    if not cfg["nextcloud_calendar_url"]:
+        result["message"] = "Configure private Nextcloud CalDAV login or a public calendar export link in Connectors."
+        return result
+    try:
+        result["events"] = parse_calendar_text(http_text(cfg["nextcloud_calendar_url"]))
+    except HTTPError as exc:
+        result["error"] = f"Calendar returned HTTP {exc.code}."
+    except (OSError, URLError) as exc:
+        result["error"] = f"Could not reach calendar: {exc}"
     return result
 
 

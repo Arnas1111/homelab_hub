@@ -370,6 +370,12 @@ function fillIntegrationSettingsForm(data) {
   $('jellyfinApiKey').value = '';
   $('jellyfinApiKey').placeholder = integrationSettings.jellyfin_api_key_configured ? 'Configured - leave blank to keep' : '';
   $('jellyfinApiKeyClear').checked = false;
+  $('nextcloudUrl').value = integrationSettings.nextcloud_url || '';
+  $('nextcloudUsername').value = integrationSettings.nextcloud_username || '';
+  $('nextcloudAppPassword').value = '';
+  $('nextcloudAppPassword').placeholder = integrationSettings.nextcloud_app_password_configured ? 'Configured - leave blank to keep' : '';
+  $('nextcloudAppPasswordClear').checked = false;
+  $('nextcloudCalendarName').value = integrationSettings.nextcloud_calendar_name || '';
   $('nextcloudCalendarUrl').value = integrationSettings.nextcloud_calendar_url || '';
   $('homeAssistantUrl').value = integrationSettings.home_assistant_url || '';
   $('homeAssistantToken').value = '';
@@ -394,6 +400,11 @@ async function saveIntegrationSettings(event) {
         jellyfin_public_url: $('jellyfinPublicUrl').value,
         jellyfin_api_key: $('jellyfinApiKey').value,
         jellyfin_api_key_clear: $('jellyfinApiKeyClear').checked,
+        nextcloud_url: $('nextcloudUrl').value,
+        nextcloud_username: $('nextcloudUsername').value,
+        nextcloud_app_password: $('nextcloudAppPassword').value,
+        nextcloud_app_password_clear: $('nextcloudAppPasswordClear').checked,
+        nextcloud_calendar_name: $('nextcloudCalendarName').value,
         nextcloud_calendar_url: $('nextcloudCalendarUrl').value,
         home_assistant_url: $('homeAssistantUrl').value,
         home_assistant_token: $('homeAssistantToken').value,
