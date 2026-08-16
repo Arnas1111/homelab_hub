@@ -586,6 +586,7 @@ function render(data) {
   ].map(([k,v]) => `<div class="detail"><span>${k}</span><strong>${escapeHtml(String(v ?? '—'))}</strong></div>`).join('');
   $('settingTitle').value = settings.title;
   $('settingRefresh').value = settings.refresh_seconds;
+  $('topRefreshSeconds').value = settings.refresh_seconds;
   $('settingConfirm').checked = settings.confirm_actions;
   $('brandTitle').textContent = settings.title;
   document.title = settings.title;
@@ -597,6 +598,25 @@ function render(data) {
   applySectionOrder();
   applySectionState();
   scheduleRefresh();
+}
+
+async function saveSettings(nextSettings) {
+  settings = await api('/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify({
+      title: nextSettings.title ?? settings.title,
+      refresh_seconds: Number(nextSettings.refresh_seconds ?? settings.refresh_seconds),
+      confirm_actions: nextSettings.confirm_actions ?? settings.confirm_actions,
+    }),
+  });
+  $('brandTitle').textContent = settings.title;
+  document.title = settings.title;
+  $('settingTitle').value = settings.title;
+  $('settingRefresh').value = settings.refresh_seconds;
+  $('topRefreshSeconds').value = settings.refresh_seconds;
+  $('settingConfirm').checked = settings.confirm_actions;
+  scheduleRefresh();
+  return settings;
 }
 
 async function refresh() {
@@ -876,6 +896,20 @@ $('containerSearch').addEventListener('input', renderContainers);
 $('portSearch').addEventListener('input', renderPorts);
 $('portProtocol').addEventListener('change', renderPorts);
 $('portMode').addEventListener('change', renderPorts);
+$('topRefreshSeconds').addEventListener('change', async () => {
+  const seconds = Number($('topRefreshSeconds').value);
+  if (!Number.isFinite(seconds)) return;
+  try {
+    await saveSettings({ refresh_seconds: seconds });
+    toast(`Refresh interval set to ${settings.refresh_seconds}s`);
+  } catch (e) {
+    $('topRefreshSeconds').value = settings.refresh_seconds;
+    toast(e.message);
+  }
+});
+$('topRefreshSeconds').addEventListener('keydown', event => {
+  if (event.key === 'Enter') $('topRefreshSeconds').blur();
+});
 $('containerRows').addEventListener('click', event => {
   const orderButton = event.target.closest('.order-btn');
   if (orderButton) {
@@ -908,8 +942,8 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
 $('settingsForm').addEventListener('submit', async e => {
   e.preventDefault();
   try {
-    settings = await api('/api/settings', { method:'PUT', body: JSON.stringify({ title:$('settingTitle').value, refresh_seconds:Number($('settingRefresh').value), confirm_actions:$('settingConfirm').checked }) });
-    $('brandTitle').textContent = settings.title; document.title = settings.title; $('settingsSaved').textContent = 'Saved.'; scheduleRefresh();
+    await saveSettings({ title:$('settingTitle').value, refresh_seconds:Number($('settingRefresh').value), confirm_actions:$('settingConfirm').checked });
+    $('settingsSaved').textContent = 'Saved.';
     setTimeout(() => $('settingsSaved').textContent = '', 1800);
   } catch (err) { toast(err.message); }
 });

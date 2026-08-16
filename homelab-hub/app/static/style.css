@@ -34,6 +34,8 @@ h1,h2,h3,p { margin-top:0; }
 h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px; } h3 { font-size:13px; margin:20px 0 8px; }
 .muted { color:var(--muted); } .tiny { font-size:12px; }
 .top-actions { display:flex; align-items:center; gap:12px; }
+.refresh-control { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; white-space:nowrap; }
+.refresh-control input { width:58px; padding:7px 8px; text-align:center; }
 .btn { border:1px solid var(--border); border-radius:9px; background:var(--panel2); color:var(--text); padding:8px 12px; cursor:pointer; }
 .btn:hover { border-color:#354154; }
 .btn.primary { background:var(--accent); border-color:var(--accent); color:white; }

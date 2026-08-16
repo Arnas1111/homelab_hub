@@ -23,7 +23,11 @@
   <main class="main">
     <header class="topbar">
       <div><h1 id="pageTitle">Overview</h1><p id="pageSubtitle" class="muted">Homelab data, shortcuts, ports, and monitoring</p></div>
-      <div class="top-actions"><span id="lastUpdated" class="muted tiny"></span><button id="refreshBtn" class="btn">Refresh</button></div>
+      <div class="top-actions">
+        <label class="refresh-control">Update <input id="topRefreshSeconds" type="number" min="2" max="60" step="1" value="{{ settings.refresh_seconds }}"> s</label>
+        <span id="lastUpdated" class="muted tiny"></span>
+        <button id="refreshBtn" class="btn">Refresh</button>
+      </div>
     </header>
 
     <section id="dashboardView" class="view active">
