@@ -514,17 +514,7 @@ def disk_usage(path: Path) -> dict:
 
 
 def host_metrics(info: dict) -> dict:
-    cpus = int(info.get("NCPU") or os.cpu_count() or 1)
-    load_one, load_five, load_fifteen = os.getloadavg()
     return {
-        "load": {
-            "one": round(load_one, 2),
-            "five": round(load_five, 2),
-            "fifteen": round(load_fifteen, 2),
-            "one_percent": pct(load_one, cpus),
-            "five_percent": pct(load_five, cpus),
-            "fifteen_percent": pct(load_fifteen, cpus),
-        },
         "cpu": cpu_usage(),
         "memory": read_meminfo(),
         "data_mount": disk_usage(DATA_DIR),

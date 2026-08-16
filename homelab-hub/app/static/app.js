@@ -7,9 +7,15 @@ let dashboardIcons = [];
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
 const DEFAULT_SECTION_ORDER = ['summary', 'server', 'webui', 'ports', 'containers'];
 let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSections') || '[]'));
+if (!localStorage.getItem('summaryDefaultApplied')) {
+  collapsedSections.add('summary');
+  localStorage.setItem('summaryDefaultApplied', 'true');
+  localStorage.setItem('collapsedSections', JSON.stringify([...collapsedSections]));
+}
 if (localStorage.getItem('containersSectionCollapsed') === 'true') collapsedSections.add('containers');
 let sectionOrder = JSON.parse(localStorage.getItem('overviewSectionOrder') || '[]').filter(id => DEFAULT_SECTION_ORDER.includes(id));
 sectionOrder = [...sectionOrder, ...DEFAULT_SECTION_ORDER.filter(id => !sectionOrder.includes(id))];
+let metricHistory = JSON.parse(localStorage.getItem('metricHistory') || '{"cpu":[],"memory":[]}');
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_CONTAINER_ICON = 'docker';
@@ -73,8 +79,8 @@ function monitorStatus(c) {
   if (c.status === 'running' && c.health === 'starting') return { label: 'Starting', kind: 'pending', info: 'Running, but the health check is still warming up.' };
   if (c.status === 'running') return { label: 'Online', kind: 'ok', info: 'Running. No Docker health check is configured for this container.' };
   if (c.status === 'paused') return { label: 'Paused', kind: 'paused', info: 'Container is paused and processes are suspended.' };
-  if (c.status === 'restarting' || c.status === 'created') return { label: 'Starting', kind: 'pending', info: 'Container exists but is not fully online yet.' };
-  if (c.status === 'exited' || c.status === 'dead') return { label: 'Offline', kind: 'offline', info: 'Container is stopped or dead.' };
+  if (c.status === 'restarting') return { label: 'Starting', kind: 'pending', info: 'Container is restarting and not fully online yet.' };
+  if (c.status === 'created' || c.status === 'exited' || c.status === 'dead') return { label: 'Stopped', kind: 'offline', info: 'Container is not running.' };
   if (c.status === 'error') return { label: 'Problem', kind: 'attention', info: c.error || 'Docker returned an error while reading this container.' };
   return { label: 'Unknown', kind: 'unknown', info: `Docker state: ${c.status || 'unknown'}.` };
 }
@@ -137,30 +143,51 @@ function metricBar(label, value, detail = '') {
   </div>`;
 }
 
+function addMetricHistory(cpuPercent, memoryPercent) {
+  const now = Date.now();
+  if (Number.isFinite(cpuPercent)) metricHistory.cpu.push({ time: now, value: cpuPercent });
+  if (Number.isFinite(memoryPercent)) metricHistory.memory.push({ time: now, value: memoryPercent });
+  for (const key of ['cpu', 'memory']) {
+    metricHistory[key] = (metricHistory[key] || []).slice(-80);
+  }
+  localStorage.setItem('metricHistory', JSON.stringify(metricHistory));
+}
+
+function sparkline(points, label) {
+  const values = (points || []).map(point => Number(point.value)).filter(Number.isFinite);
+  if (values.length < 2) return '<div class="sparkline empty-spark">Collecting trend...</div>';
+  const width = 220;
+  const height = 54;
+  const path = values.map((value, index) => {
+    const x = (index / (values.length - 1)) * width;
+    const y = height - (Math.min(Math.max(value, 0), 100) / 100) * height;
+    return `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(label)}">
+    <path class="spark-fill" d="${path} L${width} ${height} L0 ${height} Z"></path>
+    <path class="spark-line" d="${path}"></path>
+  </svg>`;
+}
+
 function renderServerMetrics(s) {
   const metrics = s.metrics || {};
-  const load = metrics.load || {};
   const cpu = metrics.cpu || {};
   const memory = metrics.memory || {};
   const disk = metrics.data_mount || metrics.appdata_disk || {};
   const cores = (cpu.cores || []).slice(0, 16);
+  addMetricHistory(Number(cpu.total_percent), Number(memory.percent));
   $('serverMetrics').innerHTML = `
-    <article class="server-card">
-      <span class="server-card-label">Load average</span>
-      <strong>${escapeHtml(String(load.one ?? '–'))}</strong>
-      ${metricBar('1 min', load.one_percent, `${load.one ?? '–'} load`)}
-      ${metricBar('5 min', load.five_percent, `${load.five ?? '–'} load`)}
-      ${metricBar('15 min', load.fifteen_percent, `${load.fifteen ?? '–'} load`)}
-    </article>
     <article class="server-card cpu-card">
       <span class="server-card-label">Processor</span>
       <strong>${percent(cpu.total_percent)}</strong>
+      ${sparkline(metricHistory.cpu, 'Recent CPU usage')}
       ${metricBar('Overall', cpu.total_percent, `${s.cpus ?? cores.length} cores`)}
       <div class="core-grid">${cores.map(core => metricBar(core.name, core.percent)).join('') || '<small class="muted">CPU sample pending</small>'}</div>
     </article>
     <article class="server-card">
       <span class="server-card-label">Memory</span>
       <strong>${percent(memory.percent)}</strong>
+      ${sparkline(metricHistory.memory, 'Recent memory usage')}
       ${metricBar('RAM usage', memory.percent, `${memory.used_human || '–'} / ${memory.total_human || s.memory_total_human || '–'}`)}
       <small class="metric-note">${escapeHtml(memory.available_human || '–')} available</small>
     </article>
@@ -557,7 +584,7 @@ function containerStatusSummary(containers, server) {
     counts.healthy ? `${counts.healthy} healthy` : '',
     counts.online ? `${counts.online} online` : '',
     counts.attention ? `${counts.attention} attention` : '',
-    counts.offline ? `${counts.offline} offline` : '',
+    counts.stopped ? `${counts.stopped} stopped` : '',
     counts.paused ? `${counts.paused} paused` : '',
     counts.starting ? `${counts.starting} starting` : '',
   ].filter(Boolean).join(' · ') || `${server.containers_total} tracked`;
@@ -594,7 +621,7 @@ function render(data) {
   $('dockerVersion').textContent = `Docker ${s.docker_version || 'unknown'}`;
   $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   $('dockerDetails').innerHTML = [
-    ['Server', s.name], ['Operating system', s.os], ['Kernel', s.kernel], ['Docker Engine', s.docker_version], ['Docker API', s.api_version], ['CPU cores', s.cpus], ['CPU usage', percent(s.metrics?.cpu?.total_percent)], ['Load average', s.metrics?.load ? `${s.metrics.load.one} / ${s.metrics.load.five} / ${s.metrics.load.fifteen}` : '—'], ['Host memory', s.metrics?.memory?.total_human || s.memory_total_human], ['Containers', s.containers_total], ['Images', s.images]
+    ['Server', s.name], ['Operating system', s.os], ['Kernel', s.kernel], ['Docker Engine', s.docker_version], ['Docker API', s.api_version], ['CPU cores', s.cpus], ['CPU usage', percent(s.metrics?.cpu?.total_percent)], ['Host memory', s.metrics?.memory?.total_human || s.memory_total_human], ['Containers', s.containers_total], ['Images', s.images]
   ].map(([k,v]) => `<div class="detail"><span>${k}</span><strong>${escapeHtml(String(v ?? '—'))}</strong></div>`).join('');
   $('settingTitle').value = settings.title;
   $('settingRefresh').value = settings.refresh_seconds;
