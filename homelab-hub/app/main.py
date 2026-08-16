@@ -697,7 +697,7 @@ def jellyfin_sessions(client, request: Request, cfg: dict) -> dict:
         "source": "configured" if configured_url else ("docker" if discovered_url else ""),
     }
     if not base_url or not cfg["jellyfin_api_key"]:
-        result["message"] = "Add HUB_JELLYFIN_API_KEY. HUB_JELLYFIN_URL is optional if Jellyfin publishes port 8096/8920."
+        result["message"] = "Configure Jellyfin in Connectors. The internal URL is optional if Docker exposes port 8096/8920."
         return result
     try:
         sessions = http_json(f"{base_url}/Sessions", headers={"X-Emby-Token": cfg["jellyfin_api_key"]})
@@ -796,7 +796,7 @@ def recurrence_delta(rule: dict[str, str]) -> timedelta | None:
 def calendar_events(cfg: dict) -> dict:
     result = {"configured": bool(cfg["nextcloud_calendar_url"]), "events": []}
     if not cfg["nextcloud_calendar_url"]:
-        result["message"] = "Add HUB_NEXTCLOUD_CALENDAR_URL with the public Nextcloud calendar export link."
+        result["message"] = "Configure the Nextcloud calendar export link in Connectors."
         return result
     try:
         text = http_text(cfg["nextcloud_calendar_url"])
@@ -876,7 +876,7 @@ def home_assistant_state(cfg: dict) -> dict:
         "entities": [],
     }
     if not result["configured"]:
-        result["message"] = "Add HUB_HOME_ASSISTANT_URL, HUB_HOME_ASSISTANT_TOKEN, and HUB_HOME_ASSISTANT_ENTITIES."
+        result["message"] = "Configure the Home Assistant URL, token, and entities in Connectors."
         return result
     headers = {"Authorization": f"Bearer {cfg['home_assistant_token']}"}
     for entity_id in cfg["home_assistant_entities"][:24]:

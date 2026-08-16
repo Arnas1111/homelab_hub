@@ -13,6 +13,7 @@
       <button class="nav-item active" data-view="dashboard"><span>◫</span> Overview</button>
       <button class="nav-item" data-view="docker"><span>⬡</span> Docker</button>
       <button class="nav-item" data-view="settings"><span>⚙</span> Settings</button>
+      <button class="nav-item" data-view="connectors"><span>◌</span> Connectors</button>
     </nav>
     <div class="sidebar-bottom">
       <div class="server-pill"><span class="dot"></span><div><strong>{{ server_name }}</strong><small id="dockerVersion">Connecting…</small></div></div>
@@ -134,7 +135,12 @@
           <label class="check"><input id="settingConfirm" type="checkbox"><span>Confirm Docker actions before executing</span></label>
           <div><button class="btn primary" type="submit">Save settings</button> <span id="settingsSaved" class="tiny muted"></span></div>
         </form>
-        <div class="sub-panel-head"><h2>Connectors</h2><p class="muted">Stored locally in appdata</p></div>
+      </div>
+    </section>
+
+    <section id="connectorsView" class="view">
+      <div class="panel settings-panel">
+        <div class="panel-head"><div><h2>Connectors</h2><p class="muted">Stored locally in appdata</p></div></div>
         <form id="integrationSettingsForm" class="connector-form">
           <article class="connector-card">
             <h3>Jellyfin</h3>

@@ -1149,9 +1149,14 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-item[data-view]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
     document.querySelectorAll('.view').forEach(x => x.classList.remove('active')); $(`${btn.dataset.view}View`).classList.add('active');
-    const names = {dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],docker:['Docker','Docker Engine information'],settings:['Settings','Configure this hub']};
+    const names = {
+      dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],
+      docker:['Docker','Docker Engine information'],
+      settings:['Settings','Configure this hub'],
+      connectors:['Connectors','Configure Jellyfin, Nextcloud, and Home Assistant'],
+    };
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
-    if (btn.dataset.view === 'settings') loadIntegrationSettings();
+    if (btn.dataset.view === 'connectors') loadIntegrationSettings();
   });
 }
 
