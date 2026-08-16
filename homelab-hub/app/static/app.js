@@ -7,10 +7,12 @@ let dashboardIcons = [];
 let integrationData = null;
 let integrationLoading = false;
 let integrationSettings = null;
-let colorPickerActive = false;
-let colorPickerHoldTimer = null;
+let integrationControlActive = false;
+let integrationControlHoldTimer = null;
 let colorSendTimer = null;
 let partySpeedTimer = null;
+let refreshControlActive = false;
+let refreshControlHoldTimer = null;
 let webuiEditorActive = false;
 let webuiEditorHoldTimer = null;
 let haColorChoices = JSON.parse(localStorage.getItem('haColorChoices') || '{}');
@@ -179,15 +181,35 @@ function cardIcon(name) {
   return `<span class="card-glyph"><svg viewBox="0 0 24 24">${paths[name] || paths.cpu}</svg></span>`;
 }
 
-function holdColorPicker(ms = 9000) {
-  colorPickerActive = true;
-  clearTimeout(colorPickerHoldTimer);
-  colorPickerHoldTimer = setTimeout(() => { colorPickerActive = false; }, ms);
+function integrationControlsActive() {
+  const focused = document.activeElement;
+  return integrationControlActive || Boolean(focused && $('integrationsPanelBody')?.contains(focused) && focused.matches('input,button,select,textarea'));
 }
 
-function releaseColorPickerSoon(ms = 1800) {
-  clearTimeout(colorPickerHoldTimer);
-  colorPickerHoldTimer = setTimeout(() => { colorPickerActive = false; }, ms);
+function holdIntegrationControls(ms = 30000) {
+  integrationControlActive = true;
+  clearTimeout(integrationControlHoldTimer);
+  integrationControlHoldTimer = setTimeout(() => { integrationControlActive = false; }, ms);
+}
+
+function releaseIntegrationControlsSoon(ms = 2200) {
+  clearTimeout(integrationControlHoldTimer);
+  integrationControlHoldTimer = setTimeout(() => { integrationControlActive = false; }, ms);
+}
+
+function refreshControlsActive() {
+  return refreshControlActive || document.activeElement === $('topRefreshSeconds');
+}
+
+function holdRefreshControl(ms = 9000) {
+  refreshControlActive = true;
+  clearTimeout(refreshControlHoldTimer);
+  refreshControlHoldTimer = setTimeout(() => { refreshControlActive = false; }, ms);
+}
+
+function releaseRefreshControlSoon(ms = 1000) {
+  clearTimeout(refreshControlHoldTimer);
+  refreshControlHoldTimer = setTimeout(() => { refreshControlActive = false; }, ms);
 }
 
 function holdWebuiEditor(ms = 9000) {
@@ -427,7 +449,7 @@ function renderIntegrations() {
 }
 
 async function loadIntegrations({ force = false } = {}) {
-  if (!isSectionOpen('integrations') || integrationLoading || colorPickerActive) return;
+  if (!isSectionOpen('integrations') || integrationLoading || integrationControlsActive()) return;
   integrationLoading = true;
   if (force || !integrationData) renderIntegrations();
   try {
@@ -448,26 +470,26 @@ async function toggleHomeAssistantEntity(entityId) {
       body: JSON.stringify({ entity_id: entityId }),
     });
     integrationData = { ...(integrationData || {}), home_assistant: result.home_assistant };
-    if (!colorPickerActive) renderIntegrations();
+    if (!integrationControlsActive()) renderIntegrations();
   } catch (e) { toast(e.message); }
 }
 
 async function colorHomeAssistantEntity(entityId, color) {
   rememberEntityColor(entityId, color);
-  holdColorPicker(4000);
+  holdIntegrationControls();
   try {
     const result = await api('/api/home-assistant/color', {
       method: 'POST',
       body: JSON.stringify({ entity_id: entityId, color }),
     });
     integrationData = { ...(integrationData || {}), home_assistant: result.home_assistant };
-    releaseColorPickerSoon();
+    releaseIntegrationControlsSoon();
   } catch (e) { toast(e.message); }
 }
 
 function queueHomeAssistantColor(entityId, color) {
   rememberEntityColor(entityId, color);
-  holdColorPicker();
+  holdIntegrationControls();
   clearTimeout(colorSendTimer);
   colorSendTimer = setTimeout(() => colorHomeAssistantEntity(entityId, color), 220);
 }
@@ -982,7 +1004,7 @@ function render(data) {
   $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   $('settingTitle').value = settings.title;
   $('settingRefresh').value = settings.refresh_seconds;
-  $('topRefreshSeconds').value = settings.refresh_seconds;
+  if (!refreshControlsActive()) $('topRefreshSeconds').value = settings.refresh_seconds;
   $('settingConfirm').checked = settings.confirm_actions;
   $('brandTitle').textContent = settings.title;
   document.title = settings.title;
@@ -991,7 +1013,7 @@ function render(data) {
   renderContainers();
   if (!webuiEditorActive) renderWebLinks();
   renderPorts();
-  if (!colorPickerActive) renderIntegrations();
+  if (!integrationControlsActive()) renderIntegrations();
   applySectionOrder();
   applySectionState();
   scheduleRefresh();
@@ -1298,13 +1320,13 @@ $('integrationsPanelBody').addEventListener('click', event => {
   else toggleHomeAssistantEntity(button.dataset.entity);
 });
 $('integrationsPanelBody').addEventListener('pointerdown', event => {
-  if (event.target.closest('[data-action="ha-color"]')) holdColorPicker();
+  if (event.target.closest('[data-action="ha-color"], [data-action="ha-craziness"]')) holdIntegrationControls();
 });
 $('integrationsPanelBody').addEventListener('focusin', event => {
-  if (event.target.closest('[data-action="ha-color"]')) holdColorPicker();
+  if (event.target.closest('input,button,select,textarea')) holdIntegrationControls();
 });
 $('integrationsPanelBody').addEventListener('focusout', event => {
-  if (event.target.closest('[data-action="ha-color"]')) releaseColorPickerSoon();
+  if (event.target.closest('input,button,select,textarea')) releaseIntegrationControlsSoon();
 });
 $('integrationsPanelBody').addEventListener('input', event => {
   const colorInput = event.target.closest('[data-action="ha-color"]');
@@ -1313,7 +1335,10 @@ $('integrationsPanelBody').addEventListener('input', event => {
     return;
   }
   const slider = event.target.closest('[data-action="ha-craziness"]');
-  if (slider) updatePartyCraziness(slider.value);
+  if (slider) {
+    holdIntegrationControls();
+    updatePartyCraziness(slider.value);
+  }
 });
 $('integrationsPanelBody').addEventListener('change', event => {
   const input = event.target.closest('[data-action="ha-color"]');
@@ -1334,6 +1359,7 @@ $('portSearch').addEventListener('input', renderPorts);
 $('portProtocol').addEventListener('change', renderPorts);
 $('portMode').addEventListener('change', renderPorts);
 $('topRefreshSeconds').addEventListener('change', async () => {
+  holdRefreshControl();
   const seconds = Number($('topRefreshSeconds').value);
   if (!Number.isFinite(seconds)) return;
   try {
@@ -1344,6 +1370,9 @@ $('topRefreshSeconds').addEventListener('change', async () => {
     toast(e.message);
   }
 });
+$('topRefreshSeconds').addEventListener('focusin', holdRefreshControl);
+$('topRefreshSeconds').addEventListener('focusout', () => releaseRefreshControlSoon());
+$('topRefreshSeconds').addEventListener('input', holdRefreshControl);
 $('topRefreshSeconds').addEventListener('keydown', event => {
   if (event.key === 'Enter') $('topRefreshSeconds').blur();
 });
