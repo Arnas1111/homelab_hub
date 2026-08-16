@@ -57,6 +57,11 @@ class IconDownloadPayload(BaseModel):
     icon: str = Field(max_length=90, pattern=r"^[a-z0-9-]+$")
 
 
+class OrderPayload(BaseModel):
+    groups: list[str] = Field(default_factory=list)
+    containers: dict[str, list[str]] = Field(default_factory=dict)
+
+
 def db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -78,7 +83,19 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS container_prefs (
                 container_name TEXT PRIMARY KEY,
                 icon TEXT NOT NULL DEFAULT '',
-                group_name TEXT NOT NULL DEFAULT ''
+                group_name TEXT NOT NULL DEFAULT '',
+                sort_order INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(container_prefs)").fetchall()}
+        if "sort_order" not in existing_columns:
+            conn.execute("ALTER TABLE container_prefs ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS group_prefs (
+                group_name TEXT PRIMARY KEY,
+                sort_order INTEGER NOT NULL DEFAULT 0
             )
             """
         )
@@ -113,14 +130,21 @@ def get_settings() -> dict:
 
 def get_container_prefs() -> dict[str, dict]:
     with db() as conn:
-        rows = conn.execute("SELECT container_name, icon, group_name FROM container_prefs").fetchall()
+        rows = conn.execute("SELECT container_name, icon, group_name, sort_order FROM container_prefs").fetchall()
     return {
         r["container_name"]: {
             "icon": r["icon"],
             "group_name": r["group_name"],
+            "sort_order": r["sort_order"],
         }
         for r in rows
     }
+
+
+def get_group_order() -> dict[str, int]:
+    with db() as conn:
+        rows = conn.execute("SELECT group_name, sort_order FROM group_prefs").fetchall()
+    return {r["group_name"]: r["sort_order"] for r in rows}
 
 
 def save_container_prefs(container_name: str, payload: ContainerPrefsPayload) -> dict:
@@ -138,6 +162,34 @@ def save_container_prefs(container_name: str, payload: ContainerPrefsPayload) ->
             (container_name, icon, group_name),
         )
     return {"container_name": container_name, "icon": icon, "group_name": group_name}
+
+
+def save_order(payload: OrderPayload) -> dict:
+    with db() as conn:
+        for index, group_name in enumerate(payload.groups):
+            clean_group = " ".join(group_name.strip().split()) or "Ungrouped"
+            conn.execute(
+                """
+                INSERT INTO group_prefs(group_name, sort_order)
+                VALUES (?, ?)
+                ON CONFLICT(group_name) DO UPDATE SET sort_order=excluded.sort_order
+                """,
+                (clean_group, index),
+            )
+        for names in payload.containers.values():
+            for index, container_name in enumerate(names):
+                clean_name = container_name.strip()
+                if not clean_name:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO container_prefs(container_name, sort_order)
+                    VALUES (?, ?)
+                    ON CONFLICT(container_name) DO UPDATE SET sort_order=excluded.sort_order
+                    """,
+                    (clean_name, index),
+                )
+    return {"ok": True}
 
 
 def icon_slugs() -> list[str]:
@@ -358,6 +410,7 @@ def overview(request: Request):
             pref = prefs.get(container.get("name"), {})
             container["icon"] = pref.get("icon") or ""
             container["group_name"] = pref.get("group_name") or ""
+            container["sort_order"] = pref.get("sort_order", 0)
 
         running = sum(1 for c in results if c.get("status") == "running")
         paused = sum(1 for c in results if c.get("status") == "paused")
@@ -379,6 +432,7 @@ def overview(request: Request):
                 "images": info.get("Images"),
             },
             "containers": results,
+            "group_order": get_group_order(),
             "settings": get_settings(),
         }
     except DockerException as exc:
@@ -403,6 +457,12 @@ def icons(request: Request):
 def icon_download(payload: IconDownloadPayload, request: Request):
     require_auth(request)
     return download_dashboard_icon(payload.icon)
+
+
+@app.put("/api/order")
+def order_put(payload: OrderPayload, request: Request):
+    require_auth(request)
+    return save_order(payload)
 
 
 @app.put("/api/containers/{container_id}/prefs")

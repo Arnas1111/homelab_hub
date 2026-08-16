@@ -4,6 +4,7 @@ let refreshTimer = null;
 let logRefreshTimer = null;
 let activeContainer = null;
 let dashboardIcons = [];
+let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_CONTAINER_ICON = 'docker';
@@ -53,11 +54,22 @@ function sanitizeIcon(value) {
 function renderContainers() {
   if (!currentData) return;
   const q = $('containerSearch').value.trim().toLowerCase();
+  const isSearching = Boolean(q);
   const rows = currentData.containers.filter(c => !q || `${c.name} ${c.image} ${c.project || ''} ${c.group_name || ''}`.toLowerCase().includes(q));
   $('containerRows').innerHTML = rows.length ? groupedContainers(rows).map(group => `
-    <tr class="group-row"><td colspan="7"><span class="folder-mark"></span>${escapeHtml(group.name)}</td></tr>
-    ${group.containers.map(c => `
-    <tr class="container-row" onclick="openContainer('${c.id}')">
+    <tr class="group-row ${collapsedGroups.has(group.name) && !isSearching ? 'collapsed' : ''}" data-group="${escapeHtml(group.name)}">
+      <td colspan="7">
+        <button class="group-toggle" type="button" data-action="toggle-group" data-group="${escapeHtml(group.name)}">
+          <span class="folder-caret">${collapsedGroups.has(group.name) && !isSearching ? '▸' : '▾'}</span>
+          <span class="folder-mark"></span>
+          <span>${escapeHtml(group.name)}</span>
+          <small>${group.containers.length}</small>
+        </button>
+        ${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="group-up" data-group="${escapeHtml(group.name)}">↑</button><button class="order-btn" type="button" data-action="group-down" data-group="${escapeHtml(group.name)}">↓</button></span>` : ''}
+      </td>
+    </tr>
+    ${collapsedGroups.has(group.name) && !isSearching ? '' : group.containers.map(c => `
+    <tr class="container-row" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">
       <td class="name-cell">
         <div class="container-title">
           <span class="container-icon"><img src="${iconPath(containerIcon(c))}" alt="" loading="lazy" onerror="this.closest('.container-icon').classList.add('missing')"></span>
@@ -69,7 +81,7 @@ function renderContainers() {
       <td>${bytes(c.memory_used)} <span class="muted">/ ${bytes(c.memory_limit)}</span><div class="meter"><i style="width:${Math.min(c.memory_percent || 0,100)}%"></i></div></td>
       <td>${portText(c.ports)}</td>
       <td><div class="image-text" title="${escapeHtml(c.image)}">${escapeHtml(c.image)}</div></td>
-      <td><button class="kebab" type="button" title="More options">•••</button></td>
+      <td>${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="container-up" data-name="${escapeHtml(c.name)}">↑</button><button class="order-btn" type="button" data-action="container-down" data-name="${escapeHtml(c.name)}">↓</button></span>` : ''}<button class="kebab" type="button" title="More options">•••</button></td>
     </tr>`).join('')}
   `).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
 }
@@ -82,8 +94,66 @@ function groupedContainers(containers) {
     groups.get(group).push(c);
   }
   return [...groups.entries()]
-    .sort(([a], [b]) => (a === 'Ungrouped') - (b === 'Ungrouped') || a.localeCompare(b))
-    .map(([name, groupContainers]) => ({ name, containers: groupContainers }));
+    .sort(([a], [b]) => sortValue(currentData?.group_order?.[a], a).localeCompare(sortValue(currentData?.group_order?.[b], b)))
+    .map(([name, groupContainers]) => ({
+      name,
+      containers: groupContainers.sort((a, b) => sortValue(a.sort_order, a.name).localeCompare(sortValue(b.sort_order, b.name))),
+    }));
+}
+
+function sortValue(order, fallback) {
+  return `${String(Number.isInteger(order) && order >= 0 ? order : 999999).padStart(6, '0')}|${String(fallback).toLowerCase()}`;
+}
+
+function toggleGroup(groupName) {
+  if (collapsedGroups.has(groupName)) collapsedGroups.delete(groupName);
+  else collapsedGroups.add(groupName);
+  localStorage.setItem('collapsedGroups', JSON.stringify([...collapsedGroups]));
+  renderContainers();
+}
+
+function moveItem(items, index, direction) {
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= items.length) return false;
+  [items[index], items[target]] = [items[target], items[index]];
+  return true;
+}
+
+async function moveGroup(groupName, direction) {
+  const groups = groupedContainers(currentData.containers);
+  const names = groups.map(g => g.name);
+  if (!moveItem(names, names.indexOf(groupName), direction)) return;
+  currentData.group_order = currentData.group_order || {};
+  names.forEach((name, index) => currentData.group_order[name] = index);
+  renderContainers();
+  await persistOrder();
+}
+
+async function moveContainer(containerName, direction) {
+  const groups = groupedContainers(currentData.containers);
+  const group = groups.find(g => g.containers.some(c => c.name === containerName));
+  if (!group) return;
+  const names = group.containers.map(c => c.name);
+  if (!moveItem(names, names.indexOf(containerName), direction)) return;
+  names.forEach((name, index) => {
+    const container = currentData.containers.find(c => c.name === name);
+    if (container) container.sort_order = index;
+  });
+  renderContainers();
+  await persistOrder();
+}
+
+async function persistOrder() {
+  const groups = groupedContainers(currentData.containers);
+  try {
+    await api('/api/order', {
+      method: 'PUT',
+      body: JSON.stringify({
+        groups: groups.map(g => g.name),
+        containers: Object.fromEntries(groups.map(g => [g.name, g.containers.map(c => c.name)])),
+      }),
+    });
+  } catch (e) { toast(e.message); }
 }
 
 function render(data) {
@@ -137,6 +207,7 @@ window.openContainer = async function(id) {
   $('containerGroupInput').value = c.group_name || '';
   $('containerPrefsSaved').textContent = '';
   renderIconPicker(containerIcon(c));
+  document.body.classList.add('modal-open');
   $('modal').classList.remove('hidden');
   await loadLogs({ forceBottom: true });
   scheduleLogRefresh();
@@ -331,6 +402,7 @@ window.doAction = async function(action) {
 
 function closeModal(){
   $('modal').classList.add('hidden');
+  document.body.classList.remove('modal-open');
   activeContainer = null;
   if (logRefreshTimer) clearTimeout(logRefreshTimer);
 }
@@ -350,6 +422,25 @@ $('dashboardIconGrid').addEventListener('click', event => {
 $('iconDownloadBtn').addEventListener('click', downloadIcon);
 $('refreshBtn').addEventListener('click', refresh);
 $('containerSearch').addEventListener('input', renderContainers);
+$('containerRows').addEventListener('click', event => {
+  const orderButton = event.target.closest('.order-btn');
+  if (orderButton) {
+    event.stopPropagation();
+    const action = orderButton.dataset.action;
+    if (action === 'group-up') moveGroup(orderButton.dataset.group, -1);
+    if (action === 'group-down') moveGroup(orderButton.dataset.group, 1);
+    if (action === 'container-up') moveContainer(orderButton.dataset.name, -1);
+    if (action === 'container-down') moveContainer(orderButton.dataset.name, 1);
+    return;
+  }
+  const groupToggle = event.target.closest('[data-action="toggle-group"]');
+  if (groupToggle) {
+    toggleGroup(groupToggle.dataset.group);
+    return;
+  }
+  const row = event.target.closest('.container-row');
+  if (row) openContainer(row.dataset.id);
+});
 
 for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
   btn.addEventListener('click', () => {

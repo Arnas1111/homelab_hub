@@ -14,6 +14,7 @@
 }
 * { box-sizing: border-box; }
 body { margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+body.modal-open { overflow:hidden; }
 button,input { font:inherit; }
 .sidebar { position:fixed; inset:0 auto 0 0; width:230px; padding:22px 16px; border-right:1px solid var(--border); background:#0d1117; display:flex; flex-direction:column; z-index:10; }
 .brand { display:flex; gap:11px; align-items:center; font-weight:750; font-size:16px; margin:0 8px 28px; }
@@ -56,9 +57,15 @@ tr:last-child td { border-bottom:0; }
 tbody tr:hover { background:rgba(255,255,255,.015); }
 .container-row { cursor:pointer; }
 .container-row:hover { background:rgba(124,140,255,.045); }
-.group-row td { padding:10px 16px; background:#0f141c; color:#b6c0cc; font-size:11px; font-weight:750; text-transform:uppercase; letter-spacing:.04em; }
-.folder-mark { display:inline-block; width:14px; height:10px; margin-right:8px; border-radius:2px; background:var(--muted); position:relative; opacity:.75; }
+.group-row td { padding:8px 16px; background:#0f141c; color:#b6c0cc; font-size:11px; font-weight:750; text-transform:uppercase; letter-spacing:.04em; }
+.group-toggle { display:inline-flex; align-items:center; gap:8px; min-width:0; color:#b6c0cc; background:transparent; border:0; padding:4px 0; cursor:pointer; text-transform:uppercase; letter-spacing:.04em; font-weight:750; }
+.group-toggle small { color:var(--muted); font-size:10px; }
+.folder-caret { width:12px; color:var(--muted); }
+.folder-mark { display:inline-block; width:14px; height:10px; border-radius:2px; background:var(--muted); position:relative; opacity:.75; }
 .folder-mark::before { content:""; position:absolute; left:1px; top:-4px; width:7px; height:4px; border-radius:2px 2px 0 0; background:var(--muted); }
+.order-controls { display:inline-flex; align-items:center; gap:4px; margin-left:8px; vertical-align:middle; }
+.order-btn { width:25px; height:25px; display:grid; place-items:center; padding:0; border:1px solid var(--border); border-radius:7px; background:#151c27; color:var(--muted); cursor:pointer; line-height:1; }
+.order-btn:hover { color:var(--text); border-color:var(--accent); }
 .name-cell strong { display:block; font-size:13px; } .name-cell small { color:var(--muted); }
 .container-title { display:flex; align-items:center; gap:11px; min-width:190px; }
 .container-icon { width:34px; height:34px; display:grid; place-items:center; flex:0 0 auto; color:#d9ddff; background:rgba(124,140,255,.12); border:1px solid rgba(124,140,255,.25); border-radius:8px; overflow:hidden; }
@@ -82,9 +89,9 @@ tbody tr:hover { background:rgba(255,255,255,.015); }
 .settings-form { padding:20px; display:grid; gap:16px; }
 .settings-form label:not(.check) { display:grid; gap:7px; color:#c5ced8; font-size:12px; }
 .check { display:flex; align-items:center; gap:9px; font-size:12px; color:#c5ced8; }.check input { width:auto; }
-.modal { position:fixed; inset:0; background:rgba(0,0,0,.65); display:grid; place-items:center; padding:24px; z-index:50; }
+.modal { position:fixed; inset:0; background:rgba(0,0,0,.65); display:grid; place-items:center; padding:24px; z-index:50; overscroll-behavior:contain; }
 .modal.hidden,.toast.hidden { display:none; }
-.modal-card { width:min(980px,95vw); max-height:90vh; overflow:auto; background:#111720; border:1px solid var(--border); border-radius:15px; box-shadow:0 30px 100px rgba(0,0,0,.55); padding:18px; }
+.modal-card { width:min(980px,95vw); max-height:90vh; overflow:auto; overscroll-behavior:contain; background:#111720; border:1px solid var(--border); border-radius:15px; box-shadow:0 30px 100px rgba(0,0,0,.55); padding:18px; }
 .modal-head { display:flex; align-items:flex-start; justify-content:space-between; }.modal-head h2 { font-size:20px; }
 .icon-btn { border:0; color:var(--muted); background:transparent; font-size:28px; cursor:pointer; }
 .container-actions { display:flex; flex-wrap:wrap; gap:8px; padding:12px 0 2px; }
@@ -95,7 +102,7 @@ tbody tr:hover { background:rgba(255,255,255,.015); }
 .container-icon.preview { width:42px; height:42px; }
 .container-icon.preview img { width:30px; height:30px; }
 .icon-library-actions { display:flex; align-items:center; gap:10px; margin:10px 0 0; }
-.icon-picker { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fill,minmax(86px,1fr)); gap:8px; max-height:230px; overflow:auto; padding:10px; background:#0a0f16; border:1px solid var(--border); border-radius:10px; }
+.icon-picker { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fill,minmax(86px,1fr)); gap:8px; max-height:230px; overflow:auto; overscroll-behavior:contain; padding:10px; background:#0a0f16; border:1px solid var(--border); border-radius:10px; }
 .icon-choice { min-width:0; display:grid; justify-items:center; gap:6px; padding:9px 7px; color:#c8d3df; background:#101722; border:1px solid var(--border); border-radius:8px; cursor:pointer; }
 .icon-choice:hover,.icon-choice.selected { border-color:var(--accent); background:rgba(124,140,255,.1); }
 .icon-choice img { width:30px; height:30px; object-fit:contain; }
@@ -107,7 +114,7 @@ tbody tr:hover { background:rgba(255,255,255,.015); }
 .log-status.current i { background:var(--green); box-shadow:0 0 0 4px rgba(81,216,138,.1); }
 .log-status.loading i { background:var(--yellow); box-shadow:0 0 0 4px rgba(243,201,105,.1); }
 .log-status.stale i { background:var(--red); box-shadow:0 0 0 4px rgba(255,107,122,.1); }
-.logs { background:#090c11; border:1px solid var(--border); border-radius:10px; max-height:520px; overflow:auto; color:#c7d0db; font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.logs { background:#090c11; border:1px solid var(--border); border-radius:10px; max-height:520px; overflow:auto; overscroll-behavior:contain; color:#c7d0db; font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
 .log-table { min-width:860px; }
 .log-row { display:grid; grid-template-columns:185px 58px minmax(0,1fr); gap:10px; align-items:start; padding:5px 10px; border-bottom:1px solid rgba(36,45,58,.55); }
 .log-row:last-child { border-bottom:0; }
