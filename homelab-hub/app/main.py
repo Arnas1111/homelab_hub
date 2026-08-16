@@ -1,16 +1,19 @@
 import json
 import os
+import re
 import secrets
 import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Literal
+from urllib.error import HTTPError, URLError
+from urllib.request import Request as UrlRequest, urlopen
 
 import docker
 from docker.errors import APIError, DockerException, NotFound
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadSignature, URLSafeSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -20,6 +23,10 @@ APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("HUB_DATA_DIR", "/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "hub.db"
+BUNDLED_ICON_DIR = APP_DIR / "static" / "icons" / "dashboard"
+USER_ICON_DIR = DATA_DIR / "icons" / "dashboard"
+DASHBOARD_ICON_CDN = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg"
+ICON_RE = re.compile(r"^[a-z0-9-]{1,90}$")
 
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
@@ -44,6 +51,10 @@ class SettingsPayload(BaseModel):
 class ContainerPrefsPayload(BaseModel):
     icon: str = Field(default="", max_length=90, pattern=r"^[a-z0-9-]*$")
     group_name: str = Field(default="", max_length=80)
+
+
+class IconDownloadPayload(BaseModel):
+    icon: str = Field(max_length=90, pattern=r"^[a-z0-9-]+$")
 
 
 def db() -> sqlite3.Connection:
@@ -85,6 +96,7 @@ def init_db() -> None:
 
 @app.on_event("startup")
 def startup() -> None:
+    USER_ICON_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
 
 
@@ -126,6 +138,47 @@ def save_container_prefs(container_name: str, payload: ContainerPrefsPayload) ->
             (container_name, icon, group_name),
         )
     return {"container_name": container_name, "icon": icon, "group_name": group_name}
+
+
+def icon_slugs() -> list[str]:
+    icons = set()
+    for icon_dir in (BUNDLED_ICON_DIR, USER_ICON_DIR):
+        if icon_dir.is_dir():
+            icons.update(path.stem for path in icon_dir.glob("*.svg") if ICON_RE.fullmatch(path.stem))
+    return sorted(icons)
+
+
+def icon_file(icon: str) -> Path | None:
+    if not ICON_RE.fullmatch(icon):
+        return None
+    for icon_dir in (USER_ICON_DIR, BUNDLED_ICON_DIR):
+        path = icon_dir / f"{icon}.svg"
+        if path.is_file():
+            return path
+    return None
+
+
+def download_dashboard_icon(icon: str) -> dict:
+    if not ICON_RE.fullmatch(icon):
+        raise HTTPException(status_code=422, detail="Use a lowercase Dashboard Icons slug.")
+    USER_ICON_DIR.mkdir(parents=True, exist_ok=True)
+    request = UrlRequest(f"{DASHBOARD_ICON_CDN}/{icon}.svg", headers={"User-Agent": "Homelab-Hub/1.0"})
+    try:
+        with urlopen(request, timeout=12) as response:
+            content = response.read(1024 * 1024)
+    except HTTPError as exc:
+        if exc.code == 404:
+            raise HTTPException(status_code=404, detail=f"No Dashboard Icons SVG found for '{icon}'.") from exc
+        raise HTTPException(status_code=502, detail=f"Dashboard Icons returned HTTP {exc.code}.") from exc
+    except URLError as exc:
+        raise HTTPException(status_code=503, detail=f"Could not reach Dashboard Icons: {exc.reason}") from exc
+    if b"<svg" not in content[:500].lower():
+        raise HTTPException(status_code=502, detail="Downloaded file was not an SVG icon.")
+    dest = USER_ICON_DIR / f"{icon}.svg"
+    tmp = dest.with_suffix(".svg.tmp")
+    tmp.write_bytes(content)
+    tmp.replace(dest)
+    return {"icon": icon, "icons": icon_slugs()}
 
 
 def docker_client():
@@ -232,6 +285,14 @@ def health():
     return {"ok": True}
 
 
+@app.get("/icons/dashboard/{icon}.svg")
+def dashboard_icon(icon: str):
+    path = icon_file(icon)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Icon not found")
+    return FileResponse(path, media_type="image/svg+xml")
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     if is_authenticated(request):
@@ -330,6 +391,18 @@ def overview(request: Request):
 
 
 Action = Literal["start", "stop", "restart", "pause", "unpause"]
+
+
+@app.get("/api/icons")
+def icons(request: Request):
+    require_auth(request)
+    return {"icons": icon_slugs()}
+
+
+@app.post("/api/icons/download")
+def icon_download(payload: IconDownloadPayload, request: Request):
+    require_auth(request)
+    return download_dashboard_icon(payload.icon)
 
 
 @app.put("/api/containers/{container_id}/prefs")

@@ -3,12 +3,10 @@ let settings = { title: 'Homelab Hub', refresh_seconds: 5, confirm_actions: true
 let refreshTimer = null;
 let logRefreshTimer = null;
 let activeContainer = null;
+let dashboardIcons = [];
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_CONTAINER_ICON = 'docker';
-const DASHBOARD_ICONS = [
-  'adguard-home','authelia','authentik','bazarr','cloudflare','cloudflare-zero-trust','deluge','docker','duplicati','filebrowser','frigate','grafana','home-assistant','immich','jellyfin','jellyseerr','lidarr','mariadb','mqtt','mysql','netdata','nextcloud','nginx','nginx-proxy-manager','node-red','overseerr','paperless-ngx','photoprism','plex','portainer','postgresql','prowlarr','qbittorrent','radarr','redis','sabnzbd','sonarr','tautulli','traefik','transmission','unifi','unraid','uptime-kuma','vaultwarden','wireguard','wordpress'
-];
 
 function bytes(v) {
   if (!v) return '0 B';
@@ -45,7 +43,7 @@ function containerIcon(c) {
 }
 
 function iconPath(icon) {
-  return `/static/icons/dashboard/${icon || DEFAULT_CONTAINER_ICON}.svg`;
+  return `/icons/dashboard/${icon || DEFAULT_CONTAINER_ICON}.svg`;
 }
 
 function sanitizeIcon(value) {
@@ -138,15 +136,17 @@ window.openContainer = async function(id) {
   setIconPreview(containerIcon(c));
   $('containerGroupInput').value = c.group_name || '';
   $('containerPrefsSaved').textContent = '';
+  renderIconPicker(containerIcon(c));
   $('modal').classList.remove('hidden');
   await loadLogs({ forceBottom: true });
   scheduleLogRefresh();
 }
 
 function renderOptionLists() {
-  $('dashboardIconOptions').innerHTML = DASHBOARD_ICONS.map(icon => `<option value="${icon}"></option>`).join('');
+  $('dashboardIconOptions').innerHTML = dashboardIcons.map(icon => `<option value="${icon}"></option>`).join('');
   const groups = [...new Set((currentData?.containers || []).map(c => c.group_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   $('containerGroupOptions').innerHTML = groups.map(group => `<option value="${escapeHtml(group)}"></option>`).join('');
+  renderIconPicker($('containerIconInput')?.value || '');
 }
 
 function setIconPreview(icon) {
@@ -155,6 +155,49 @@ function setIconPreview(icon) {
   preview.onerror = () => preview.closest('.container-icon').classList.add('missing');
   preview.src = iconPath(slug);
   preview.closest('.container-icon').classList.remove('missing');
+}
+
+async function loadIconLibrary() {
+  try {
+    const result = await api('/api/icons');
+    dashboardIcons = result.icons || [];
+    renderOptionLists();
+  } catch (e) { toast(e.message); }
+}
+
+function renderIconPicker(query = '') {
+  const target = $('dashboardIconGrid');
+  if (!target) return;
+  const selected = sanitizeIcon($('containerIconInput')?.value || '') || DEFAULT_CONTAINER_ICON;
+  const q = sanitizeIcon(query);
+  const icons = dashboardIcons.filter(icon => !q || icon.includes(q)).slice(0, 80);
+  target.innerHTML = icons.length ? icons.map(icon => `
+    <button class="icon-choice ${icon === selected ? 'selected' : ''}" type="button" data-icon="${icon}" title="${escapeHtml(icon)}">
+      <img src="${iconPath(icon)}" alt="">
+      <span>${escapeHtml(icon)}</span>
+    </button>
+  `).join('') : '<div class="icon-picker-empty">No local icon found.</div>';
+}
+
+function chooseIcon(icon) {
+  $('containerIconInput').value = icon;
+  setIconPreview(icon);
+  renderIconPicker(icon);
+}
+
+async function downloadIcon() {
+  const icon = sanitizeIcon($('containerIconInput').value);
+  if (!icon) return;
+  $('iconLibraryStatus').textContent = 'Checking...';
+  try {
+    const result = await api('/api/icons/download', { method:'POST', body: JSON.stringify({ icon }) });
+    dashboardIcons = result.icons || dashboardIcons;
+    chooseIcon(result.icon);
+    $('iconLibraryStatus').textContent = 'Downloaded.';
+    setTimeout(() => $('iconLibraryStatus').textContent = '', 1800);
+  } catch (e) {
+    $('iconLibraryStatus').textContent = e.message;
+  }
 }
 
 async function saveContainerPrefs(event) {
@@ -296,8 +339,15 @@ $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeMo
 $('logRefreshBtn').addEventListener('click', () => loadLogs({ forceBottom: true }));
 $('containerPrefsForm').addEventListener('submit', saveContainerPrefs);
 $('containerIconInput').addEventListener('input', () => {
-  setIconPreview(sanitizeIcon($('containerIconInput').value) || DEFAULT_CONTAINER_ICON);
+  const icon = sanitizeIcon($('containerIconInput').value) || DEFAULT_CONTAINER_ICON;
+  setIconPreview(icon);
+  renderIconPicker(icon);
 });
+$('dashboardIconGrid').addEventListener('click', event => {
+  const button = event.target.closest('.icon-choice');
+  if (button) chooseIcon(button.dataset.icon);
+});
+$('iconDownloadBtn').addEventListener('click', downloadIcon);
 $('refreshBtn').addEventListener('click', refresh);
 $('containerSearch').addEventListener('input', renderContainers);
 
@@ -321,4 +371,4 @@ $('settingsForm').addEventListener('submit', async e => {
 
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
-refresh();
+loadIconLibrary().finally(refresh);
