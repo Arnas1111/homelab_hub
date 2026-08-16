@@ -5,6 +5,10 @@ let logRefreshTimer = null;
 let activeContainer = null;
 
 const $ = (id) => document.getElementById(id);
+const DEFAULT_CONTAINER_ICON = 'deployed_code';
+const MATERIAL_ICONS = [
+  'apps','archive','backup','cloud','cloud_sync','database','deployed_code','dns','folder','home_storage','hub','image','lan','memory','movie','music_note','network_check','photo_library','router','security','settings','smart_display','storage','terminal','tv','videocam','vpn_key','web','wifi'
+];
 
 function bytes(v) {
   if (!v) return '0 B';
@@ -36,20 +40,44 @@ function portText(ports) {
   return ports.slice(0,3).map(p => `<span class="port">${p.host_port} → ${p.internal}</span>`).join('<br>') + (ports.length > 3 ? `<br><span class="muted">+${ports.length-3} more</span>` : '');
 }
 
+function containerIcon(c) {
+  return c.icon || DEFAULT_CONTAINER_ICON;
+}
+
 function renderContainers() {
   if (!currentData) return;
   const q = $('containerSearch').value.trim().toLowerCase();
-  const rows = currentData.containers.filter(c => !q || `${c.name} ${c.image} ${c.project || ''}`.toLowerCase().includes(q));
-  $('containerRows').innerHTML = rows.length ? rows.map(c => `
-    <tr>
-      <td class="name-cell"><strong>${escapeHtml(c.name)}</strong><small>${c.project ? escapeHtml(c.project) : c.short_id}</small></td>
+  const rows = currentData.containers.filter(c => !q || `${c.name} ${c.image} ${c.project || ''} ${c.group_name || ''}`.toLowerCase().includes(q));
+  $('containerRows').innerHTML = rows.length ? groupedContainers(rows).map(group => `
+    <tr class="group-row"><td colspan="7"><span class="material-symbols-rounded">folder</span>${escapeHtml(group.name)}</td></tr>
+    ${group.containers.map(c => `
+    <tr class="container-row" onclick="openContainer('${c.id}')">
+      <td class="name-cell">
+        <div class="container-title">
+          <span class="material-symbols-rounded container-icon">${escapeHtml(containerIcon(c))}</span>
+          <div><strong>${escapeHtml(c.name)}</strong><small>${c.project ? escapeHtml(c.project) : c.short_id}</small></div>
+        </div>
+      </td>
       <td>${statusBadge(c)}</td>
       <td>${Number(c.cpu_percent || 0).toFixed(1)}%<div class="meter"><i style="width:${Math.min(c.cpu_percent || 0,100)}%"></i></div></td>
       <td>${bytes(c.memory_used)} <span class="muted">/ ${bytes(c.memory_limit)}</span><div class="meter"><i style="width:${Math.min(c.memory_percent || 0,100)}%"></i></div></td>
       <td>${portText(c.ports)}</td>
       <td><div class="image-text" title="${escapeHtml(c.image)}">${escapeHtml(c.image)}</div></td>
-      <td><button class="kebab" onclick="openContainer('${c.id}')">•••</button></td>
-    </tr>`).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
+      <td><button class="kebab" type="button" title="More options"><span class="material-symbols-rounded">more_horiz</span></button></td>
+    </tr>`).join('')}
+  `).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
+}
+
+function groupedContainers(containers) {
+  const groups = new Map();
+  for (const c of containers) {
+    const group = c.group_name || 'Ungrouped';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(c);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === 'Ungrouped') - (b === 'Ungrouped') || a.localeCompare(b))
+    .map(([name, groupContainers]) => ({ name, containers: groupContainers }));
 }
 
 function render(data) {
@@ -71,6 +99,7 @@ function render(data) {
   $('settingConfirm').checked = settings.confirm_actions;
   $('brandTitle').textContent = settings.title;
   document.title = settings.title;
+  renderOptionLists();
   renderContainers();
   scheduleRefresh();
 }
@@ -97,9 +126,43 @@ window.openContainer = async function(id) {
   $('modalTitle').textContent = c.name;
   $('modalMeta').textContent = `${c.image} · ${c.status}`;
   $('modalActions').innerHTML = actionsFor(c).map(a => `<button class="btn ${a === 'stop' ? 'danger' : ''}" onclick="doAction('${a}')">${a[0].toUpperCase()+a.slice(1)}</button>`).join('');
+  $('containerIconInput').value = containerIcon(c);
+  $('containerIconPreview').textContent = containerIcon(c);
+  $('containerGroupInput').value = c.group_name || '';
+  $('containerPrefsSaved').textContent = '';
   $('modal').classList.remove('hidden');
   await loadLogs({ forceBottom: true });
   scheduleLogRefresh();
+}
+
+function renderOptionLists() {
+  $('materialIconOptions').innerHTML = MATERIAL_ICONS.map(icon => `<option value="${icon}"></option>`).join('');
+  const groups = [...new Set((currentData?.containers || []).map(c => c.group_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  $('containerGroupOptions').innerHTML = groups.map(group => `<option value="${escapeHtml(group)}"></option>`).join('');
+}
+
+async function saveContainerPrefs(event) {
+  event.preventDefault();
+  if (!activeContainer) return;
+  const icon = $('containerIconInput').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+  const group_name = $('containerGroupInput').value.trim();
+  try {
+    const prefs = await api(`/api/containers/${activeContainer.id}/prefs`, {
+      method: 'PUT',
+      body: JSON.stringify({ icon, group_name }),
+    });
+    activeContainer.icon = prefs.icon;
+    activeContainer.group_name = prefs.group_name;
+    const existing = currentData.containers.find(c => c.id === activeContainer.id);
+    if (existing) Object.assign(existing, prefs);
+    $('containerIconInput').value = prefs.icon || DEFAULT_CONTAINER_ICON;
+    $('containerIconPreview').textContent = prefs.icon || DEFAULT_CONTAINER_ICON;
+    $('containerGroupInput').value = prefs.group_name;
+    $('containerPrefsSaved').textContent = 'Saved.';
+    renderOptionLists();
+    renderContainers();
+    setTimeout(() => $('containerPrefsSaved').textContent = '', 1600);
+  } catch (e) { toast(e.message); }
 }
 
 async function loadLogs({ forceBottom = false } = {}) {
@@ -215,6 +278,10 @@ function closeModal(){
 $('modalClose').addEventListener('click', closeModal);
 $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
 $('logRefreshBtn').addEventListener('click', () => loadLogs({ forceBottom: true }));
+$('containerPrefsForm').addEventListener('submit', saveContainerPrefs);
+$('containerIconInput').addEventListener('input', () => {
+  $('containerIconPreview').textContent = $('containerIconInput').value.trim().toLowerCase() || DEFAULT_CONTAINER_ICON;
+});
 $('refreshBtn').addEventListener('click', refresh);
 $('containerSearch').addEventListener('input', renderContainers);
 

@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ settings.title }}</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -69,6 +70,24 @@
     <div class="modal-card">
       <div class="modal-head"><div><h2 id="modalTitle">Container</h2><p id="modalMeta" class="muted"></p></div><button id="modalClose" class="icon-btn">×</button></div>
       <div class="container-actions" id="modalActions"></div>
+      <section class="container-options">
+        <h3>Options</h3>
+        <form id="containerPrefsForm" class="prefs-form">
+          <label>Icon
+            <div class="icon-input-wrap">
+              <span id="containerIconPreview" class="material-symbols-rounded container-icon preview">deployed_code</span>
+              <input id="containerIconInput" list="materialIconOptions" maxlength="60" placeholder="deployed_code">
+            </div>
+          </label>
+          <label>Folder
+            <input id="containerGroupInput" list="containerGroupOptions" maxlength="80" placeholder="Media">
+          </label>
+          <button class="btn primary" type="submit">Save</button>
+          <span id="containerPrefsSaved" class="tiny muted"></span>
+        </form>
+        <datalist id="materialIconOptions"></datalist>
+        <datalist id="containerGroupOptions"></datalist>
+      </section>
       <h3>Logs</h3>
       <div class="log-toolbar">
         <span id="logStatus" class="log-status loading"><i></i><span>Loading</span></span>

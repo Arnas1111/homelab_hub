@@ -41,6 +41,11 @@ class SettingsPayload(BaseModel):
     confirm_actions: bool
 
 
+class ContainerPrefsPayload(BaseModel):
+    icon: str = Field(default="", max_length=60, pattern=r"^[a-z0-9_]*$")
+    group_name: str = Field(default="", max_length=80)
+
+
 def db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -54,6 +59,15 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS container_prefs (
+                container_name TEXT PRIMARY KEY,
+                icon TEXT NOT NULL DEFAULT '',
+                group_name TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -83,6 +97,35 @@ def get_settings() -> dict:
         "refresh_seconds": int(values.get("refresh_seconds", "5")),
         "confirm_actions": values.get("confirm_actions", "true").lower() == "true",
     }
+
+
+def get_container_prefs() -> dict[str, dict]:
+    with db() as conn:
+        rows = conn.execute("SELECT container_name, icon, group_name FROM container_prefs").fetchall()
+    return {
+        r["container_name"]: {
+            "icon": r["icon"],
+            "group_name": r["group_name"],
+        }
+        for r in rows
+    }
+
+
+def save_container_prefs(container_name: str, payload: ContainerPrefsPayload) -> dict:
+    icon = payload.icon.strip().lower()
+    group_name = " ".join(payload.group_name.strip().split())
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO container_prefs(container_name, icon, group_name)
+            VALUES (?, ?, ?)
+            ON CONFLICT(container_name) DO UPDATE SET
+                icon=excluded.icon,
+                group_name=excluded.group_name
+            """,
+            (container_name, icon, group_name),
+        )
+    return {"container_name": container_name, "icon": icon, "group_name": group_name}
 
 
 def docker_client():
@@ -249,6 +292,11 @@ def overview(request: Request):
                 except Exception as exc:
                     results.append({"id": futures[future], "name": "unknown", "status": "error", "error": str(exc)})
         results.sort(key=lambda x: x.get("name", "").lower())
+        prefs = get_container_prefs()
+        for container in results:
+            pref = prefs.get(container.get("name"), {})
+            container["icon"] = pref.get("icon") or ""
+            container["group_name"] = pref.get("group_name") or ""
 
         running = sum(1 for c in results if c.get("status") == "running")
         paused = sum(1 for c in results if c.get("status") == "paused")
@@ -282,6 +330,22 @@ def overview(request: Request):
 
 
 Action = Literal["start", "stop", "restart", "pause", "unpause"]
+
+
+@app.put("/api/containers/{container_id}/prefs")
+def container_prefs(container_id: str, payload: ContainerPrefsPayload, request: Request):
+    require_auth(request)
+    client = docker_client()
+    try:
+        container = client.containers.get(container_id)
+        return save_container_prefs(container.name, payload)
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail="Container not found") from exc
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
 
 
 @app.post("/api/containers/{container_id}/{action}")
