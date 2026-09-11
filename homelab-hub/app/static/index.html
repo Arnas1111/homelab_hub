@@ -12,8 +12,11 @@
     <div class="brand"><div class="brand-mark small"><img src="/static/favicon.svg" alt=""></div><span id="brandTitle">{{ settings.title }}</span></div>
     <nav>
       <button class="nav-item active" data-view="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4zM14 15h6v4h-6z"/></svg></span> Overview</button>
+      <button class="nav-item" data-view="metrics"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="m7 15 3-4 3 2 5-7"/></svg></span> Metrics</button>
+      <button class="nav-item" data-view="containers"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M7 7V5h10v2M8 17v2M16 17v2"/></svg></span> Containers</button>
+      <button class="nav-item" data-view="integrations"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/></svg></span> Integrations</button>
       <button class="nav-item" data-view="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/><path d="m19 12 .9-2-2-3.4-2.2.3-1.7-1L13.1 4H9l-.9 1.9-1.7 1-2.2-.3-2 3.4.9 2-.9 2 2 3.4 2.2-.3 1.7 1L9 20h4.1l.9-1.9 1.7-1 2.2.3 2-3.4z"/></svg></span> Settings</button>
-      <button class="nav-item" data-view="connectors"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 7h4v4H7zM13 13h4v4h-4z"/><path d="M11 9h2a2 2 0 0 1 2 2v2M7 11v2a4 4 0 0 0 4 4h2"/></svg></span> Connectors</button>
+      <button class="nav-item" data-view="connectors"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 7h4v4H7zM13 13h4v4h-4z"/><path d="M11 9h2a2 2 0 0 1 2 2v2M7 11v2a4 4 0 0 0 4 4h2"/></svg></span> Connector setup</button>
     </nav>
     <div class="sidebar-bottom">
       <div class="server-pill"><span class="dot"></span><div><strong>{{ server_name }}</strong><small id="dockerVersion">Connecting…</small></div></div>
@@ -52,7 +55,7 @@
           <div class="panel-head section-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="integrations" aria-expanded="true">
               <span id="integrationsFoldIcon">▾</span>
-              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/></svg></span><span><strong>Live integrations</strong><small>Jellyfin streams, agenda, and Home Assistant</small></span></span>
+              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/></svg></span><span><strong>Live integrations</strong><small>Jellyfin streams and Home Assistant controls</small></span></span>
             </button>
             <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="integrations" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="integrations" aria-label="Move section down">▿</button></span>
           </div>
@@ -111,7 +114,7 @@
 
     <section id="settingsView" class="view">
       <div class="panel settings-panel">
-        <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div></div>
+          <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div><span class="version-label">Version <strong id="appVersion">{{ settings.version }}</strong></span></div>
         <form id="settingsForm" class="settings-form">
           <label>Hub title<input id="settingTitle" maxlength="80" required></label>
           <label>Refresh interval (seconds)<input id="settingRefresh" type="number" min="1" max="60" required></label>
@@ -133,17 +136,17 @@
             <label class="check"><input id="jellyfinApiKeyClear" type="checkbox"><span>Clear API key</span></label>
           </article>
           <article class="connector-card">
-            <h3>Nextcloud</h3>
+            <h3>WebCal / Nextcloud</h3>
             <label>Base URL<input id="nextcloudUrl" maxlength="500" placeholder="https://cloud.example.com"></label>
             <label>Username<input id="nextcloudUsername" maxlength="200" autocomplete="username"></label>
             <label>App password<input id="nextcloudAppPassword" type="password" maxlength="5000" autocomplete="new-password"></label>
             <label class="check"><input id="nextcloudAppPasswordClear" type="checkbox"><span>Clear app password</span></label>
-            <label>Calendar filter<input id="nextcloudCalendarName" maxlength="200" placeholder="Ignored: all account calendars are shown"></label>
-            <label>Public export fallback<input id="nextcloudCalendarUrl" maxlength="1000" placeholder="https://cloud.example.com/remote.php/dav/public-calendars/..."></label>
+            <label>Calendar filter<input id="nextcloudCalendarName" maxlength="200" placeholder="Optional calendar name"></label>
+            <label>WebCal export URL<input id="nextcloudCalendarUrl" maxlength="1000" placeholder="Optional .ics / WebCal URL"></label>
           </article>
           <article class="connector-card">
             <h3>Home Assistant</h3>
-            <label>Base URL<input id="homeAssistantUrl" maxlength="500" placeholder="http://192.168.178.100:8123"></label>
+            <label>Base URL<input id="homeAssistantUrl" maxlength="500" placeholder="http://homeassistant:8123"></label>
             <label>Token<input id="homeAssistantToken" type="password" maxlength="5000" autocomplete="new-password"></label>
             <label class="check"><input id="homeAssistantTokenClear" type="checkbox"><span>Clear token</span></label>
             <label>Entities<textarea id="homeAssistantEntities" maxlength="2000" rows="4" placeholder="light.wohnzimmer,sensor.temperature"></textarea></label>

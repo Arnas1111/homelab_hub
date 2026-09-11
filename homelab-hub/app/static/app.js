@@ -22,7 +22,9 @@ let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSectio
 if (localStorage.getItem('containersSectionCollapsed') === 'true') collapsedSections.add('containers');
 let sectionOrder = JSON.parse(localStorage.getItem('overviewSectionOrder') || '[]').filter(id => DEFAULT_SECTION_ORDER.includes(id));
 sectionOrder = [...sectionOrder, ...DEFAULT_SECTION_ORDER.filter(id => !sectionOrder.includes(id))];
+let overviewFocus = 'all';
 let metricHistory = JSON.parse(localStorage.getItem('metricHistory') || '{"cpu":[],"memory":[],"network":[]}');
+let containerStructureKey = '';
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_CONTAINER_ICON = 'docker';
@@ -287,7 +289,7 @@ function renderServerMetrics(s) {
   localStorage.setItem('metricHistory', JSON.stringify(metricHistory));
   $('serverMetrics').innerHTML = `
     <article class="server-card cpu-card metric-cpu">
-      <span class="server-card-label">${cardIcon('cpu')}Processor</span>
+      <span class="server-card-label">${cardIcon('cpu')}Host CPU</span>
       <strong>${percent(cpu.total_percent)}</strong>
       ${sparkline(metricHistory.cpu, 'Recent CPU usage')}
       ${metricBar('Overall', cpu.total_percent, `${s.cpus ?? cores.length} cores`)}
@@ -318,7 +320,7 @@ function renderServerMetrics(s) {
       <strong>CPU / Memory</strong>
       ${containerTopList('CPU', topContainers('cpu_percent'), 'cpu_percent')}
       ${containerTopList('Memory', topContainers('memory_percent'), 'memory_percent')}
-      <small class="metric-note">Docker container stats. Host process view inside this container is limited.</small>
+      <small class="metric-note">Docker CPU is normalized to total host capacity. Host process detail is limited by container isolation.</small>
     </article>
   `;
 }
@@ -454,7 +456,6 @@ function renderIntegrations() {
   }
   target.innerHTML = [
     renderJellyfinCard(integrationData.jellyfin),
-    renderCalendarCard(integrationData.calendar),
     renderHomeAssistantCard(integrationData.home_assistant),
   ].join('');
 }
@@ -621,6 +622,13 @@ function applySectionState() {
   }
 }
 
+function applyOverviewFocus() {
+  const overview = $('overviewSections');
+  if (!overview) return;
+  overview.classList.remove('focus-all', 'focus-server', 'focus-containers', 'focus-integrations');
+  overview.classList.add(`focus-${overviewFocus}`);
+}
+
 function toggleSection(section) {
   if (collapsedSections.has(section)) collapsedSections.delete(section);
   else collapsedSections.add(section);
@@ -653,6 +661,12 @@ function renderContainers() {
   const terms = q.split(/\s+/).filter(Boolean);
   const containers = currentData.containers || [];
   const rows = containers.filter(c => !terms.length || terms.every(term => containerSearchText(c).includes(term)));
+  const structureKey = JSON.stringify(rows.map(c => [c.id, c.name, c.status, c.health, c.group_name, c.sort_order, c.image, c.ports]));
+  if (structureKey === containerStructureKey && $('containerRows').children.length) {
+    updateContainerStats(rows);
+    return;
+  }
+  containerStructureKey = structureKey;
   $('containerRows').innerHTML = rows.length ? groupedContainers(rows).map(group => `
     <tr class="group-row ${collapsedGroups.has(group.name) && !isSearching ? 'collapsed' : ''}" data-group="${escapeHtml(group.name)}">
       <td colspan="7">
@@ -677,8 +691,8 @@ function renderContainers() {
         </div>
       </td>
       <td>${statusBadge(c)}</td>
-      <td>${Number(c.cpu_percent || 0).toFixed(1)}%<div class="meter"><i style="width:${Math.min(c.cpu_percent || 0,100)}%"></i></div></td>
-      <td>${bytes(c.memory_used)} <span class="muted">/ ${bytes(c.memory_limit)}</span><div class="meter"><i style="width:${Math.min(c.memory_percent || 0,100)}%"></i></div></td>
+      <td class="container-cpu">${Number(c.cpu_percent || 0).toFixed(1)}%<div class="meter"><i style="width:${Math.min(c.cpu_percent || 0,100)}%"></i></div></td>
+      <td class="container-memory">${bytes(c.memory_used)} <span class="muted">/ ${bytes(c.memory_limit)}</span><div class="meter"><i style="width:${Math.min(c.memory_percent || 0,100)}%"></i></div></td>
       <td>${portText(c.ports)}</td>
       <td><div class="image-text" title="${escapeHtml(c.image)}">${escapeHtml(c.image)}</div></td>
       <td>${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="container-up" data-name="${escapeHtml(c.name)}" aria-label="Move container up">▵</button><button class="order-btn" type="button" data-action="container-down" data-name="${escapeHtml(c.name)}" aria-label="Move container down">▿</button></span>` : ''}<button class="kebab" type="button" title="More options">•••</button></td>
@@ -686,6 +700,19 @@ function renderContainers() {
     }).join('')}
   `).join('') : '<tr><td colspan="7" class="empty">No matching containers.</td></tr>';
   applySectionState();
+}
+
+function updateContainerStats(containers) {
+  for (const container of containers) {
+    const row = document.querySelector(`.container-row[data-id="${CSS.escape(container.id)}"]`);
+    if (!row) continue;
+    const statusCell = row.children[1];
+    const cpuCell = row.querySelector('.container-cpu');
+    const memoryCell = row.querySelector('.container-memory');
+    if (statusCell) statusCell.innerHTML = statusBadge(container);
+    if (cpuCell) cpuCell.innerHTML = `${Number(container.cpu_percent || 0).toFixed(1)}%<div class="meter"><i style="width:${Math.min(container.cpu_percent || 0, 100)}%"></i></div>`;
+    if (memoryCell) memoryCell.innerHTML = `${bytes(container.memory_used)} <span class="muted">/ ${bytes(container.memory_limit)}</span><div class="meter"><i style="width:${Math.min(container.memory_percent || 0, 100)}%"></i></div>`;
+  }
 }
 
 function groupedContainers(containers) {
@@ -1027,6 +1054,7 @@ function render(data) {
   $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   $('settingTitle').value = settings.title;
   $('settingRefresh').value = settings.refresh_seconds;
+  if ($('appVersion')) $('appVersion').textContent = settings.version || '0.1.0';
   if (!refreshControlsActive()) $('topRefreshSeconds').value = settings.refresh_seconds;
   $('settingConfirm').checked = settings.confirm_actions;
   $('brandTitle').textContent = settings.title;
@@ -1387,6 +1415,13 @@ $('containerSearch').addEventListener('input', renderContainers);
 $('portSearch').addEventListener('input', renderPorts);
 $('portProtocol').addEventListener('change', renderPorts);
 $('portMode').addEventListener('change', renderPorts);
+document.addEventListener('keydown', event => {
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'f') return;
+  event.preventDefault();
+  const target = document.querySelector('.view.active #containerSearch') || document.querySelector('.view.active .search') || $('containerSearch');
+  target?.focus();
+  target?.select();
+});
 $('topRefreshSeconds').addEventListener('change', async () => {
   holdRefreshControl();
   const seconds = Number($('topRefreshSeconds').value);
@@ -1429,14 +1464,29 @@ $('containerRows').addEventListener('click', event => {
 for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-item[data-view]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
-    document.querySelectorAll('.view').forEach(x => x.classList.remove('active')); $(`${btn.dataset.view}View`).classList.add('active');
+    const overviewViews = { metrics: 'server', containers: 'containers', integrations: 'integrations' };
+    const overviewView = overviewViews[btn.dataset.view];
+    document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+    if (overviewView) {
+      $('dashboardView').classList.add('active');
+      overviewFocus = overviewView;
+      applyOverviewFocus();
+    } else {
+      $(`${btn.dataset.view}View`).classList.add('active');
+      overviewFocus = 'all';
+      applyOverviewFocus();
+    }
     const names = {
       dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],
+      metrics:['Metrics','Host utilization, saturation, and trends'],
+      containers:['Containers','Docker state, resources, ports, and logs'],
+      integrations:['Integrations','Live service status and controls'],
       settings:['Settings','Configure this hub'],
-      connectors:['Connectors','Configure Jellyfin, Nextcloud, and Home Assistant'],
+      connectors:['Connector setup','Configure service URLs and credentials'],
     };
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
     if (btn.dataset.view === 'connectors') loadIntegrationSettings();
+    if (overviewView === 'integrations') loadIntegrations();
   });
 }
 

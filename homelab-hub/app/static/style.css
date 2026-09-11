@@ -52,7 +52,12 @@ h1 { font-size:25px; margin-bottom:5px; } h2 { font-size:17px; margin-bottom:4px
 .panel.narrow { max-width:720px; }
 .panel-head { min-height:72px; padding:16px 18px; display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--border); }
 .panel-head p { margin-bottom:0; font-size:12px; }
+.version-label { color:var(--muted); font-size:12px; white-space:nowrap; }
+.version-label strong { color:var(--text); font-weight:700; }
 .overview-sections { display:grid; gap:15px; }
+.overview-sections.focus-server > [data-section]:not([data-section="server"]),
+.overview-sections.focus-containers > [data-section]:not([data-section="containers"]),
+.overview-sections.focus-integrations > [data-section]:not([data-section="integrations"]) { display:none; }
 .dashboard-section .hidden { display:none; }
 .section-strip { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
 .section-head { padding:0; align-items:stretch; }

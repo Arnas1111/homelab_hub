@@ -56,6 +56,7 @@ WHITE_MODE_KELVIN = {
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
 SERVER_NAME = os.getenv("HUB_SERVER_NAME", "Unraid")
+APP_VERSION = os.getenv("HUB_VERSION", "0.1.0")
 
 app = FastAPI(title="Homelab Hub", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
@@ -223,6 +224,7 @@ def get_settings() -> dict:
         "title": values.get("title", "Homelab Hub"),
         "refresh_seconds": int(values.get("refresh_seconds", "5")),
         "confirm_actions": values.get("confirm_actions", "true").lower() == "true",
+        "version": APP_VERSION,
     }
 
 
@@ -741,13 +743,13 @@ def public_integration_settings() -> dict:
 
 def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
     values = {
-        "jellyfin_url": payload.jellyfin_url.strip().rstrip("/"),
+        "jellyfin_url": normalize_service_url(payload.jellyfin_url),
         "jellyfin_public_url": payload.jellyfin_public_url.strip().rstrip("/"),
         "nextcloud_calendar_url": payload.nextcloud_calendar_url.strip(),
-        "nextcloud_url": payload.nextcloud_url.strip().rstrip("/"),
+        "nextcloud_url": normalize_service_url(payload.nextcloud_url),
         "nextcloud_username": payload.nextcloud_username.strip(),
         "nextcloud_calendar_name": payload.nextcloud_calendar_name.strip(),
-        "home_assistant_url": payload.home_assistant_url.strip().rstrip("/"),
+        "home_assistant_url": normalize_service_url(payload.home_assistant_url),
         "home_assistant_entities": ",".join(
             item.strip() for item in payload.home_assistant_entities.split(",") if item.strip()
         ),
@@ -782,15 +784,15 @@ def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
 def integration_config() -> dict:
     values = get_integration_values()
     return {
-        "jellyfin_url": values["jellyfin_url"].rstrip("/"),
+        "jellyfin_url": normalize_service_url(values["jellyfin_url"]),
         "jellyfin_public_url": values["jellyfin_public_url"].rstrip("/"),
         "jellyfin_api_key": values["jellyfin_api_key"],
         "nextcloud_calendar_url": values["nextcloud_calendar_url"],
-        "nextcloud_url": values["nextcloud_url"].rstrip("/"),
+        "nextcloud_url": normalize_service_url(values["nextcloud_url"]),
         "nextcloud_username": values["nextcloud_username"],
         "nextcloud_app_password": values["nextcloud_app_password"],
         "nextcloud_calendar_name": values["nextcloud_calendar_name"],
-        "home_assistant_url": values["home_assistant_url"].rstrip("/"),
+        "home_assistant_url": normalize_service_url(values["home_assistant_url"]),
         "home_assistant_token": values["home_assistant_token"],
         "home_assistant_entities": [
             item.strip()
@@ -823,6 +825,13 @@ def basic_auth_header(username: str, password: str) -> str:
 def host_base_url(request: Request) -> str:
     hostname = request.url.hostname or "localhost"
     return hostname
+
+
+def normalize_service_url(value: str) -> str:
+    clean = value.strip().rstrip("/")
+    if clean.endswith("/api"):
+        clean = clean[:-4].rstrip("/")
+    return clean
 
 
 def discover_service_url(client, request: Request, terms: list[str], ports: set[str]) -> str:
@@ -870,9 +879,16 @@ def jellyfin_sessions(client, request: Request, cfg: dict) -> dict:
         result["message"] = "Configure Jellyfin in Connectors. The internal URL is optional if Docker exposes port 8096/8920."
         return result
     try:
-        sessions = http_json(f"{base_url}/Sessions", headers={"X-Emby-Token": cfg["jellyfin_api_key"]})
+        token = cfg["jellyfin_api_key"]
+        sessions = http_json(
+            f"{base_url}/Sessions",
+            headers={
+                "X-Emby-Token": token,
+                "Authorization": f'MediaBrowser Token="{token}"',
+            },
+        )
     except HTTPError as exc:
-        result["error"] = f"Jellyfin returned HTTP {exc.code}."
+        result["error"] = f"Jellyfin returned HTTP {exc.code}. Check the internal URL and API key in Connectors."
         return result
     except (OSError, URLError, ValueError) as exc:
         result["error"] = f"Could not reach Jellyfin: {exc}"
@@ -1171,7 +1187,7 @@ def home_assistant_state(cfg: dict) -> dict:
             ][:60]
             result["discovered"] = True
         except HTTPError as exc:
-            result["error"] = f"Home Assistant returned HTTP {exc.code}."
+            result["error"] = f"Home Assistant returned HTTP {exc.code}. Check the base URL and long-lived access token in Connectors."
             return result
         except (OSError, URLError, ValueError) as exc:
             result["error"] = f"Could not query Home Assistant entities: {exc}"
@@ -1330,7 +1346,6 @@ def integrations(request: Request):
     try:
         return {
             "jellyfin": jellyfin_sessions(client, request, cfg),
-            "calendar": calendar_events(cfg),
             "home_assistant": home_assistant_state(cfg),
         }
     finally:
