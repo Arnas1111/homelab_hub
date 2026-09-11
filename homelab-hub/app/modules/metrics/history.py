@@ -139,7 +139,7 @@ class HistoryStore:
             if self.schema_target != target:
                 self.ensure_schema(conn)
             conn.execute("INSERT INTO homelab_hub.samples VALUES (%s, %s, %s) ON CONFLICT DO NOTHING", (source_id, sampled_at, Jsonb(sample)))
-            prune = time.monotonic() - self.last_prune >= 3600
+            prune = self.last_prune == 0 or time.monotonic() - self.last_prune >= 3600
             if prune:
                 # Bounded batches keep large retention changes from locking a collection cycle.
                 conn.execute("DELETE FROM homelab_hub.samples WHERE source_id=%s AND sampled_at IN (SELECT sampled_at FROM homelab_hub.samples WHERE source_id=%s AND sampled_at < %s ORDER BY sampled_at LIMIT 10000)", (source_id, source_id, sampled_at - timedelta(days=cfg.retention_days)))
