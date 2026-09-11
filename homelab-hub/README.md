@@ -129,7 +129,11 @@ Live integration credentials are stored locally in Homelab Hub's SQLite database
 
 Open **Settings -> Connectors** in Homelab Hub to configure Jellyfin, Nextcloud, and Home Assistant. Secret fields are not echoed back to the browser; leave them blank to keep the saved value or use the clear checkbox to remove them.
 
-## Planned next integrations
+## Server metrics design
+
+The overview prioritizes CPU and memory trends plus a used/free storage ring. Neutral cards use blue for utilization below 75%, amber from 75%, and red from 90%, with text labels. These thresholds are visual guides, not health alerts. Expand **Resource details** for per-core readings, container rankings and Hub network traffic. Memory rankings compare bytes used. Charts use a fixed 0–100% scale and elapsed time, retaining up to 80 browser samples from the last 30 minutes; longer sampling interruptions appear as gaps.
+
+The layout follows [Grafana's dashboard guidance](https://grafana.com/docs/grafana/latest/visualizations/dashboards/build-dashboards/best-practices/) on meaningful color and focused views, and [Nielsen Norman Group's chart guidance](https://www.nngroup.com/articles/dashboards-preattentive/) on readable comparisons. The storage ring has just two parts and explicit values; time trends and container comparisons use lines and bars.
 
 See [the implementation review](REVIEW.md) for verified fixes, validation limits and the remaining FileBrowser Quantum, PostgreSQL metrics history and WebCal work. Published builds display their source commit in Settings. Container CPU uses Docker units (100% per logical core); host CPU uses total machine capacity. Network metrics reflect the Hub's network namespace.
 
@@ -141,6 +145,8 @@ node --test tests/frontend.test.cjs
 python -m compileall -q app
 python -m unittest discover -s tests
 ```
+
+## Planned next integrations
 
 - Unraid API connector (Unraid 7.2+) for array state, disks, shares and system information
 - VM management

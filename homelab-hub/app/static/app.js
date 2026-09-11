@@ -41,6 +41,7 @@ function patchContent(target, html) {
       } else if (old.nodeType === 1) {
         if (old === document.activeElement) continue;
         for (const attr of [...old.attributes]) {
+          if (old.nodeName === 'DETAILS' && attr.name === 'open') continue;
           if (!next.hasAttribute(attr.name)) old.removeAttribute(attr.name);
         }
         for (const attr of next.attributes) {
@@ -305,54 +306,73 @@ function sparkline(points, label) {
   </svg>`;
 }
 
+function metricLevel(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return { kind: 'unknown', label: 'Unavailable', value: null };
+  const n = Math.max(0, Math.min(100, Number(value)));
+  return { kind: n >= 90 ? 'critical' : n >= 75 ? 'warning' : 'normal', label: n >= 90 ? 'Very high' : n >= 75 ? 'Elevated' : 'Normal range', value: n };
+}
+
+function utilizationTrend(points, label) {
+  const values = (points || []).filter(p => Number.isFinite(p.time) && Number.isFinite(p.value) && p.time > Date.now() - 30 * 60 * 1000);
+  if (values.length < 2) return '<div class="utilization-empty">Collecting trend · waiting for another sample</div>';
+  const start = values[0].time;
+  const span = Math.max(values[values.length - 1].time - start, 1);
+  const path = values.map((p, i) => {
+    const gap = i && p.time - values[i - 1].time > Math.max(30000, settings.refresh_seconds * 3000);
+    return `${!i || gap ? 'M' : 'L'}${(32 + (p.time - start) / span * 328).toFixed(1)} ${(100 - Math.max(0, Math.min(p.value, 100)) * .88).toFixed(1)}`;
+  }).join(' ');
+  const duration = span >= 60000 ? `${Math.round(span / 60000)} min` : `${Math.round(span / 1000)} sec`;
+  return `<div class="utilization-trend"><svg viewBox="0 0 368 110" role="img" aria-label="${escapeHtml(label)}; 0 to 100 percent over ${duration}"><g class="trend-grid"><path d="M32 12H360 M32 56H360 M32 100H360"/></g><g class="trend-labels"><text x="0" y="16">100</text><text x="7" y="60">50</text><text x="14" y="104">0</text></g><path class="utilization-line" d="${path}"/></svg><div class="trend-caption"><span>${duration} ago</span><span>Now</span></div></div>`;
+}
+
 function renderServerMetrics(s) {
   const metrics = s.metrics || {};
   const cpu = metrics.cpu || {};
   const memory = metrics.memory || {};
   const disk = metrics.data_mount || metrics.appdata_disk || {};
   const network = metrics.network || {};
-  const cores = (cpu.cores || []).slice(0, 16);
-  addMetricHistory(Number(cpu.total_percent), Number(memory.percent));
-  const networkRate = Number(network.rx_rate || 0) + Number(network.tx_rate || 0);
-  metricHistory.network.push({ time: Date.now(), value: Math.min(networkRate / 1024 / 1024, 100) });
-  metricHistory.network = metricHistory.network.slice(-80);
-  localStorage.setItem('metricHistory', JSON.stringify(metricHistory));
+  const levels = {
+    cpu: metricLevel(cpu.cores?.length ? cpu.total_percent : null),
+    memory: metricLevel(memory.total ? memory.percent : null),
+    disk: metricLevel(disk.total ? disk.percent : null),
+  };
+  addMetricHistory(levels.cpu.value === null ? NaN : levels.cpu.value, levels.memory.value === null ? NaN : levels.memory.value);
+  const status = level => `<span class="utilization-status ${level.kind}">${level.label}</span>`;
+  const reading = level => level.value === null ? '—' : `${level.value.toFixed(1)}<span>%</span>`;
+  const detailBar = (name, value) => {
+    const level = metricLevel(value);
+    return `<div class="detail-reading ${level.kind}"><div><span>${escapeHtml(name)}</span><strong>${level.value === null ? '—' : `${level.value.toFixed(1)}%`}</strong></div><div class="capacity-track"><i style="width:${level.value ?? 0}%"></i></div></div>`;
+  };
+  const ranking = (key, unit) => {
+    const rows = topContainers(key);
+    const max = Math.max(1, ...rows.map(row => Number(row[key])));
+    return rows.map(row => `<div class="detail-reading normal"><div><span>${escapeHtml(row.name)}</span><strong>${unit === '%' ? `${Number(row[key]).toFixed(1)}%` : bytes(row[key])}</strong></div><div class="capacity-track"><i style="width:${Number(row[key]) / max * 100}%"></i></div></div>`).join('') || '<p class="metric-note">No active usage reported.</p>';
+  };
   patchContent($('serverMetrics'), `
-    <article class="server-card cpu-card metric-cpu">
-      <span class="server-card-label">${cardIcon('cpu')}Host CPU</span>
-      <strong>${percent(cpu.total_percent)}</strong>
-      ${sparkline(metricHistory.cpu, 'Recent CPU usage')}
-      ${metricBar('Overall', cpu.total_percent, `${s.cpus ?? cores.length} cores`)}
-      <div class="core-grid">${cores.map(core => metricBar(core.name, core.percent)).join('') || '<small class="muted">CPU sample pending</small>'}</div>
+    <div class="metrics-context"><span>Host capacity <small>· sampled every ~${Number(settings.refresh_seconds) || 5}s</small></span><span class="metrics-legend"><i></i>Normal <i class="warning"></i>≥75% <i class="critical"></i>≥90%</span></div>
+    <article class="utilization-card ${levels.cpu.kind}">
+      <div class="utilization-heading"><h3>CPU utilization</h3>${status(levels.cpu)}</div>
+      <strong class="utilization-value">${reading(levels.cpu)}</strong>
+      <p class="utilization-context">${Number(s.cpus) || cpu.cores?.length || '—'} logical cores · total host capacity</p>
+      ${levels.cpu.value === null ? '<div class="utilization-empty">Host CPU sample unavailable</div>' : utilizationTrend(metricHistory.cpu, 'Host CPU utilization')}
     </article>
-    <article class="server-card metric-memory">
-      <span class="server-card-label">${cardIcon('memory')}Memory</span>
-      <strong>${percent(memory.percent)}</strong>
-      ${sparkline(metricHistory.memory, 'Recent memory usage')}
-      ${metricBar('RAM usage', memory.percent, `${memory.used_human || '–'} / ${memory.total_human || s.memory_total_human || '–'}`)}
-      <small class="metric-note">${escapeHtml(memory.available_human || '–')} available</small>
+    <article class="utilization-card ${levels.memory.kind}">
+      <div class="utilization-heading"><h3>Memory utilization</h3>${status(levels.memory)}</div>
+      <strong class="utilization-value">${reading(levels.memory)}</strong>
+      <p class="utilization-context">${escapeHtml(memory.used_human || '—')} used / ${escapeHtml(memory.total_human || '—')}</p>
+      ${levels.memory.value === null ? '<div class="utilization-empty">Host memory sample unavailable</div>' : utilizationTrend(metricHistory.memory, 'Host memory utilization')}
+      <small class="metric-note">${escapeHtml(memory.available_human || '—')} available</small>
     </article>
-    <article class="server-card metric-disk">
-      <span class="server-card-label">${cardIcon('disk')}Data mount</span>
-      <strong>${percent(disk.percent)}</strong>
-      ${metricBar('Used capacity', disk.percent, `${disk.free_human || '–'} free / ${disk.total_human || '–'} total`)}
-      <small class="metric-note">Shared Unraid mount capacity, not appdata folder size</small>
+    <article class="utilization-card ${levels.disk.kind}">
+      <div class="utilization-heading"><h3>Storage capacity</h3>${status(levels.disk)}</div>
+      <div class="storage-summary"><div class="capacity-ring" role="img" aria-label="${levels.disk.value === null ? 'Storage unavailable' : `${levels.disk.value.toFixed(1)} percent used, ${(100 - levels.disk.value).toFixed(1)} percent free`}"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="48"/><circle class="ring-used" cx="60" cy="60" r="48" pathLength="100" stroke-dasharray="${levels.disk.value ?? 0} 100"/></svg><div><strong>${levels.disk.value === null ? '—' : `${levels.disk.value.toFixed(1)}%`}</strong><span>used</span></div></div><div class="storage-values"><span>Free space</span><strong>${escapeHtml(disk.free_human || '—')}</strong><span>of ${escapeHtml(disk.total_human || '—')} total</span></div></div>
+      <p class="utilization-context">Filesystem backing /data</p><small class="metric-note">Mount capacity · not array health or folder size</small>
     </article>
-    <article class="server-card metric-network">
-      <span class="server-card-label">${cardIcon('network')}Network</span>
-      <strong>${escapeHtml(network.rx_rate_human || '0 B/s')} ↓</strong>
-      ${sparkline(metricHistory.network, 'Recent network throughput')}
-      ${trafficBar('Receive', network.rx_rate, network.rx_human ? `${network.rx_human} total` : '')}
-      ${trafficBar('Transmit', network.tx_rate, network.tx_human ? `${network.tx_human} total` : '')}
-      <small class="metric-note">Hub network namespace; bridge mode does not measure all host traffic.</small>
-    </article>
-    <article class="server-card metric-top">
-      <span class="server-card-label">${cardIcon('top')}Top containers</span>
-      <strong>CPU / Memory</strong>
-      ${containerTopList('CPU', topContainers('cpu_percent'), 'cpu_percent')}
-      ${containerTopList('Memory', topContainers('memory_percent'), 'memory_percent')}
-      <small class="metric-note">Container CPU: 100% = one logical core; values may exceed 100%. Host CPU: 100% = all cores. Host process detail is limited by container isolation.</small>
-    </article>
+    <details class="metrics-details"><summary>Resource details <span>Per-core CPU, busiest containers &amp; Hub traffic</span></summary>
+      <div class="metrics-detail-grid"><section><h3>CPU by core</h3><div class="core-detail-grid">${(cpu.cores || []).map(core => detailBar(core.name, core.percent)).join('') || '<p class="metric-note">No core samples available.</p>'}</div></section>
+      <section><h3>Top containers · CPU</h3>${ranking('cpu_percent', '%')}<p class="metric-note">100% = one logical core. Bars compare these containers.</p><h3>Top containers · memory</h3>${ranking('memory_used', 'bytes')}<p class="metric-note">Ranked by bytes used, not container memory limits.</p></section>
+      <section><h3>Hub network traffic</h3><div class="network-readings"><span>↓ Receive<strong>${escapeHtml(network.rx_rate_human || '—')}</strong></span><span>↑ Transmit<strong>${escapeHtml(network.tx_rate_human || '—')}</strong></span></div><p class="metric-note">Container network namespace. In bridge mode, this excludes other host traffic.</p><h3>Reading this dashboard</h3><p class="metric-note">Blue: below 75%. Amber: 75–89.9%. Red: 90% or more. These are utilization guides, not health alerts; a brief CPU peak can be normal.</p><p class="metric-note">Trends keep up to 80 browser samples from the last 30 minutes. Gaps indicate interrupted sampling.</p></section></div>
+    </details>
   `);
 }
 
@@ -1098,7 +1118,7 @@ function render(data) {
   $('brandTitle').textContent = settings.title;
   document.title = settings.title;
   renderOptionLists();
-  if (s.metrics) renderServerMetrics(s);
+  if (data.server?.metrics) renderServerMetrics(s);
   renderContainers();
   if (!webuiEditorActive) renderWebLinks();
   renderPorts();
