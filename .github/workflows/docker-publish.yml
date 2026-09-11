@@ -49,5 +49,7 @@ jobs:
           context: ./homelab-hub
           file: ./homelab-hub/Dockerfile
           push: true
+          build-args: |
+            HUB_VERSION=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

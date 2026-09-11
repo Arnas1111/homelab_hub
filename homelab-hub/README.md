@@ -131,6 +131,17 @@ Open **Settings -> Connectors** in Homelab Hub to configure Jellyfin, Nextcloud,
 
 ## Planned next integrations
 
+See [the implementation review](REVIEW.md) for verified fixes, validation limits and the remaining FileBrowser Quantum, PostgreSQL metrics history and WebCal work. Published builds display their source commit in Settings. Container CPU uses Docker units (100% per logical core); host CPU uses total machine capacity. Network metrics reflect the Hub's network namespace.
+
+Development checks:
+
+```text
+node --check app/static/app.js
+node --test tests/frontend.test.cjs
+python -m compileall -q app
+python -m unittest discover -s tests
+```
+
 - Unraid API connector (Unraid 7.2+) for array state, disks, shares and system information
 - VM management
 - Disk temperatures / SMART health

@@ -27,6 +27,36 @@ let metricHistory = JSON.parse(localStorage.getItem('metricHistory') || '{"cpu":
 let containerStructureKey = '';
 
 const $ = (id) => document.getElementById(id);
+// Retain existing elements, images and controls when polling changes only values.
+function patchContent(target, html) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  function sync(parent, source) {
+    for (let i = 0; i < source.childNodes.length; i++) {
+      const next = source.childNodes[i];
+      const old = parent.childNodes[i];
+      if (!old) { parent.appendChild(next.cloneNode(true)); continue; }
+      if (old.nodeType !== next.nodeType || old.nodeName !== next.nodeName) {
+        parent.replaceChild(next.cloneNode(true), old);
+      } else if (old.nodeType === 1) {
+        if (old === document.activeElement) continue;
+        for (const attr of [...old.attributes]) {
+          if (!next.hasAttribute(attr.name)) old.removeAttribute(attr.name);
+        }
+        for (const attr of next.attributes) {
+          if (old.getAttribute(attr.name) !== attr.value) old.setAttribute(attr.name, attr.value);
+        }
+        sync(old, next);
+        if (old.nodeName === 'INPUT') {
+          if (old.value !== next.value) old.value = next.value;
+          if (old.checked !== next.checked) old.checked = next.checked;
+        }
+      } else if (old.nodeValue !== next.nodeValue) old.nodeValue = next.nodeValue;
+    }
+    while (parent.childNodes.length > source.childNodes.length) parent.lastChild.remove();
+  }
+  sync(target, template.content);
+}
 const DEFAULT_CONTAINER_ICON = 'docker';
 const WEBUI_RULES = [
   { terms: ['bazarr'], ports: ['6767'] },
@@ -287,7 +317,7 @@ function renderServerMetrics(s) {
   metricHistory.network.push({ time: Date.now(), value: Math.min(networkRate / 1024 / 1024, 100) });
   metricHistory.network = metricHistory.network.slice(-80);
   localStorage.setItem('metricHistory', JSON.stringify(metricHistory));
-  $('serverMetrics').innerHTML = `
+  patchContent($('serverMetrics'), `
     <article class="server-card cpu-card metric-cpu">
       <span class="server-card-label">${cardIcon('cpu')}Host CPU</span>
       <strong>${percent(cpu.total_percent)}</strong>
@@ -314,15 +344,16 @@ function renderServerMetrics(s) {
       ${sparkline(metricHistory.network, 'Recent network throughput')}
       ${trafficBar('Receive', network.rx_rate, network.rx_human ? `${network.rx_human} total` : '')}
       ${trafficBar('Transmit', network.tx_rate, network.tx_human ? `${network.tx_human} total` : '')}
+      <small class="metric-note">Hub network namespace; bridge mode does not measure all host traffic.</small>
     </article>
     <article class="server-card metric-top">
       <span class="server-card-label">${cardIcon('top')}Top containers</span>
       <strong>CPU / Memory</strong>
       ${containerTopList('CPU', topContainers('cpu_percent'), 'cpu_percent')}
       ${containerTopList('Memory', topContainers('memory_percent'), 'memory_percent')}
-      <small class="metric-note">Docker CPU is normalized to total host capacity. Host process detail is limited by container isolation.</small>
+      <small class="metric-note">Container CPU: 100% = one logical core; values may exceed 100%. Host CPU: 100% = all cores. Host process detail is limited by container isolation.</small>
     </article>
-  `;
+  `);
 }
 
 function topContainers(key) {
@@ -454,10 +485,10 @@ function renderIntegrations() {
     target.innerHTML = '<div class="empty">Waiting for integrations…</div>';
     return;
   }
-  target.innerHTML = [
+  patchContent(target, [
     renderJellyfinCard(integrationData.jellyfin),
     renderHomeAssistantCard(integrationData.home_assistant),
-  ].join('');
+  ].join(''));
 }
 
 async function loadIntegrations({ force = false } = {}) {
@@ -466,7 +497,7 @@ async function loadIntegrations({ force = false } = {}) {
   if (force || !integrationData) renderIntegrations();
   try {
     integrationData = await api('/api/integrations');
-    renderIntegrations();
+    if (!integrationControlsActive()) renderIntegrations();
   } catch (e) {
     const target = $('integrationsPanelBody');
     if (target) target.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
@@ -661,9 +692,14 @@ function renderContainers() {
   const terms = q.split(/\s+/).filter(Boolean);
   const containers = currentData.containers || [];
   const rows = containers.filter(c => !terms.length || terms.every(term => containerSearchText(c).includes(term)));
-  const structureKey = JSON.stringify(rows.map(c => [c.id, c.name, c.status, c.health, c.group_name, c.sort_order, c.image, c.ports]));
+  const structureKey = JSON.stringify([
+    isSearching, [...collapsedGroups].sort(), currentData.group_order,
+    rows.map(c => [c.id, c.name, c.group_name, c.sort_order, c.image, c.ports,
+      c.project, c.short_id, containerIcon(c), webuiLinkForContainer(c)]),
+  ]);
   if (structureKey === containerStructureKey && $('containerRows').children.length) {
     updateContainerStats(rows);
+    applySectionState();
     return;
   }
   containerStructureKey = structureKey;
@@ -709,9 +745,9 @@ function updateContainerStats(containers) {
     const statusCell = row.children[1];
     const cpuCell = row.querySelector('.container-cpu');
     const memoryCell = row.querySelector('.container-memory');
-    if (statusCell) statusCell.innerHTML = statusBadge(container);
-    if (cpuCell) cpuCell.innerHTML = `${Number(container.cpu_percent || 0).toFixed(1)}%<div class="meter"><i style="width:${Math.min(container.cpu_percent || 0, 100)}%"></i></div>`;
-    if (memoryCell) memoryCell.innerHTML = `${bytes(container.memory_used)} <span class="muted">/ ${bytes(container.memory_limit)}</span><div class="meter"><i style="width:${Math.min(container.memory_percent || 0, 100)}%"></i></div>`;
+    if (statusCell) patchContent(statusCell, statusBadge(container));
+    if (cpuCell) patchContent(cpuCell, `${Number(container.cpu_percent || 0).toFixed(1)}%<div class="meter"><i style="width:${Math.min(container.cpu_percent || 0, 100)}%"></i></div>`);
+    if (memoryCell) patchContent(memoryCell, `${bytes(container.memory_used)} <span class="muted">/ ${bytes(container.memory_limit)}</span><div class="meter"><i style="width:${Math.min(container.memory_percent || 0, 100)}%"></i></div>`);
   }
 }
 
@@ -1052,11 +1088,13 @@ function render(data) {
   const s = currentData.server;
   $('dockerVersion').textContent = `Docker ${s.docker_version || 'unknown'}`;
   $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
-  $('settingTitle').value = settings.title;
-  $('settingRefresh').value = settings.refresh_seconds;
+  if (!$('settingsView').classList.contains('active')) {
+    $('settingTitle').value = settings.title;
+    $('settingRefresh').value = settings.refresh_seconds;
+    $('settingConfirm').checked = settings.confirm_actions;
+  }
   if ($('appVersion')) $('appVersion').textContent = settings.version || '0.1.0';
   if (!refreshControlsActive()) $('topRefreshSeconds').value = settings.refresh_seconds;
-  $('settingConfirm').checked = settings.confirm_actions;
   $('brandTitle').textContent = settings.title;
   document.title = settings.title;
   renderOptionLists();
@@ -1097,7 +1135,10 @@ async function refresh() {
     if (isSectionOpen('integrations')) loadIntegrations();
     if (preserveScroll) requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0 }));
   }
-  catch (e) { $('containerRows').innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(e.message)}</td></tr>`; toast(e.message); }
+  catch (e) {
+    $('lastUpdated').textContent = 'Refresh failed — showing last received data';
+    toast(e.message);
+  } finally { scheduleRefresh(); }
 }
 
 function scheduleRefresh() {
@@ -1418,7 +1459,13 @@ $('portMode').addEventListener('change', renderPorts);
 document.addEventListener('keydown', event => {
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'f') return;
   event.preventDefault();
-  const target = document.querySelector('.view.active #containerSearch') || document.querySelector('.view.active .search') || $('containerSearch');
+  let target = [...document.querySelectorAll('.view.active .search')].find(el => el.getClientRects().length);
+  if (!target) {
+    document.querySelector('.nav-item[data-view="containers"]').click();
+    collapsedSections.delete('containers');
+    applySectionState();
+    target = $('containerSearch');
+  }
   target?.focus();
   target?.select();
 });

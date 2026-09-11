@@ -447,7 +447,8 @@ def collect_container(container, include_stats: bool = True) -> dict:
     cpu = mem_used = mem_limit = mem_pct = 0
     if include_stats and state.get("Running"):
         try:
-            stats = container.stats(stream=False, one_shot=True)
+            # CPU utilization requires two samples, not a single lifetime counter.
+            stats = container.stats(stream=False, one_shot=False)
             cpu = cpu_percent(stats)
             mem_used, mem_limit, mem_pct = mem_values(stats)
         except Exception:
@@ -1342,17 +1343,26 @@ def overview(
 def integrations(request: Request):
     require_auth(request)
     cfg = integration_config()
-    client = docker_client()
+    client = None
     try:
-        return {
-            "jellyfin": jellyfin_sessions(client, request, cfg),
-            "home_assistant": home_assistant_state(cfg),
-        }
+        if not cfg["jellyfin_url"]:
+            client = docker_client()
+        jellyfin = jellyfin_sessions(client, request, cfg)
+    except Exception:
+        jellyfin = {"configured": bool(cfg["jellyfin_api_key"]), "active": [],
+                    "error": "Jellyfin unavailable. Check its URL and Docker discovery."}
     finally:
         try:
-            client.close()
+            if client is not None:
+                client.close()
         except Exception:
             pass
+    try:
+        home_assistant = home_assistant_state(cfg)
+    except Exception:
+        home_assistant = {"configured": bool(cfg["home_assistant_url"]), "entities": [],
+                          "error": "Home Assistant unavailable. Check its URL and token."}
+    return {"jellyfin": jellyfin, "home_assistant": home_assistant}
 
 
 @app.get("/api/jellyfin/users/{user_id}/avatar")
