@@ -9,6 +9,7 @@ const METRIC_PAGES = {
 let historyMetric = 'cpu';
 let historyRequest = 0;
 let historySettingsLoaded = false;
+let lastHistoryData = null;
 
 function historyFormat(value, unit) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—';
@@ -22,7 +23,9 @@ function historyChart(points, series, start, end, bucketSeconds) {
   const max = series.unit === '%' ? 100 : Math.max(1, ...valid.map(p => Number(p[series.key + '_max'] ?? p[series.key]))) * 1.1;
   const first = new Date(start).getTime();
   const span = Math.max(1, new Date(end).getTime() - first);
-  const x = p => 70 + Math.max(0, Math.min(1, (new Date(p.time).getTime() - first) / span)) * 800;
+  const chartWidth = typeof window !== 'undefined' && window.matchMedia('(max-width:720px)').matches ? 360 : 900;
+  const plotEnd = chartWidth - 30;
+  const x = p => 70 + Math.max(0, Math.min(1, (new Date(p.time).getTime() - first) / span)) * (plotEnd - 70);
   const y = v => 190 - Math.max(0, Math.min(1, Number(v) / max)) * 160;
   function path(key) {
     let previous = null;
@@ -33,11 +36,12 @@ function historyChart(points, series, start, end, bucketSeconds) {
       return `${disconnected ? 'M' : 'L'}${x(p).toFixed(1)} ${y(p[key]).toFixed(1)}`;
     }).join(' ');
   }
-  const grid = [0, .5, 1].map(f => `<path d="M70 ${y(f * max)}H870"/><text x="62" y="${y(f * max) + 4}" text-anchor="end">${escapeHtml(historyFormat(f * max, series.unit))}</text>`).join('');
-  return `<svg class="history-chart" viewBox="0 0 900 220" role="img" aria-label="${escapeHtml(series.label)}: average and peak per ${bucketSeconds}-second interval"><g class="history-grid">${grid}</g><path class="history-peak" d="${path(series.key + '_max')}"/><path class="history-average" d="${path(series.key)}"/>${valid.map(p => `<circle class="history-point" cx="${x(p)}" cy="${y(p[series.key])}" r="2.5"><title>${escapeHtml(new Date(p.time).toLocaleString())}: average ${escapeHtml(historyFormat(p[series.key], series.unit))}, peak ${escapeHtml(historyFormat(p[series.key + '_max'], series.unit))}</title></circle>`).join('')}</svg><div class="history-axis"><span>${escapeHtml(new Date(start).toLocaleString())}</span><span>${escapeHtml(new Date(end).toLocaleString())}</span></div>`;
+  const grid = [0, .5, 1].map(f => `<path d="M70 ${y(f * max)}H${plotEnd}"/><text x="62" y="${y(f * max) + 4}" text-anchor="end">${escapeHtml(historyFormat(f * max, series.unit))}</text>`).join('');
+  return `<svg class="history-chart" viewBox="0 0 ${chartWidth} 220" role="img" aria-label="${escapeHtml(series.label)}: average and peak per ${bucketSeconds}-second interval"><g class="history-grid">${grid}</g><path class="history-peak" d="${path(series.key + '_max')}"/><path class="history-average" d="${path(series.key)}"/>${valid.map(p => `<circle class="history-point" cx="${x(p)}" cy="${y(p[series.key])}" r="2.5"><title>${escapeHtml(new Date(p.time).toLocaleString())}: average ${escapeHtml(historyFormat(p[series.key], series.unit))}, peak ${escapeHtml(historyFormat(p[series.key + '_max'], series.unit))}</title></circle>`).join('')}</svg><div class="history-axis"><span>${escapeHtml(new Date(start).toLocaleString())}</span><span>${escapeHtml(new Date(end).toLocaleString())}</span></div>`;
 }
 
 function renderHistory(data) {
+  lastHistoryData = data;
   const latest = data.latest?.payload || {};
   const chosen = $('historyContainer').value;
   const selected = chosen ? (latest.containers || []).find(c => c.id === chosen) : null;
@@ -64,6 +68,7 @@ async function loadHistory(clear = false) {
   if (!$('metricDetailView').classList.contains('active')) return;
   const request = ++historyRequest;
   if (clear) $('historyContent').innerHTML = '<div class="empty">Loading history…</div>';
+  if (clear) lastHistoryData = null;
   const range = $('historyRange').value;
   const container = historyMetric === 'containers' ? $('historyContainer').value : '';
   const query = new URLSearchParams({ metric: historyMetric, range });
@@ -169,6 +174,9 @@ window.addEventListener('hashchange', () => {
   else if ($('metricDetailView').classList.contains('active')) document.querySelector('[data-view="dashboard"]').click();
 });
 if (location.hash.startsWith('#metrics/')) openMetricPage(location.hash.split('/')[1]);
+window.addEventListener('resize', () => {
+  if (lastHistoryData && $('metricDetailView').classList.contains('active')) renderHistory(lastHistoryData);
+});
 setInterval(async () => {
   if (document.hidden) return;
   if ($('metricDetailView').classList.contains('active')) loadHistory();

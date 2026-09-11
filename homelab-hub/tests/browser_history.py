@@ -132,6 +132,7 @@ def main():
         page.wait_for_selector('.history-chart')
         page.screenshot(path=str(artifacts / 'hub-history-desktop.png'), full_page=True)
         page.set_viewport_size({'width': 390, 'height': 844})
+        page.wait_for_function("document.querySelector('.history-chart').getAttribute('viewBox') === '0 0 360 220'")
         page.screenshot(path=str(artifacts / 'hub-history-mobile.png'), full_page=True)
         assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile overflow'
         page.reload()
