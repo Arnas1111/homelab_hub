@@ -23,9 +23,12 @@ from docker.errors import APIError, DockerException, NotFound
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
 from itsdangerous import BadSignature, URLSafeSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field
+from app.modules.metrics.history import HistorySettings, HistoryStore, safe_error
+from app.modules.metrics.sampler import HistorySampler
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("HUB_DATA_DIR", "/data"))
@@ -60,6 +63,13 @@ APP_VERSION = os.getenv("HUB_VERSION", "0.1.0")
 
 app = FastAPI(title="Homelab Hub", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    # Validation responses must not echo input passwords or tokens.
+    return JSONResponse(status_code=422, content={"detail": "Invalid request fields: " + ", ".join(
+        ".".join(str(part) for part in error["loc"]) for error in exc.errors())})
 
 templates = Environment(
     loader=FileSystemLoader(APP_DIR / "static"),
@@ -214,6 +224,13 @@ def init_db() -> None:
 def startup() -> None:
     USER_ICON_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+    metrics_history.initialize()
+    metrics_history.start()
+
+
+@app.on_event("shutdown")
+def shutdown() -> None:
+    metrics_history.stop()
 
 
 def get_settings() -> dict:
@@ -445,12 +462,14 @@ def collect_container(container, include_stats: bool = True) -> dict:
             published_ports.append({"internal": internal, "host_ip": host_ip, "host_port": host_port})
 
     cpu = mem_used = mem_limit = mem_pct = 0
+    stats_available = not state.get("Running")
     if include_stats and state.get("Running"):
         try:
             # CPU utilization requires two samples, not a single lifetime counter.
             stats = container.stats(stream=False, one_shot=False)
             cpu = cpu_percent(stats)
             mem_used, mem_limit, mem_pct = mem_values(stats)
+            stats_available = True
         except Exception:
             pass
 
@@ -466,6 +485,7 @@ def collect_container(container, include_stats: bool = True) -> dict:
         "created": attrs.get("Created"),
         "restart_policy": attrs.get("HostConfig", {}).get("RestartPolicy", {}).get("Name", ""),
         "cpu_percent": cpu,
+        "stats_available": stats_available,
         "memory_used": mem_used,
         "memory_limit": mem_limit,
         "memory_percent": mem_pct,
@@ -528,7 +548,7 @@ def read_cpu_sample() -> dict[str, tuple[int, int]]:
                     continue
                 values = [int(value) for value in parts[1:]]
                 idle = values[3] + (values[4] if len(values) > 4 else 0)
-                total = sum(values)
+                total = sum(values[:8])  # guest counters are already included in user/nice
                 sample[name] = (total, idle)
     except (OSError, ValueError):
         return {}
@@ -693,6 +713,47 @@ def host_metrics(info: dict) -> dict:
         "network": network_usage(),
         "top_processes": top_processes(),
     }
+
+
+def collect_history_sample(include_containers: bool) -> dict:
+    # Dedicated sample state avoids browser polling changing the history interval.
+    return history_sampler.sample(include_containers)
+
+
+history_sampler = HistorySampler(DATA_DIR, docker_client, collect_container)
+metrics_history = HistoryStore(db, collect_history_sample)
+
+
+@app.get("/api/metrics/settings")
+def metrics_settings_get(request: Request):
+    require_auth(request)
+    return metrics_history.public()
+
+
+@app.put("/api/metrics/settings")
+def metrics_settings_put(payload: HistorySettings, request: Request):
+    require_auth(request)
+    return metrics_history.save(payload)
+
+
+@app.post("/api/metrics/test")
+def metrics_test(payload: HistorySettings, request: Request):
+    require_auth(request)
+    try:
+        return metrics_history.test(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=safe_error(exc)) from None
+
+
+@app.get("/api/metrics/history")
+def metrics_history_get(request: Request, metric: Literal["cpu", "memory", "storage", "network", "containers"] = "cpu",
+                        range: Literal["1h", "6h", "24h", "7d", "30d"] = "24h",
+                        container_id: str | None = Query(None, max_length=64, pattern=r"^[a-f0-9]+$")):
+    require_auth(request)
+    try:
+        return metrics_history.history(metric, range, container_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=safe_error(exc)) from None
 
 
 INTEGRATION_ENV = {

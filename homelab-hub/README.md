@@ -4,6 +4,9 @@ A self-hosted web dashboard for managing Docker containers on an Unraid host.
 
 ## Current features
 
+- Dedicated CPU, memory, storage, network and container history pages
+- Optional PostgreSQL 18 background metrics storage with connection setup, retention and historical charts — [setup guide](HISTORY.md)
+
 - Password-protected Web UI
 - Docker host overview
 - Container state, health, image and published ports

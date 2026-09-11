@@ -16,7 +16,10 @@ env:
   IMAGE_NAME: ghcr.io/arnas1111/homelab-hub
 
 jobs:
+  validate:
+    uses: ./.github/workflows/checks.yml
   publish:
+    needs: validate
     runs-on: ubuntu-latest
 
     steps:

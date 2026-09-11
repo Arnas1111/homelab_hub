@@ -351,20 +351,20 @@ function renderServerMetrics(s) {
   patchContent($('serverMetrics'), `
     <div class="metrics-context"><span>Host capacity <small>· sampled every ~${Number(settings.refresh_seconds) || 5}s</small></span><span class="metrics-legend"><i></i>Normal <i class="warning"></i>≥75% <i class="critical"></i>≥90%</span></div>
     <article class="utilization-card ${levels.cpu.kind}">
-      <div class="utilization-heading"><h3>CPU utilization</h3>${status(levels.cpu)}</div>
+      <div class="utilization-heading"><h3><button class="metric-page-link" data-metric-page="cpu">CPU utilization ↗</button></h3>${status(levels.cpu)}</div>
       <strong class="utilization-value">${reading(levels.cpu)}</strong>
       <p class="utilization-context">${Number(s.cpus) || cpu.cores?.length || '—'} logical cores · total host capacity</p>
       ${levels.cpu.value === null ? '<div class="utilization-empty">Host CPU sample unavailable</div>' : utilizationTrend(metricHistory.cpu, 'Host CPU utilization')}
     </article>
     <article class="utilization-card ${levels.memory.kind}">
-      <div class="utilization-heading"><h3>Memory utilization</h3>${status(levels.memory)}</div>
+      <div class="utilization-heading"><h3><button class="metric-page-link" data-metric-page="memory">Memory utilization ↗</button></h3>${status(levels.memory)}</div>
       <strong class="utilization-value">${reading(levels.memory)}</strong>
       <p class="utilization-context">${escapeHtml(memory.used_human || '—')} used / ${escapeHtml(memory.total_human || '—')}</p>
       ${levels.memory.value === null ? '<div class="utilization-empty">Host memory sample unavailable</div>' : utilizationTrend(metricHistory.memory, 'Host memory utilization')}
       <small class="metric-note">${escapeHtml(memory.available_human || '—')} available</small>
     </article>
     <article class="utilization-card ${levels.disk.kind}">
-      <div class="utilization-heading"><h3>Storage capacity</h3>${status(levels.disk)}</div>
+      <div class="utilization-heading"><h3><button class="metric-page-link" data-metric-page="storage">Storage capacity ↗</button></h3>${status(levels.disk)}</div>
       <div class="storage-summary"><div class="capacity-ring" role="img" aria-label="${levels.disk.value === null ? 'Storage unavailable' : `${levels.disk.value.toFixed(1)} percent used, ${(100 - levels.disk.value).toFixed(1)} percent free`}"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="48"/><circle class="ring-used" cx="60" cy="60" r="48" pathLength="100" stroke-dasharray="${levels.disk.value ?? 0} 100"/></svg><div><strong>${levels.disk.value === null ? '—' : `${levels.disk.value.toFixed(1)}%`}</strong><span>used</span></div></div><div class="storage-values"><span>Free space</span><strong>${escapeHtml(disk.free_human || '—')}</strong><span>of ${escapeHtml(disk.total_human || '—')} total</span></div></div>
       <p class="utilization-context">Filesystem backing /data</p><small class="metric-note">Mount capacity · not array health or folder size</small>
     </article>
@@ -1530,6 +1530,7 @@ $('containerRows').addEventListener('click', event => {
 
 for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
   btn.addEventListener('click', () => {
+    if (location.hash.startsWith('#metrics/')) history.replaceState(null, '', location.pathname + location.search);
     document.querySelectorAll('.nav-item[data-view]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
     const overviewViews = { metrics: 'server', containers: 'containers', integrations: 'integrations' };
     const overviewView = overviewViews[btn.dataset.view];
@@ -1550,6 +1551,7 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
       integrations:['Integrations','Live service status and controls'],
       settings:['Settings','Configure this hub'],
       connectors:['Connector setup','Configure service URLs and credentials'],
+      database:['History storage','PostgreSQL connection and background collection'],
     };
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
     if (btn.dataset.view === 'connectors') loadIntegrationSettings();

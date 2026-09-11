@@ -1,5 +1,7 @@
 # Review of the Copilot handoff
 
+**Update:** Dedicated statistic pages and PostgreSQL background history have now been implemented. See [HISTORY.md](HISTORY.md) for configuration, data scope, retention and validation. The original findings and remaining-work list below describe the earlier review baseline; PostgreSQL is no longer unimplemented.
+
 Reviewed baseline: `9a71b2a` (11 September 2026). The checkout was clean.
 
 ## Findings and changes

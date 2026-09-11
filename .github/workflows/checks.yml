@@ -1,10 +1,27 @@
 name: Checks
-on: [push, pull_request, workflow_dispatch]
+on: [pull_request, workflow_dispatch, workflow_call]
 permissions:
   contents: read
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: homelab_test
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: homelab_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U homelab_test -d homelab_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      HUB_TEST_PG_HOST: localhost
+      HUB_TEST_PG_PASSWORD: ci-test-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -14,6 +31,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: node --check homelab-hub/app/static/app.js
-      - run: node --test homelab-hub/tests/frontend.test.cjs
+      - run: node --check homelab-hub/app/static/history.js
+      - run: node --test homelab-hub/tests/*.test.cjs
+      - run: pip install -r homelab-hub/requirements.txt httpx playwright
       - run: python -m compileall -q homelab-hub/app
       - run: python -m unittest discover -s homelab-hub/tests
+      - run: playwright install --with-deps chromium
+      - run: python homelab-hub/tests/browser_history.py

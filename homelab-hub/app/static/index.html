@@ -13,6 +13,8 @@
     <nav>
       <button class="nav-item active" data-view="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4zM14 15h6v4h-6z"/></svg></span> Overview</button>
       <button class="nav-item" data-view="metrics"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="m7 15 3-4 3 2 5-7"/></svg></span> Metrics</button>
+      <button class="nav-item history-nav" data-metric-page="cpu">↳ Performance history</button>
+      <button class="nav-item" data-view="database">History storage</button>
       <button class="nav-item" data-view="containers"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M7 7V5h10v2M8 17v2M16 17v2"/></svg></span> Containers</button>
       <button class="nav-item" data-view="integrations"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/></svg></span> Integrations</button>
       <button class="nav-item" data-view="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/><path d="m19 12 .9-2-2-3.4-2.2.3-1.7-1L13.1 4H9l-.9 1.9-1.7 1-2.2-.3-2 3.4.9 2-.9 2 2 3.4 2.2-.3 1.7 1L9 20h4.1l.9-1.9 1.7-1 2.2.3 2-3.4z"/></svg></span> Settings</button>
@@ -112,6 +114,46 @@
       </div>
     </section>
 
+    <section id="metricDetailView" class="view">
+      <div class="panel history-panel">
+        <div class="history-toolbar">
+          <nav class="metric-tabs" aria-label="Metric pages">
+            <button class="btn" data-metric-page="cpu">CPU</button><button class="btn" data-metric-page="memory">Memory</button><button class="btn" data-metric-page="storage">Storage</button><button class="btn" data-metric-page="network">Network</button><button class="btn" data-metric-page="containers">Containers</button>
+          </nav>
+          <label>Time range <select id="historyRange" class="select"><option value="1h">Last hour</option><option value="6h">Last 6 hours</option><option value="24h" selected>Last 24 hours</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select></label>
+          <label id="historyContainerLabel" hidden>Container <select id="historyContainer" class="select"><option value="">All containers</option></select></label>
+          <button class="btn" id="historyRefresh">Refresh history</button><button class="btn" data-history-settings>Configure storage</button>
+        </div>
+        <p id="historyNotice" class="history-notice" role="status"></p>
+        <div id="historyContent"><div class="empty">Loading history…</div></div>
+      </div>
+    </section>
+
+    <section id="databaseView" class="view">
+      <div class="panel settings-panel">
+        <div class="panel-head"><div><h2>PostgreSQL history storage</h2><p class="muted">Connect an existing database. Collection runs even when the Hub is closed in your browser.</p></div></div>
+        <form id="historySettingsForm" class="history-settings">
+          <label class="check"><input id="pgEnabled" type="checkbox"><span>Enable background history collection</span></label>
+          <div class="history-fields">
+            <label>Hostname or IP<input id="pgHost" maxlength="253" placeholder="postgres" autocomplete="off"></label>
+            <label>Port<input id="pgPort" type="number" min="1" max="65535" value="5432" required></label>
+            <label>Database<input id="pgDatabase" maxlength="63" value="homelab" required></label>
+            <label>Username<input id="pgUsername" maxlength="63" value="homelab" autocomplete="username" required></label>
+            <label>Password<input id="pgPassword" type="password" maxlength="2000" autocomplete="new-password"><small id="pgPasswordHint">Leave blank to keep the saved password.</small></label>
+            <label>TLS mode<select id="pgSslmode" class="select"><option value="prefer">Prefer TLS</option><option value="require">Require encryption</option><option value="verify-full">Verify certificate and hostname</option><option value="disable">Disable TLS (trusted network)</option></select></label>
+            <label>Sample interval (seconds)<input id="pgSampleSeconds" type="number" min="10" max="3600" value="30" required></label>
+            <label>Retention (days)<input id="pgRetentionDays" type="number" min="1" max="365" value="30" required></label>
+          </div>
+          <label class="check"><input id="pgClearPassword" type="checkbox"><span>Clear saved password</span></label>
+          <label class="check"><input id="pgIncludeContainers" type="checkbox" checked><span>Also collect individual Docker container statistics</span></label>
+          <p class="muted tiny">The database must already exist. The Hub creates its own homelab_hub schema on first collection. Retention automatically deletes this Hub's older samples; disabling collection keeps existing history. Credentials are stored in local appdata.</p>
+          <p class="muted tiny">Use a hostname reachable from the Hub container, not localhost. Verified TLS uses libpq's root certificate configuration (PGSSLROOTCERT). At 30 seconds, collection stores about 2,880 snapshots per day.</p>
+          <div class="history-actions"><button id="pgSave" class="btn primary" type="submit">Save history settings</button><button id="pgTest" class="btn" type="button">Test connection</button><button class="btn" type="button" data-metric-page="cpu">View history</button></div>
+          <p id="pgFeedback" role="status" class="muted"></p><p id="pgStatus" class="muted tiny"></p>
+        </form>
+      </div>
+    </section>
+
     <section id="settingsView" class="view">
       <div class="panel settings-panel">
           <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div><span class="version-label">Version <strong id="appVersion">{{ settings.version }}</strong></span></div>
@@ -197,5 +239,6 @@
 
   <div id="toast" class="toast hidden"></div>
   <script src="/static/app.js"></script>
+  <script src="/static/history.js"></script>
 </body>
 </html>
