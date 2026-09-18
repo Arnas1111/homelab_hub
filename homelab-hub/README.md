@@ -2,6 +2,16 @@
 
 A self-hosted web dashboard for managing Docker containers on an Unraid host.
 
+The workspace now separates Home, Services, Containers, Metrics, History and Integrations. Home shows favorites, capacity and container alerts; Services automatically discovers applications from Docker metadata and Unraid/ Homepage display labels. Background collectors keep resource sampling off the opening request path.
+
+See the [dashboard concept and research](DASHBOARD_CONCEPT.md) for design decisions, supported discovery labels, collection behavior and the roadmap.
+
+### Unraid telemetry
+
+Open **Connections** and save your Unraid server URL and an API key with Info and Array read permissions. **Integrations** then shows hardware, array state and disk temperatures. Docker discovery works through the existing socket mount without this API key. Unraid API readings are live snapshots; PostgreSQL history currently stores host/container performance metrics. Environment defaults are `HUB_UNRAID_URL` and `HUB_UNRAID_API_KEY`.
+
+In **Services**, pin applications for Home, search with Ctrl/Cmd+K, or use **Manage links** to override a URL. Favorites are shared by this Hub and persisted under `/data`. Explicit URLs are useful for host networking, dedicated container IPs or reverse proxies.
+
 ## Current features
 
 - Dedicated CPU, memory, storage, network and container history pages

@@ -1,5 +1,7 @@
 # Review of the Copilot handoff
 
+**18 September workspace redesign:** Home/Services now use background Docker discovery, saved favorites and focused navigation. A read-only Unraid API adapter adds array/disk telemetry. See [DASHBOARD_CONCEPT.md](DASHBOARD_CONCEPT.md) for research, architecture, setup and remaining scope. The historical baseline and validation limitations below predate the current Python/browser test suite; image publication is now gated on checks, including PostgreSQL 18.
+
 **Update:** Dedicated statistic pages and PostgreSQL background history have now been implemented. See [HISTORY.md](HISTORY.md) for configuration, data scope, retention and validation. The original findings and remaining-work list below describe the earlier review baseline; PostgreSQL is no longer unimplemented.
 
 Reviewed baseline: `9a71b2a` (11 September 2026). The checkout was clean.

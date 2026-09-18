@@ -37,6 +37,21 @@ class HistoryAPITests(unittest.TestCase):
     def login(self):
         self.client.cookies.set('hub_session', self.main.signer.dumps({'authenticated': True}))
 
+    def test_board_and_unraid_require_authentication(self):
+        self.assertEqual(self.client.put('/api/board', json={'favorites': []}).status_code, 401)
+        self.assertEqual(self.client.get('/api/unraid').status_code, 401)
+
+    def test_home_overview_uses_cached_inventory_without_resource_sampling(self):
+        self.login()
+        self.client.put('/api/board', json={'favorites': ['container:cinema', 'container:cinema']})
+        snapshot = {'data': {'server': {'cpus': 4}, 'containers': []}, 'loading': False, 'error': None, 'updated_at': '2026-09-18T12:00:00Z'}
+        with patch.object(self.main.inventory_cache, 'read', return_value=snapshot), patch.object(self.main.resource_cache, 'read') as stats:
+            response = self.client.get('/api/overview?include_metrics=false')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['board']['favorites'], ['container:cinema'])
+            self.assertEqual(response.json()['server']['cpus'], 4)
+            stats.assert_not_called()
+
     def test_all_history_routes_require_authentication(self):
         for method, endpoint, kwargs in [('get', '/api/metrics/settings', {}), ('get', '/api/metrics/history', {}),
                                          ('put', '/api/metrics/settings', {'json': {}}), ('post', '/api/metrics/test', {'json': {}})]:

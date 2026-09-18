@@ -29,6 +29,9 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field
 from app.modules.metrics.history import HistorySettings, HistoryStore, safe_error
 from app.modules.metrics.sampler import HistorySampler
+from app.core.snapshot import Snapshot
+from app.modules.docker.discovery import load_inventory, service_url
+from app.modules.unraid.connector import read_unraid
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("HUB_DATA_DIR", "/data"))
@@ -114,6 +117,9 @@ class WebuiLinksPayload(BaseModel):
 
 
 class IntegrationSettingsPayload(BaseModel):
+    unraid_url: str = Field(default="", max_length=500)
+    unraid_api_key: str = Field(default="", max_length=5000)
+    unraid_api_key_clear: bool = False
     jellyfin_url: str = Field(default="", max_length=500)
     jellyfin_public_url: str = Field(default="", max_length=500)
     jellyfin_api_key: str = Field(default="", max_length=5000)
@@ -224,6 +230,8 @@ def init_db() -> None:
 def startup() -> None:
     USER_ICON_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+    inventory_cache.read()
+    host_cache.read()
     metrics_history.initialize()
     metrics_history.start()
 
@@ -711,7 +719,6 @@ def host_metrics(info: dict) -> dict:
         "memory": read_meminfo(),
         "data_mount": disk_usage(DATA_DIR),
         "network": network_usage(),
-        "top_processes": top_processes(),
     }
 
 
@@ -757,6 +764,8 @@ def metrics_history_get(request: Request, metric: Literal["cpu", "memory", "stor
 
 
 INTEGRATION_ENV = {
+    "unraid_url": "HUB_UNRAID_URL",
+    "unraid_api_key": "HUB_UNRAID_API_KEY",
     "jellyfin_url": "HUB_JELLYFIN_URL",
     "jellyfin_public_url": "HUB_JELLYFIN_PUBLIC_URL",
     "jellyfin_api_key": "HUB_JELLYFIN_API_KEY",
@@ -769,7 +778,7 @@ INTEGRATION_ENV = {
     "home_assistant_token": "HUB_HOME_ASSISTANT_TOKEN",
     "home_assistant_entities": "HUB_HOME_ASSISTANT_ENTITIES",
 }
-SECRET_INTEGRATION_KEYS = {"jellyfin_api_key", "nextcloud_app_password", "home_assistant_token"}
+SECRET_INTEGRATION_KEYS = {"unraid_api_key", "jellyfin_api_key", "nextcloud_app_password", "home_assistant_token"}
 
 
 def env_value(name: str, default: str = "") -> str:
@@ -789,6 +798,8 @@ def get_integration_values() -> dict[str, str]:
 def public_integration_settings() -> dict:
     values = get_integration_values()
     return {
+        "unraid_url": values["unraid_url"],
+        "unraid_api_key_configured": bool(values["unraid_api_key"]),
         "jellyfin_url": values["jellyfin_url"],
         "jellyfin_public_url": values["jellyfin_public_url"],
         "jellyfin_api_key_configured": bool(values["jellyfin_api_key"]),
@@ -805,6 +816,7 @@ def public_integration_settings() -> dict:
 
 def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
     values = {
+        "unraid_url": payload.unraid_url.strip().rstrip("/"),
         "jellyfin_url": normalize_service_url(payload.jellyfin_url),
         "jellyfin_public_url": payload.jellyfin_public_url.strip().rstrip("/"),
         "nextcloud_calendar_url": payload.nextcloud_calendar_url.strip(),
@@ -817,6 +829,10 @@ def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
         ),
     }
     secrets_to_write = {}
+    if payload.unraid_api_key_clear:
+        secrets_to_write["unraid_api_key"] = ""
+    elif payload.unraid_api_key.strip():
+        secrets_to_write["unraid_api_key"] = payload.unraid_api_key.strip()
     if payload.jellyfin_api_key_clear:
         secrets_to_write["jellyfin_api_key"] = ""
     elif payload.jellyfin_api_key.strip():
@@ -840,6 +856,7 @@ def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
                 """,
                 (key, value),
             )
+    unraid_cache.invalidate()
     return public_integration_settings()
 
 
@@ -1332,72 +1349,80 @@ def index(request: Request):
     return HTMLResponse(html)
 
 
-@app.get("/api/overview")
-def overview(
-    request: Request,
-    include_containers: bool = Query(True),
-    include_stats: bool = Query(True),
-    include_metrics: bool = Query(True),
-):
-    require_auth(request)
+def load_resource_stats():
     client = docker_client()
     try:
-        info = client.info()
-        version = client.version()
         containers = client.containers.list(all=True)
-        results = []
-        if include_containers:
-            workers = min(max(len(containers), 1), 16)
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = {pool.submit(collect_container, c, include_stats): c.id for c in containers}
-                for future in as_completed(futures):
-                    try:
-                        results.append(future.result())
-                    except Exception as exc:
-                        results.append({"id": futures[future], "name": "unknown", "status": "error", "error": str(exc)})
-            results.sort(key=lambda x: x.get("name", "").lower())
-            prefs = get_container_prefs()
-            for container in results:
-                pref = prefs.get(container.get("name"), {})
-                container["icon"] = pref.get("icon") or ""
-                container["group_name"] = pref.get("group_name") or ""
-                container["sort_order"] = pref.get("sort_order", 0)
-
-        running = sum(1 for c in containers if c.status == "running")
-        paused = sum(1 for c in containers if c.status == "paused")
-        stopped = len(containers) - running - paused
-        payload = {
-            "server": {
-                "name": SERVER_NAME,
-                "docker_version": version.get("Version"),
-                "api_version": version.get("ApiVersion"),
-                "os": info.get("OperatingSystem"),
-                "kernel": info.get("KernelVersion"),
-                "cpus": info.get("NCPU"),
-                "memory_total": info.get("MemTotal", 0),
-                "memory_total_human": fmt_bytes(info.get("MemTotal", 0)),
-                "containers_total": len(containers),
-                "containers_running": running,
-                "containers_paused": paused,
-                "containers_stopped": stopped,
-                "images": info.get("Images"),
-            },
-            "group_order": get_group_order(),
-            "settings": get_settings(),
-            "webui_links": get_webui_links(),
-        }
-        if include_metrics:
-            payload["server"]["metrics"] = host_metrics(info)
-        if include_containers:
-            payload["containers"] = results
-        return payload
-    except DockerException as exc:
-        raise HTTPException(status_code=503, detail=f"Docker unavailable: {exc}") from exc
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            return {row["id"]: row for row in pool.map(collect_container, containers)}
     finally:
-        try:
-            client.close()
-        except Exception:
-            pass
+        client.close()
+
+
+inventory_cache = Snapshot(lambda: load_inventory(docker_client), ttl=10, error_message="Docker is unavailable. Showing the last discovery result.")
+resource_cache = Snapshot(load_resource_stats, ttl=10, error_message="Resource samples unavailable.")
+host_cache = Snapshot(lambda: host_metrics({}), ttl=5, error_message="Host readings unavailable.")
+unraid_cache = Snapshot(lambda: read_unraid(get_integration_values()), ttl=30, error_message="Unraid API unavailable.")
+
+
+@app.get("/api/unraid")
+def unraid_state(request: Request):
+    require_auth(request)
+    return unraid_cache.read()
+
+
+class BoardPayload(BaseModel):
+    favorites: list[str] = Field(default_factory=list, max_length=300)
+
+
+@app.put("/api/board")
+def board_put(payload: BoardPayload, request: Request):
+    require_auth(request)
+    favorites = list(dict.fromkeys(item[:200] for item in payload.favorites))
+    with db() as conn:
+        conn.execute("INSERT INTO settings(key,value) VALUES ('board_favorites',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(favorites),))
+    return {"favorites": favorites}
+
+
+@app.get("/api/overview")
+def overview(request: Request, include_containers: bool = Query(True),
+             include_stats: bool = Query(False), include_metrics: bool = Query(True)):
+    require_auth(request)
+    inventory = inventory_cache.read()
+    discovered = inventory["data"] or {"containers": [], "server": {}}
+    payload = {"server": {"name": SERVER_NAME, **discovered["server"]}, "settings": get_settings(),
+               "webui_links": get_webui_links(), "group_order": get_group_order(),
+               "discovery": {key: value for key, value in inventory.items() if key != "data"}}
+    with db() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key='board_favorites'").fetchone()
+    payload["board"] = {"favorites": json.loads(row["value"]) if row else []}
+    configured = get_integration_values()
+    payload["connections"] = {"jellyfin": bool(configured["jellyfin_api_key"]),
+                              "home_assistant": bool(configured["home_assistant_url"] and configured["home_assistant_token"]),
+                              "unraid": bool(configured["unraid_url"] and configured["unraid_api_key"])}
+    if include_metrics:
+        host = host_cache.read()
+        payload["host_collection"] = {key: value for key, value in host.items() if key != "data"}
+        if host["data"] is not None:
+            payload["server"]["metrics"] = host["data"]
+    if include_containers:
+        prefs = get_container_prefs()
+        stats = resource_cache.read() if include_stats else None
+        if stats:
+            payload["resource_collection"] = {key: value for key, value in stats.items() if key != "data"}
+        results = discovered["containers"]
+        for container in results:
+            pref = prefs.get(container["name"], {})
+            container["icon"] = pref.get("icon") or container["icon"]
+            container["group_name"] = pref.get("group_name") or container["group_name"]
+            container["sort_order"] = pref.get("sort_order", 0)
+            container["discovered_url"] = service_url(container["discovered_url"], container["ports"], host_base_url(request))
+            sample = (stats["data"] or {}).get(container["id"]) if stats else None
+            if sample and sample["status"] == container["status"]:
+                for key in ("cpu_percent", "memory_used", "memory_limit", "memory_percent", "stats_available"):
+                    container[key] = sample.get(key)
+        payload["containers"] = results
+    return payload
 
 
 @app.get("/api/integrations")
@@ -1714,6 +1739,8 @@ def container_action(container_id: str, action: Action, request: Request):
         elif action == "unpause":
             container.unpause()
         container.reload()
+        inventory_cache.invalidate()
+        resource_cache.invalidate()
         return {"ok": True, "id": container.id, "name": container.name, "status": container.status}
     except NotFound as exc:
         raise HTTPException(status_code=404, detail="Container not found") from exc

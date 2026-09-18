@@ -127,7 +127,7 @@ def main():
         assert database['enabled']
         artifacts = Path(os.getenv('HUB_BROWSER_ARTIFACTS', tempfile.gettempdir()))
         page.screenshot(path=str(artifacts / 'hub-history-settings.png'), full_page=True)
-        page.locator('[data-view="dashboard"]').click()
+        page.locator('[data-view="home"]').click()
         page.get_by_role('button', name='CPU utilization ↗').click()
         page.wait_for_selector('.history-chart')
         page.screenshot(path=str(artifacts / 'hub-history-desktop.png'), full_page=True)

@@ -6,19 +6,23 @@
   <title>{{ settings.title }}</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/workspace.css">
 </head>
 <body>
   <aside class="sidebar">
     <div class="brand"><div class="brand-mark small"><img src="/static/favicon.svg" alt=""></div><span id="brandTitle">{{ settings.title }}</span></div>
-    <nav>
-      <button class="nav-item active" data-view="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4zM14 15h6v4h-6z"/></svg></span> Overview</button>
-      <button class="nav-item" data-view="metrics"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="m7 15 3-4 3 2 5-7"/></svg></span> Metrics</button>
-      <button class="nav-item history-nav" data-metric-page="cpu">↳ Performance history</button>
-      <button class="nav-item" data-view="database">History storage</button>
-      <button class="nav-item" data-view="containers"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M7 7V5h10v2M8 17v2M16 17v2"/></svg></span> Containers</button>
-      <button class="nav-item" data-view="integrations"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/></svg></span> Integrations</button>
-      <button class="nav-item" data-view="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/><path d="m19 12 .9-2-2-3.4-2.2.3-1.7-1L13.1 4H9l-.9 1.9-1.7 1-2.2-.3-2 3.4.9 2-.9 2 2 3.4 2.2-.3 1.7 1L9 20h4.1l.9-1.9 1.7-1 2.2.3 2-3.4z"/></svg></span> Settings</button>
-      <button class="nav-item" data-view="connectors"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 7h4v4H7zM13 13h4v4h-4z"/><path d="M11 9h2a2 2 0 0 1 2 2v2M7 11v2a4 4 0 0 0 4 4h2"/></svg></span> Connector setup</button>
+    <nav aria-label="Main navigation">
+      <span class="nav-heading">Workspace</span>
+      <button class="nav-item active" data-view="home"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v10H3z M9 20v-7h6v7"/></svg></span> Home</button>
+      <button class="nav-item" data-view="services"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg></span> Services</button>
+      <button class="nav-item" data-view="containers"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18v6H3z M3 14h18v6H3z M6 7h1 M6 17h1"/></svg></span> Containers</button>
+      <button class="nav-item" data-view="metrics"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-7 5 4 8-11 M3 21h18"/></svg></span> Metrics</button>
+      <button class="nav-item history-nav" data-metric-page="cpu"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a9 9 0 1 1-1 9 M3 3v5h5 M12 7v5l3 2"/></svg></span> History</button>
+      <button class="nav-item" data-view="integrations"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6v6H4z M14 13h6v6h-6z M10 8h7v5"/></svg></span> Integrations</button>
+      <span class="nav-heading">Manage</span>
+      <button class="nav-item" data-view="settings"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16 M4 17h16 M8 4v6 M16 14v6"/></svg></span> Settings</button>
+      <button class="nav-item" data-view="database"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6c0-4 16-4 16 0v12c0 4-16 4-16 0z M4 6c0 4 16 4 16 0 M4 12c0 4 16 4 16 0"/></svg></span> History storage</button>
+      <button class="nav-item" data-view="connectors"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h8v6a4 4 0 0 1-8 0z M10 4v4 M14 4v4 M12 18v3"/></svg></span> Connections</button>
     </nav>
     <div class="sidebar-bottom">
       <div class="server-pill"><span class="dot"></span><div><strong>{{ server_name }}</strong><small id="dockerVersion">Connecting…</small></div></div>
@@ -28,7 +32,7 @@
 
   <main class="main">
     <header class="topbar">
-      <div><h1 id="pageTitle">Overview</h1><p id="pageSubtitle" class="muted">Homelab data, shortcuts, ports, and monitoring</p></div>
+      <div><h1 id="pageTitle">Home</h1><p id="pageSubtitle" class="muted">Your services and host, at a glance</p></div>
       <div class="top-actions">
         <label class="refresh-control">Update <input id="topRefreshSeconds" type="number" min="1" max="60" step="1" value="{{ settings.refresh_seconds }}"> s</label>
         <span id="lastUpdated" class="muted tiny"></span>
@@ -36,7 +40,22 @@
       </div>
     </header>
 
-    <section id="dashboardView" class="view active">
+    <section id="homeView" class="view active">
+      <div class="home-heading"><div><span class="eyebrow">YOUR HOMELAB</span><h2 id="homeServerTitle">{{ server_name }}</h2><p>Everything in its place. Open a service or see what needs attention.</p></div><label class="board-search"><span class="sr-only">Search services</span><input id="homeSearch" class="search" placeholder="Search your services..." autocomplete="off"><kbd>Ctrl K</kbd></label></div>
+      <p id="boardStatus" class="discovery-status" role="status">Discovering your Docker environment...</p>
+      <div id="homePulse" class="home-pulse" aria-label="Host summary"><div class="pulse-placeholder">Host readings are loading independently.</div></div>
+      <div class="home-columns"><div><div class="board-section-heading"><div><span class="eyebrow">QUICK ACCESS</span><h2 id="favoriteTitle">Your services</h2></div><button class="btn subtle" data-open-view="services">View all services &rarr;</button></div><div id="homeServices"><div class="board-empty">Discovering services from Docker. Your page is ready while discovery runs.</div></div></div>
+      <aside class="home-aside"><section class="board-panel"><div class="board-section-heading"><h2>Needs attention</h2><span id="attentionCount" class="count-label">&mdash;</span></div><div id="homeAttention" class="board-empty">Waiting for the first discovery result.</div></section><section class="board-panel"><div class="board-section-heading"><h2>Connections</h2><button class="text-btn" data-open-view="integrations">View &rarr;</button></div><div id="homeConnections"></div></section></aside></div>
+    </section>
+
+    <section id="servicesView" class="view">
+      <div class="board-section-heading"><div><span class="eyebrow">APPLICATION DIRECTORY</span><h2>Services</h2><p class="muted tiny">Discovered from Docker, organized for you. Pin frequently used services.</p></div><button class="btn" id="manageServices">Manage links</button></div>
+      <div class="service-toolbar"><label class="sr-only" for="serviceSearch">Search services</label><input id="serviceSearch" class="search" placeholder="Search name, group, image..."><label class="sr-only" for="serviceFilter">Filter services</label><select id="serviceFilter" class="select"><option value="all">All services</option><option value="favorites">Favorites</option><option value="attention">Needs attention</option><option value="running">Running</option></select><span id="serviceCount" class="muted tiny"></span></div>
+      <div id="allServices"><div class="board-empty">Discovering your applications...</div></div>
+      <div id="webuiPanelBody" class="webui-manager"></div>
+    </section>
+
+    <section id="dashboardView" class="view">
       <div id="overviewSections" class="overview-sections">
         <section id="serverPanel" class="panel dashboard-section server-metrics-panel" data-section="server">
           <div class="panel-head section-head">
@@ -47,6 +66,7 @@
             <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="server" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="server" aria-label="Move section down">▿</button></span>
           </div>
           <div id="serverPanelBody">
+            <p id="metricsCollectionStatus" class="collection-status" role="status"></p>
             <div id="serverMetrics" class="server-metrics">
               <div class="empty">Waiting for host metrics…</div>
             </div>
@@ -57,10 +77,12 @@
           <div class="panel-head section-head">
             <button class="section-toggle" type="button" data-action="toggle-section" data-section="integrations" aria-expanded="true">
               <span id="integrationsFoldIcon">▾</span>
-              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/></svg></span><span><strong>Live integrations</strong><small>Jellyfin streams and Home Assistant controls</small></span></span>
+              <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/></svg></span><span><strong>Live integrations</strong><small>Unraid, media and home automation</small></span></span>
             </button>
             <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="integrations" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="integrations" aria-label="Move section down">▿</button></span>
           </div>
+          <div class="connections-toolbar"><p>Live data and controls from connected services. Detected applications still need their own credentials.</p><button class="btn" data-open-view="connectors">Configure connections</button></div>
+          <div id="unraidPanel" class="unraid-panel"><div class="empty">Open Integrations to load Unraid data.</div></div>
           <div id="integrationsPanelBody" class="integration-grid">
             <div class="empty">Waiting for integrations…</div>
           </div>
@@ -101,15 +123,14 @@
               <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="containers" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="containers" aria-label="Move section down">▿</button></span>
             </div>
           </div>
+          <p id="resourceCollectionStatus" class="collection-status" role="status"></p>
           <div id="containersPanelBody" class="table-wrap">
             <table>
               <thead><tr><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th>Ports</th><th>Image</th><th></th></tr></thead>
               <tbody id="containerRows"><tr><td colspan="7" class="empty">Connecting to Docker…</td></tr></tbody>
             </table>
           </div>
-          <div id="webuiPanelBody" class="webui-manager">
-            <div class="empty compact-empty">Waiting for WebUI links…</div>
-          </div>
+
         </section>
       </div>
     </section>
@@ -170,6 +191,7 @@
       <div class="panel settings-panel">
         <div class="panel-head"><div><h2>Connectors</h2><p class="muted">Stored locally in appdata</p></div></div>
         <form id="integrationSettingsForm" class="connector-form">
+          <article class="connector-card"><h3>Unraid</h3><p class="muted tiny">Array state, disk temperatures and host hardware via the Unraid GraphQL API. Docker discovery works without this connection.</p><label>Server URL<input id="unraidUrl" maxlength="500" placeholder="https://unraid.example.com"></label><label>API key<input id="unraidApiKey" type="password" maxlength="5000" autocomplete="new-password"></label><label class="check"><input id="unraidApiKeyClear" type="checkbox"><span>Clear API key</span></label><p class="muted tiny">Create a key with Info and Array read permissions under Unraid Settings &rarr; Management Access &rarr; API Keys.</p></article>
           <article class="connector-card">
             <h3>Jellyfin</h3>
             <label>Internal URL<input id="jellyfinUrl" maxlength="500" placeholder="http://192.168.178.100:8096"></label>
@@ -177,15 +199,15 @@
             <label>API key<input id="jellyfinApiKey" type="password" maxlength="5000" autocomplete="new-password"></label>
             <label class="check"><input id="jellyfinApiKeyClear" type="checkbox"><span>Clear API key</span></label>
           </article>
-          <article class="connector-card">
-            <h3>WebCal / Nextcloud</h3>
+          <details class="connector-card legacy-connector"><summary>Legacy calendar settings</summary>
+            <h3>Legacy calendar settings</h3><p class="muted tiny">Retained for compatibility. Calendar is not an active dashboard integration.</p>
             <label>Base URL<input id="nextcloudUrl" maxlength="500" placeholder="https://cloud.example.com"></label>
             <label>Username<input id="nextcloudUsername" maxlength="200" autocomplete="username"></label>
             <label>App password<input id="nextcloudAppPassword" type="password" maxlength="5000" autocomplete="new-password"></label>
             <label class="check"><input id="nextcloudAppPasswordClear" type="checkbox"><span>Clear app password</span></label>
             <label>Calendar filter<input id="nextcloudCalendarName" maxlength="200" placeholder="Optional calendar name"></label>
             <label>WebCal export URL<input id="nextcloudCalendarUrl" maxlength="1000" placeholder="Optional .ics / WebCal URL"></label>
-          </article>
+          </details>
           <article class="connector-card">
             <h3>Home Assistant</h3>
             <label>Base URL<input id="homeAssistantUrl" maxlength="500" placeholder="http://homeassistant:8123"></label>
@@ -239,6 +261,7 @@
 
   <div id="toast" class="toast hidden"></div>
   <script src="/static/app.js"></script>
+  <script src="/static/board.js"></script>
   <script src="/static/history.js"></script>
 </body>
 </html>

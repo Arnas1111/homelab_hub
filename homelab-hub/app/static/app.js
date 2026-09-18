@@ -595,6 +595,10 @@ async function updatePartyCraziness(value) {
 
 function fillIntegrationSettingsForm(data) {
   integrationSettings = data || {};
+  $('unraidUrl').value = integrationSettings.unraid_url || '';
+  $('unraidApiKey').value = '';
+  $('unraidApiKey').placeholder = integrationSettings.unraid_api_key_configured ? 'Configured - leave blank to keep' : '';
+  $('unraidApiKeyClear').checked = false;
   $('jellyfinUrl').value = integrationSettings.jellyfin_url || '';
   $('jellyfinPublicUrl').value = integrationSettings.jellyfin_public_url || '';
   $('jellyfinApiKey').value = '';
@@ -626,6 +630,9 @@ async function saveIntegrationSettings(event) {
     const saved = await api('/api/integration-settings', {
       method: 'PUT',
       body: JSON.stringify({
+        unraid_url: $('unraidUrl').value,
+        unraid_api_key: $('unraidApiKey').value,
+        unraid_api_key_clear: $('unraidApiKeyClear').checked,
         jellyfin_url: $('jellyfinUrl').value,
         jellyfin_public_url: $('jellyfinPublicUrl').value,
         jellyfin_api_key: $('jellyfinApiKey').value,
@@ -644,6 +651,7 @@ async function saveIntegrationSettings(event) {
     });
     fillIntegrationSettingsForm(saved);
     integrationData = null;
+    if (typeof loadUnraid === 'function') loadUnraid();
     if (isSectionOpen('integrations')) loadIntegrations({ force: true });
     $('integrationSettingsSaved').textContent = 'Saved.';
     setTimeout(() => $('integrationSettingsSaved').textContent = '', 1800);
@@ -657,6 +665,7 @@ function sectionSearchActive(section) {
 }
 
 function isSectionOpen(section) {
+  if ($('dashboardView')?.classList.contains('active') && overviewFocus === section) return true;
   return !collapsedSections.has(section) || sectionSearchActive(section);
 }
 
@@ -747,8 +756,8 @@ function renderContainers() {
         </div>
       </td>
       <td>${statusBadge(c)}</td>
-      <td class="container-cpu">${Number(c.cpu_percent || 0).toFixed(1)}%<div class="meter"><i style="width:${Math.min(c.cpu_percent || 0,100)}%"></i></div></td>
-      <td class="container-memory">${bytes(c.memory_used)} <span class="muted">/ ${bytes(c.memory_limit)}</span><div class="meter"><i style="width:${Math.min(c.memory_percent || 0,100)}%"></i></div></td>
+      <td class="container-cpu">${c.stats_available === false ? '&mdash;' : Number(c.cpu_percent || 0).toFixed(1) + '%'}<div class="meter"><i style="width:${Math.min(c.cpu_percent || 0,100)}%"></i></div></td>
+      <td class="container-memory">${c.stats_available === false ? '&mdash;' : bytes(c.memory_used)} <span class="muted">/ ${bytes(c.memory_limit)}</span><div class="meter"><i style="width:${Math.min(c.memory_percent || 0,100)}%"></i></div></td>
       <td>${portText(c.ports)}</td>
       <td><div class="image-text" title="${escapeHtml(c.image)}">${escapeHtml(c.image)}</div></td>
       <td>${!isSearching ? `<span class="order-controls"><button class="order-btn" type="button" data-action="container-up" data-name="${escapeHtml(c.name)}" aria-label="Move container up">▵</button><button class="order-btn" type="button" data-action="container-down" data-name="${escapeHtml(c.name)}" aria-label="Move container down">▿</button></span>` : ''}<button class="kebab" type="button" title="More options">•••</button></td>
@@ -766,8 +775,8 @@ function updateContainerStats(containers) {
     const cpuCell = row.querySelector('.container-cpu');
     const memoryCell = row.querySelector('.container-memory');
     if (statusCell) patchContent(statusCell, statusBadge(container));
-    if (cpuCell) patchContent(cpuCell, `${Number(container.cpu_percent || 0).toFixed(1)}%<div class="meter"><i style="width:${Math.min(container.cpu_percent || 0, 100)}%"></i></div>`);
-    if (memoryCell) patchContent(memoryCell, `${bytes(container.memory_used)} <span class="muted">/ ${bytes(container.memory_limit)}</span><div class="meter"><i style="width:${Math.min(container.memory_percent || 0, 100)}%"></i></div>`);
+    if (cpuCell) patchContent(cpuCell, `${container.stats_available === false ? '&mdash;' : Number(container.cpu_percent || 0).toFixed(1) + '%'}<div class="meter"><i style="width:${Math.min(container.cpu_percent || 0, 100)}%"></i></div>`);
+    if (memoryCell) patchContent(memoryCell, `${container.stats_available === false ? '&mdash;' : bytes(container.memory_used)} <span class="muted">/ ${bytes(container.memory_limit)}</span><div class="meter"><i style="width:${Math.min(container.memory_percent || 0, 100)}%"></i></div>`);
   }
 }
 
@@ -860,6 +869,12 @@ function autoWebLinks(containers) {
   const links = [];
   const seen = new Set();
   for (const c of containers || []) {
+    if (c.discovered_url) {
+      links.push({ link_key: `auto:${safeKey(c.name)}:label`, label: c.display_name || c.name,
+        url: c.discovered_url, icon: containerIcon(c), container_name: c.name, enabled: true,
+        source: 'auto', sort_order: 999999, port: 0 });
+      continue;
+    }
     for (const p of c.ports || []) {
       const [internalPort, protocol = 'tcp'] = String(p.internal || '').split('/');
       const rule = webuiRuleFor(c, p);
@@ -926,6 +941,7 @@ async function saveWebuiLinks(links) {
   currentData.webui_links = result.links || [];
   webuiEditorActive = false;
   renderWebLinks();
+  if (typeof renderBoard === 'function') renderBoard();
   renderContainers();
 }
 
@@ -1087,9 +1103,12 @@ function containerStatusSummary(containers, server) {
 function overviewQuery() {
   const containerSearchActive = Boolean($('containerSearch')?.value.trim());
   const portSearchActive = Boolean($('portSearch')?.value.trim());
-  const includeMetrics = isSectionOpen('server');
-  const includeContainers = isSectionOpen('server') || isSectionOpen('containers') || isSectionOpen('ports') || containerSearchActive || portSearchActive;
-  const includeStats = isSectionOpen('server') || isSectionOpen('containers') || containerSearchActive;
+  const home = $('homeView').classList.contains('active');
+  const services = $('servicesView').classList.contains('active');
+  const dashboard = $('dashboardView').classList.contains('active');
+  const includeMetrics = home || (dashboard && overviewFocus === 'server');
+  const includeContainers = home || services || dashboard;
+  const includeStats = dashboard && ['containers', 'server'].includes(overviewFocus);
   return new URLSearchParams({
     include_metrics: String(includeMetrics),
     include_containers: String(includeContainers),
@@ -1107,7 +1126,7 @@ function render(data) {
   settings = data.settings || settings;
   const s = currentData.server;
   $('dockerVersion').textContent = `Docker ${s.docker_version || 'unknown'}`;
-  $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  $('lastUpdated').textContent = data.discovery?.error ? 'Discovery unavailable · cached data' : data.discovery?.updated_at ? `Discovered ${new Date(data.discovery.updated_at).toLocaleTimeString()}` : 'Discovering…';
   if (!$('settingsView').classList.contains('active')) {
     $('settingTitle').value = settings.title;
     $('settingRefresh').value = settings.refresh_seconds;
@@ -1117,12 +1136,14 @@ function render(data) {
   if (!refreshControlsActive()) $('topRefreshSeconds').value = settings.refresh_seconds;
   $('brandTitle').textContent = settings.title;
   document.title = settings.title;
-  renderOptionLists();
-  if (data.server?.metrics) renderServerMetrics(s);
-  renderContainers();
-  if (!webuiEditorActive) renderWebLinks();
-  renderPorts();
-  if (!integrationControlsActive()) renderIntegrations();
+  if (activeContainer) renderOptionLists();
+  if (typeof renderBoard === 'function') renderBoard();
+  if ($('dashboardView').classList.contains('active')) {
+    if (overviewFocus === 'server' && data.server?.metrics) renderServerMetrics(s);
+    if (overviewFocus === 'containers') { renderContainers(); renderPorts(); }
+    if (overviewFocus === 'integrations' && !integrationControlsActive()) renderIntegrations();
+  }
+  if ($('servicesView').classList.contains('active') && !webuiEditorActive) renderWebLinks();
   applySectionOrder();
   applySectionState();
   scheduleRefresh();
@@ -1152,7 +1173,9 @@ async function refresh() {
   const scrollY = window.scrollY;
   try {
     render(await api(`/api/overview?${overviewQuery()}`));
-    if (isSectionOpen('integrations')) loadIntegrations();
+    if (typeof loadUnraid === 'function' && $('dashboardView').classList.contains('active') && overviewFocus === 'integrations') {
+      loadIntegrations(); loadUnraid();
+    }
     if (preserveScroll) requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0 }));
   }
   catch (e) {
@@ -1163,7 +1186,11 @@ async function refresh() {
 
 function scheduleRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(refresh, (settings.refresh_seconds || 5) * 1000);
+  const pending = currentData?.discovery?.loading && !currentData.discovery.updated_at;
+  refreshTimer = setTimeout(() => {
+    if (document.hidden || (!['homeView','servicesView','dashboardView'].includes(document.querySelector('.view.active')?.id))) { scheduleRefresh(); return; }
+    refresh();
+  }, pending ? 1000 : (settings.refresh_seconds || 5) * 1000);
 }
 
 function actionsFor(c) {
@@ -1173,6 +1200,7 @@ function actionsFor(c) {
 }
 
 window.openContainer = async function(id) {
+  if (!dashboardIcons.length) loadIconLibrary();
   const c = (currentData?.containers || []).find(x => x.id === id); if (!c) return;
   activeContainer = c;
   $('modalTitle').textContent = c.name;
@@ -1546,6 +1574,8 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     }
     const names = {
       dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],
+      home:['Home','Your services and host, at a glance'],
+      services:['Services','Discover, organize and open your applications'],
       metrics:['Metrics','Host utilization, saturation, and trends'],
       containers:['Containers','Docker state, resources, ports, and logs'],
       integrations:['Integrations','Live service status and controls'],
@@ -1556,6 +1586,8 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
     if (btn.dataset.view === 'connectors') loadIntegrationSettings();
     if (overviewView === 'integrations') loadIntegrations();
+    applySectionState();
+    refresh();
   });
 }
 
@@ -1572,5 +1604,4 @@ $('integrationSettingsForm').addEventListener('submit', saveIntegrationSettings)
 
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
-loadIntegrationSettings();
-loadIconLibrary().finally(refresh);
+refresh();

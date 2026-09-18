@@ -171,7 +171,7 @@ $('pgTest').addEventListener('click', async () => {
 window.addEventListener('hashchange', () => {
   const metric = location.hash.split('/')[1];
   if (location.hash.startsWith('#metrics/') && METRIC_PAGES[metric]) openMetricPage(metric);
-  else if ($('metricDetailView').classList.contains('active')) document.querySelector('[data-view="dashboard"]').click();
+  else if ($('metricDetailView').classList.contains('active')) document.querySelector('[data-view="home"]').click();
 });
 if (location.hash.startsWith('#metrics/')) openMetricPage(location.hash.split('/')[1]);
 window.addEventListener('resize', () => {
