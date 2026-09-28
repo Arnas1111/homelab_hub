@@ -14,6 +14,10 @@ In **Services**, pin applications for Home, search with Ctrl/Cmd+K, or use **Man
 
 ## Current features
 
+- Zigbee2MQTT light discovery, On/Off and brightness through the generic authenticated `/api/v1/objects` API and **Zigbee** page — [setup and API](ZIGBEE.md), [architecture and integration plan](ARCHITECTURE.md)
+
+- Central container **Logs** page with error/warning detection, service/time/text filters, context and collection coverage — [scope and setup](LOGS.md)
+
 - Dedicated CPU, memory, storage, network and container history pages
 - Optional PostgreSQL 18 background metrics storage with connection setup, retention and historical charts — [setup guide](HISTORY.md)
 

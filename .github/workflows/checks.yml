@@ -33,6 +33,8 @@ jobs:
       - run: node --check homelab-hub/app/static/app.js
       - run: node --check homelab-hub/app/static/history.js
       - run: node --check homelab-hub/app/static/board.js
+      - run: node --check homelab-hub/app/static/logs.js
+      - run: node --check homelab-hub/app/static/zigbee.js
       - run: node --test homelab-hub/tests/*.test.cjs
       - run: pip install -r homelab-hub/requirements.txt httpx playwright
       - run: python -m compileall -q homelab-hub/app
@@ -40,3 +42,5 @@ jobs:
       - run: playwright install --with-deps chromium
       - run: python homelab-hub/tests/browser_history.py
       - run: python homelab-hub/tests/browser_dashboard.py
+      - run: python homelab-hub/tests/browser_logs.py
+      - run: python homelab-hub/tests/browser_zigbee.py

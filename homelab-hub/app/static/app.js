@@ -1576,6 +1576,8 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
       dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],
       home:['Home','Your services and host, at a glance'],
       services:['Services','Discover, organize and open your applications'],
+      logs:['Logs','Errors, warnings and context across Docker containers'],
+      zigbee:['Zigbee','Discovered lights and device controls'],
       metrics:['Metrics','Host utilization, saturation, and trends'],
       containers:['Containers','Docker state, resources, ports, and logs'],
       integrations:['Integrations','Live service status and controls'],
@@ -1585,6 +1587,8 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     };
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
     if (btn.dataset.view === 'connectors') loadIntegrationSettings();
+    if (btn.dataset.view === 'logs' && typeof loadAggregateLogs === 'function') loadAggregateLogs();
+    if (btn.dataset.view === 'zigbee' && typeof loadZigbee === 'function') loadZigbee();
     if (overviewView === 'integrations') loadIntegrations();
     applySectionState();
     refresh();

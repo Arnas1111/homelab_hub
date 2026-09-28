@@ -32,6 +32,9 @@ from app.modules.metrics.sampler import HistorySampler
 from app.core.snapshot import Snapshot
 from app.modules.docker.discovery import load_inventory, service_url
 from app.modules.unraid.connector import read_unraid
+from app.modules.logs.collector import collect_logs, query_logs
+from app.core.objects import ModuleRegistry, object_router
+from app.modules.zigbee.connector import ZigbeeModule
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("HUB_DATA_DIR", "/data"))
@@ -66,6 +69,9 @@ APP_VERSION = os.getenv("HUB_VERSION", "0.1.0")
 
 app = FastAPI(title="Homelab Hub", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+module_registry = ModuleRegistry()
+zigbee_module = ZigbeeModule()
+module_registry.register(zigbee_module)
 
 
 @app.exception_handler(RequestValidationError)
@@ -234,10 +240,12 @@ def startup() -> None:
     host_cache.read()
     metrics_history.initialize()
     metrics_history.start()
+    zigbee_module.start()
 
 
 @app.on_event("shutdown")
 def shutdown() -> None:
+    zigbee_module.stop()
     metrics_history.stop()
 
 
@@ -428,6 +436,9 @@ def is_authenticated(request: Request) -> bool:
 def require_auth(request: Request) -> None:
     if not is_authenticated(request):
         raise HTTPException(status_code=401, detail="Authentication required")
+
+
+app.include_router(object_router(module_registry, require_auth))
 
 
 def cpu_percent(stats: dict) -> float:
@@ -1363,6 +1374,16 @@ inventory_cache = Snapshot(lambda: load_inventory(docker_client), ttl=10, error_
 resource_cache = Snapshot(load_resource_stats, ttl=10, error_message="Resource samples unavailable.")
 host_cache = Snapshot(lambda: host_metrics({}), ttl=5, error_message="Host readings unavailable.")
 unraid_cache = Snapshot(lambda: read_unraid(get_integration_values()), ttl=30, error_message="Unraid API unavailable.")
+logs_cache = Snapshot(lambda: collect_logs(docker_client), ttl=15, error_message="Docker log collection unavailable. Showing the previous snapshot.")
+
+
+@app.get("/api/logs")
+def logs_overview(request: Request,
+                  level: Literal['all', 'issues', 'critical', 'error', 'warning', 'info', 'debug', 'unknown'] = 'issues',
+                  service: str = Query('', max_length=128), q: str = Query('', max_length=200),
+                  minutes: int = Query(60, ge=1, le=1440), limit: int = Query(500, ge=1, le=1000)):
+    require_auth(request)
+    return query_logs(logs_cache.read(), level, service, q, minutes, limit)
 
 
 @app.get("/api/unraid")

@@ -40,6 +40,26 @@ class HistoryAPITests(unittest.TestCase):
     def test_board_and_unraid_require_authentication(self):
         self.assertEqual(self.client.put('/api/board', json={'favorites': []}).status_code, 401)
         self.assertEqual(self.client.get('/api/unraid').status_code, 401)
+        self.assertEqual(self.client.get('/api/logs').status_code, 401)
+
+    def test_v1_object_routes_use_existing_login(self):
+        for path in ['/api/v1/modules', '/api/v1/objects', '/api/v1/objects/zigbee.unknown']:
+            self.assertEqual(self.client.get(path).status_code, 401)
+        self.assertEqual(self.client.post('/api/v1/objects/zigbee.unknown/actions',
+                                         json={'action': 'set_power', 'value': True}).status_code, 401)
+        self.login()
+        self.assertEqual(self.client.get('/api/v1/modules').status_code, 200)
+        self.assertEqual(self.client.get('/api/v1/objects').status_code, 200)
+
+    def test_log_filters_are_validated_and_collection_is_cached(self):
+        self.login()
+        self.assertEqual(self.client.get('/api/logs?minutes=999999').status_code, 422)
+        self.assertEqual(self.client.get('/api/logs?level=invalid').status_code, 422)
+        with patch.object(self.main.logs_cache, 'read', return_value={'data': None, 'loading': True, 'error': None}):
+            response = self.client.get('/api/logs')
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json()['loading'])
+            self.assertEqual(response.json()['entries'], [])
 
     def test_home_overview_uses_cached_inventory_without_resource_sampling(self):
         self.login()

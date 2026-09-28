@@ -19,6 +19,8 @@
       <button class="nav-item" data-view="metrics"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-7 5 4 8-11 M3 21h18"/></svg></span> Metrics</button>
       <button class="nav-item history-nav" data-metric-page="cpu"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a9 9 0 1 1-1 9 M3 3v5h5 M12 7v5l3 2"/></svg></span> History</button>
       <button class="nav-item" data-view="integrations"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6v6H4z M14 13h6v6h-6z M10 8h7v5"/></svg></span> Integrations</button>
+      <button class="nav-item" data-view="logs"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 3h16v18H4z M8 7h8 M8 12h8 M8 17h5"/></svg></span> Logs</button>
+      <button class="nav-item" data-view="zigbee"><span class="nav-symbol" aria-hidden="true">&#9788;</span> Zigbee</button>
       <span class="nav-heading">Manage</span>
       <button class="nav-item" data-view="settings"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16 M4 17h16 M8 4v6 M16 14v6"/></svg></span> Settings</button>
       <button class="nav-item" data-view="database"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6c0-4 16-4 16 0v12c0 4-16 4-16 0z M4 6c0 4 16 4 16 0 M4 12c0 4 16 4 16 0"/></svg></span> History storage</button>
@@ -133,6 +135,28 @@
 
         </section>
       </div>
+    </section>
+
+    <section id="zigbeeView" class="view">
+      <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Zigbee lights</h2><p class="muted tiny">Control lights discovered through Zigbee2MQTT. Values update when devices report their state.</p></div><button id="zigbeeRefresh" class="btn">Refresh</button></div>
+      <p id="zigbeeStatus" role="status">Loading connection status...</p>
+      <p id="zigbeeFeedback" role="status" aria-live="polite"></p>
+      <div id="zigbeeLights" class="zigbee-grid"></div>
+    </section>
+
+    <section id="logsView" class="view">
+      <div class="board-section-heading"><div><span class="eyebrow">CROSS-SERVICE INVESTIGATION</span><h2>Container logs</h2><p class="muted tiny">Start with errors and warnings, then inspect surrounding messages. Inferred severity may need review.</p></div><button id="aggregateLogsRefresh" class="btn">Refresh logs</button></div>
+      <div class="log-filters">
+        <label>Service<select id="aggregateLogService" class="select"><option value="">All containers</option></select></label>
+        <label>Severity<select id="aggregateLogLevel" class="select"><option value="issues">Errors &amp; warnings</option><option value="all">All levels</option><option value="critical">Critical</option><option value="error">Error</option><option value="warning">Warning</option><option value="info">Info</option><option value="debug">Debug / trace</option><option value="unknown">Unknown</option></select></label>
+        <label>Time<select id="aggregateLogRange" class="select"><option value="15">Last 15 minutes</option><option value="60" selected>Last hour</option><option value="360">Last 6 hours</option><option value="1440">Last 24 hours</option></select></label>
+        <label class="log-search">Search messages<input id="aggregateLogSearch" class="search" maxlength="200" placeholder="Search text, exception or request..."></label>
+        <label class="check"><input id="aggregateLogLive" type="checkbox" checked> Auto refresh</label>
+      </div>
+      <p id="aggregateLogStatus" class="discovery-status" role="status">Open Logs to collect recent messages.</p>
+      <div id="aggregateLogCounts" class="log-counts"></div>
+      <details id="aggregateLogCoverage" class="log-coverage"><summary>Collection coverage and limits</summary><div id="aggregateLogCoverageBody"></div></details>
+      <div id="aggregateLogRows" class="aggregate-log-rows"><div class="board-empty">No snapshot loaded yet.</div></div>
     </section>
 
     <section id="metricDetailView" class="view">
@@ -263,5 +287,7 @@
   <script src="/static/app.js"></script>
   <script src="/static/board.js"></script>
   <script src="/static/history.js"></script>
+  <script src="/static/logs.js"></script>
+  <script src="/static/zigbee.js"></script>
 </body>
 </html>

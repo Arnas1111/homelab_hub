@@ -30,4 +30,10 @@
   <Config Name="Server Name" Target="HUB_SERVER_NAME" Default="Unraid" Mode="" Description="Display name for this Unraid server inside the Hub." Type="Variable" Display="always" Required="true" Mask="false">Unraid</Config>
   <Config Name="Internal Data Directory" Target="HUB_DATA_DIR" Default="/data" Mode="" Description="Internal data directory. Normally leave unchanged." Type="Variable" Display="advanced-hide" Required="true" Mask="false">/data</Config>
   <Config Name="Docker Host" Target="DOCKER_HOST" Default="unix:///var/run/docker.sock" Mode="" Description="Docker Engine socket used by the Hub. Normally leave unchanged." Type="Variable" Display="advanced-hide" Required="true" Mask="false">unix:///var/run/docker.sock</Config>
+  <Config Name="MQTT Host" Target="HUB_MQTT_HOST" Default="" Mode="" Description="Zigbee2MQTT broker hostname. Empty disables Zigbee." Type="Variable" Display="advanced-hide" Required="false" Mask="false"></Config>
+  <Config Name="MQTT Port" Target="HUB_MQTT_PORT" Default="1883" Mode="" Description="Broker TCP port. Set explicitly for TLS." Type="Variable" Display="advanced-hide" Required="false" Mask="false">1883</Config>
+  <Config Name="MQTT Username" Target="HUB_MQTT_USERNAME" Default="" Mode="" Description="Optional broker account." Type="Variable" Display="advanced-hide" Required="false" Mask="false"></Config>
+  <Config Name="MQTT Password" Target="HUB_MQTT_PASSWORD" Default="" Mode="" Description="Broker password." Type="Variable" Display="advanced-hide" Required="false" Mask="true"></Config>
+  <Config Name="MQTT TLS" Target="HUB_MQTT_TLS" Default="false" Mode="" Description="Enable certificate-verified TLS with true." Type="Variable" Display="advanced-hide" Required="false" Mask="false">false</Config>
+  <Config Name="Zigbee Base Topic" Target="HUB_ZIGBEE_BASE_TOPIC" Default="zigbee2mqtt" Mode="" Description="Must match the Zigbee2MQTT base topic." Type="Variable" Display="advanced-hide" Required="false" Mask="false">zigbee2mqtt</Config>
 </Container>
