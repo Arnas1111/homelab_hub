@@ -11,6 +11,8 @@ class Capability(BaseModel):
     unit: str | None = None
     minimum: float | None = None
     maximum: float | None = None
+    label: str | None = None
+    options: list[str] = Field(default_factory=list)
 
 
 class HubObject(BaseModel):

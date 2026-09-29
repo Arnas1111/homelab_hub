@@ -75,13 +75,20 @@ class PreferenceTests(unittest.TestCase):
         app.include_router(settings_router(self.config, auth))
         app.include_router(branding_router(self.store, auth, Path(__file__).parents[1] / 'app/static'))
         with TestClient(app) as client:
-            for endpoint in ['/api/zigbee/settings', '/api/branding']:
+            for endpoint in ['/api/zigbee/settings', '/api/zigbee/organization', '/api/branding']:
                 self.assertEqual(client.get(endpoint).status_code, 401)
             self.assertEqual(client.put('/api/zigbee/settings', json={}).status_code, 401)
             self.assertEqual(client.post('/api/zigbee/reconnect').status_code, 401)
             self.assertEqual(client.put('/api/branding/logo', content=b'bad').status_code, 401)
             self.assertEqual(client.delete('/api/branding/logo').status_code, 401)
             client.cookies.set('test', 'yes')
+            self.module.devices['lamp'] = {}
+            url = '/api/zigbee/organization/lamp'
+            self.assertEqual(client.put(url, json={'group': ' Bedroom '}).json(), {'lamp': 'Bedroom'})
+            self.assertEqual(Preferences(self.factory).read('zigbee_organization', {}), {'lamp': 'Bedroom'})
+            self.assertEqual(client.put(url, json={'group': 'x'*81}).status_code, 422)
+            self.assertEqual(client.put('/api/zigbee/organization/unknown', json={'group': 'Room'}).status_code, 404)
+            self.assertEqual(client.put(url, json={'group': ''}).json(), {})
             self.assertEqual(client.put('/api/zigbee/settings', json={'enabled':True}).status_code, 422)
             self.assertEqual(client.put('/api/zigbee/settings', json={'host':'mqtt://broker'}).status_code, 422)
             self.assertEqual(client.put('/api/zigbee/settings', json={'base_topic':'bad/#'}).status_code, 422)

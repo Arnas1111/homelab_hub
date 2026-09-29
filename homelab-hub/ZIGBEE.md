@@ -1,4 +1,11 @@
-# Zigbee2MQTT pilot: lights
+# Zigbee2MQTT devices
+
+The Zigbee page builds compact cards from device capabilities: power, brightness,
+white temperature (mired), color and effects where supported, plus sensor readings,
+battery and signal quality. Search or filter by device type. Open **Details & grouping**
+on a card, enter a room/category and save; select **Room / category** in the grouping
+selector to arrange devices. Assignments persist under `/data`. These are Hub display
+groups, not Zigbee multicast groups; commands target individual devices.
 
 The Hub connects to an existing MQTT broker and Zigbee2MQTT installation.
 Home Assistant is not required. The coordinator belongs to Zigbee2MQTT, not the
@@ -40,7 +47,7 @@ base topic. The Hub account needs subscribe/read access to `<base>/#` and publis
 access to device `<base>/<friendly_name>/set` topics. Pair lights through the
 Zigbee2MQTT frontend. The Hub does not install Zigbee2MQTT or permit joining.
 Device availability is optional; enable it in Zigbee2MQTT to detect individual
-offline lamps. Unsupported devices remain outside the light-only pilot.
+offline devices. Lights, switches and exposed numeric/binary/enum sensor readings are supported.
 
 Open **Zigbee** in the Hub. Connection errors stay on this page. On/Off and the
 brightness slider are enabled only when the provider is available. The view

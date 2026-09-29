@@ -21,7 +21,7 @@ Configure a fresh Hub before exposing it to other users: the first completed set
 
 Container ports, network attachment, USB/Docker device access and the `/data` volume remain deployment settings. All new feature configuration belongs in the Hub Settings UI; environment variables are optional provisioning defaults.
 
-- Zigbee2MQTT light discovery, On/Off and brightness through the generic authenticated `/api/v1/objects` API and **Zigbee** page — [setup and API](ZIGBEE.md), [architecture and integration plan](ARCHITECTURE.md)
+- Zigbee2MQTT capability-based device cards with power, brightness, color, white temperature, effects and sensor readings; saved room/category groups and type filters — [setup and API](ZIGBEE.md), [architecture and integration plan](ARCHITECTURE.md)
 
 - Central container **Logs** page with error/warning detection, service/time/text filters, context and collection coverage — [scope and setup](LOGS.md)
 

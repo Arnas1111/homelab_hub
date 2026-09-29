@@ -1,6 +1,6 @@
 import threading
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -82,6 +82,24 @@ class ZigbeeConfiguration:
 def settings_router(configuration, require_auth):
     router = APIRouter(prefix='/api/zigbee', dependencies=[Depends(require_auth)])
 
+    @router.get('/organization')
+    def organization():
+        return configuration.preferences.read('zigbee_organization', {})
+
+    @router.put('/organization/{object_id}')
+    def organize(object_id: str, payload: Organization):
+        with configuration.lock:
+            with configuration.module.lock:
+                if object_id not in configuration.module.devices:
+                    raise HTTPException(404, 'Device not found')
+            saved = organization()
+            if payload.group.strip():
+                saved[object_id] = payload.group.strip()
+            else:
+                saved.pop(object_id, None)
+            configuration.preferences.write('zigbee_organization', saved)
+            return saved
+
     @router.get('/settings')
     def get():
         return configuration.public()
@@ -97,3 +115,7 @@ def settings_router(configuration, require_auth):
         return configuration.public()
 
     return router
+
+
+class Organization(BaseModel):
+    group: str = Field(default='', max_length=80)

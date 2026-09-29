@@ -54,6 +54,28 @@ class ZigbeeTests(unittest.TestCase):
         self.module.act(self.id, ActionRequest(action="set_power", value=False))
         self.assertEqual(json.loads(self.module.client.publish.call_args.args[1]), {"state": "OFF"})
 
+    def test_color_temperature_effect_and_sensor_exposes(self):
+        device = light()
+        device['definition']['exposes'][0]['features'] += [
+            dict(name='color_xy', property='color', type='composite', access=7),
+            dict(name='color_temp', property='color_temp', type='numeric', access=7, value_min=153, value_max=500),
+            dict(name='effect', property='effect', type='enum', access=2, values=['blink', 'stop'])]
+        sensor = dict(ieee_address='0x0011223344556688', friendly_name='Weather', definition={'exposes': [
+            dict(name='temperature', property='temperature', type='numeric', access=1, unit='°C'),
+            dict(name='power', property='power', type='numeric', access=1, unit='W')]})
+        self.feed('bridge/devices', [device, sensor])
+        self.feed('Weather', {'temperature': 16.49, 'power': 12})
+        objects = self.module.objects()
+        self.assertEqual(objects[1].type, 'sensor')
+        self.assertEqual(objects[1].state, {'temperature': 16.49, 'power_measurement': 12})
+        self.assertEqual(objects[1].actions, [])
+        for action, value, prop in [('color_xy', {'x': .3, 'y': .4}, 'color'), ('color_temp', 250, 'color_temp'), ('effect', 'blink', 'effect')]:
+            self.module.act(self.id, ActionRequest(action='set_'+action, value=value))
+            self.assertEqual(json.loads(self.module.client.publish.call_args.args[1]), {prop: value})
+        for action, value in [('color_xy', {'x': .8, 'y': .8}), ('color_temp', 501), ('effect', 'invalid')]:
+            with self.assertRaises(ValueError):
+                self.module.act(self.id, ActionRequest(action='set_'+action, value=value))
+
     def test_invalid_commands_never_publish(self):
         for value in [True, "50", -1, 101, None, float("nan"), float("inf")]:
             with self.assertRaises(ValueError):

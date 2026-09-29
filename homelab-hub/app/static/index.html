@@ -138,10 +138,10 @@
     </section>
 
     <section id="zigbeeView" class="view">
-      <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Zigbee lights</h2><p class="muted tiny">Control lights discovered through Zigbee2MQTT. Values update when devices report their state.</p></div><button id="zigbeeRefresh" class="btn">Refresh</button></div>
+      <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Zigbee devices</h2><p class="muted tiny">Lights, switches and sensors. Controls follow the capabilities reported by each device.</p></div><button id="zigbeeRefresh" class="btn">Refresh</button></div>
       <p id="zigbeeStatus" role="status">Loading connection status...</p>
       <p id="zigbeeFeedback" role="status" aria-live="polite"></p>
-      <div id="zigbeeLights" class="zigbee-grid"></div>
+      <div class="zb-toolbar"><input id="zigbeeSearch" class="search" placeholder="Find a device…" aria-label="Search devices"><select id="zigbeeType" class="select" aria-label="Device type"><option value="">All types</option><option value="light">Lights</option><option value="switch">Switches</option><option value="sensor">Sensors</option></select><select id="zigbeeGrouping" class="select" aria-label="Group devices by"><option value="type">Group by type</option><option value="room">Group by room / category</option><option value="none">All devices</option></select><span id="zigbeeCount" class="muted tiny"></span></div><datalist id="zigbeeGroupNames"></datalist><div id="zigbeeLights"></div>
     </section>
 
     <section id="logsView" class="view">

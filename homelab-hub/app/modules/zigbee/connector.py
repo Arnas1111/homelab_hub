@@ -8,7 +8,8 @@ import threading
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from app.core.objects import ActionRequest, Capability, HubObject
+from app.core.objects import ActionRequest, HubObject
+from app.modules.zigbee.exposes import features, capability, state_value, command_value
 
 
 class ZigbeeModule:
@@ -159,23 +160,17 @@ class ZigbeeModule:
         if any(c in name for c in "#+\x00") or name.startswith("bridge/"):
             return {}
         result = {}
-        for expose in (device.get("definition") or {}).get("exposes", []):
-            if not isinstance(expose, dict) or expose.get("type") != "light":
+        exposes = (device.get("definition") or {}).get("exposes", [])
+        common = features(exposes)
+        composites = [e for e in exposes if isinstance(e, dict) and e.get('type') in ('light', 'switch')]
+        for expose in composites or [{'type':'sensor', 'features':[]}]:
+            mapped = {**common, **features(expose.get('features', []))}
+            if not mapped:
                 continue
-            features = {}
-            for feature in expose.get("features", []):
-                key = {"state": "power", "brightness": "brightness"}.get(feature.get("name"))
-                if key and isinstance(feature.get("property"), str) and type(feature.get("access")) is int:
-                    if key == "brightness":
-                        low, high = feature.get("value_min", 0), feature.get("value_max", 254)
-                        if not all(type(v) in (int, float) and math.isfinite(v) for v in (low, high)) or low >= high:
-                            continue
-                    features[key] = feature
-            if not features:
-                continue
-            endpoint = str(expose.get("endpoint", ""))
-            object_id = f"zigbee.{ieee.lower()}" + (f".{quote(endpoint, safe='')}" if endpoint else "")
-            result[object_id] = {"topic": name, "name": name + (f" ({endpoint})" if endpoint else ""), "features": features}
+            endpoint = str(expose.get('endpoint', ''))
+            object_id = f"zigbee.{ieee.lower()}" + (f".{quote(endpoint, safe='')}" if endpoint else '')
+            result[object_id] = {'topic':name, 'name':name + (f' ({endpoint})' if endpoint else ''),
+                                 'features':mapped, 'type':expose['type']}
         return result
 
     def describe(self):
@@ -184,7 +179,7 @@ class ZigbeeModule:
             if self.connected:
                 status = "online" if self.bridge_online else "bridge_offline"
             return {"id": self.id, "name": "Zigbee", "status": status,
-                    "object_types": ["light"], "capabilities": ["power", "brightness"],
+                    "object_types": ["light", "switch", "sensor"], "capabilities": ["power", "brightness", "color_temp", "color_xy", "color_hs", "effect", "measurements"],
                     "object_count": len(self.devices)}
 
     def objects(self):
@@ -194,23 +189,14 @@ class ZigbeeModule:
                 state, capabilities, actions = {}, {}, []
                 raw = self.states.get(device["topic"], {})
                 for key, feature in device["features"].items():
-                    writable = bool(feature["access"] & 2)
-                    capabilities[key] = Capability(type="boolean" if key == "power" else "number", writable=writable,
-                                                   unit="%" if key == "brightness" else None,
-                                                   minimum=0 if key == "brightness" else None,
-                                                   maximum=100 if key == "brightness" else None)
-                    if writable:
+                    cap = capability(key, feature)
+                    capabilities[key] = cap
+                    if cap.writable:
                         actions.append(f"set_{key}")
-                    value = raw.get(feature["property"])
-                    if key == "power" and value is not None:
-                        if value == feature.get("value_on", "ON"):
-                            state[key] = True
-                        elif value == feature.get("value_off", "OFF"):
-                            state[key] = False
-                    elif key == "brightness" and type(value) in (int, float) and math.isfinite(value):
-                        low, high = feature.get("value_min", 0), feature.get("value_max", 254)
-                        state[key] = round(max(0, min(100, (value - low) * 100 / (high - low))), 1)
-                result.append(HubObject(id=object_id, module=self.id, type="light", name=device["name"],
+                    value = state_value(key, feature, raw.get(feature['property']))
+                    if value is not None and feature['access'] & 1:
+                        state[key] = value
+                result.append(HubObject(id=object_id, module=self.id, type=device["type"], name=device["name"],
                                         available=self.connected and self.bridge_online and self.availability.get(device["topic"], True),
                                         state=state, capabilities=capabilities, actions=actions,
                                         updated_at=self.updated.get(device["topic"])))
@@ -219,20 +205,11 @@ class ZigbeeModule:
     def act(self, object_id: str, request: ActionRequest):
         with self.lock:
             device = self.devices[object_id]
-            key = {"set_power": "power", "set_brightness": "brightness"}.get(request.action)
-            feature = device["features"].get(key)
-            if feature is None or not feature["access"] & 2:
-                raise ValueError("Unsupported action")
-            value = request.value
-            if key == "power":
-                if type(value) is not bool:
-                    raise ValueError("Expected boolean")
-                value = feature.get("value_on", "ON") if value else feature.get("value_off", "OFF")
-            else:
-                if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 100:
-                    raise ValueError("Expected percentage")
-                low, high = feature.get("value_min", 0), feature.get("value_max", 254)
-                value = round(low + value * (high - low) / 100)
+            key = request.action.removeprefix('set_')
+            feature = device['features'].get(key)
+            if not request.action.startswith('set_') or feature is None:
+                raise ValueError('Unsupported action')
+            value = command_value(key, feature, request.value)
             if not self.client or not self.connected or not self.bridge_online or not self.availability.get(device["topic"], True):
                 raise RuntimeError("Unavailable")
             # QoS 0 deliberately avoids replaying queued actuator commands after

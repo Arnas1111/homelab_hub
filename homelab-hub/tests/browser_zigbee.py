@@ -8,13 +8,19 @@ from browser_dashboard import handler as dashboard_handler
 
 lamp = dict(id='zigbee.0x0011223344556677', module='zigbee', type='light',
             name='Living <room>', available=True, state={'power': False, 'brightness': 50},
-            capabilities={}, actions=['set_power', 'set_brightness'], updated_at=None)
+            capabilities={'color_temp': {'minimum': 153, 'maximum': 500}, 'effect': {'options': ['blink', 'stop']}},
+            actions=['set_power', 'set_brightness', 'set_color_temp', 'set_color_xy', 'set_effect'], updated_at=None)
 state = {'failed': False, 'status': 'online', 'objects': [lamp]}
 commands = []
+organization = {}
 
 
 def handler(route):
     path = urlparse(route.request.url).path
+    if path.startswith('/api/zigbee/organization'):
+        if route.request.method == 'PUT':
+            organization[path.rsplit('/', 1)[-1]] = route.request.post_data_json['group']
+        return route.fulfill(json=organization)
     if not path.startswith('/api/v1/'):
         return dashboard_handler(route)
     if state['failed']:
@@ -46,20 +52,36 @@ def main():
         expect(card.locator('h3')).to_have_text('Living <room>')
         assert card.locator('room').count() == 0
         page.evaluate('window.originalLampCard = document.querySelector("#zigbeeLights article")')
-        card.get_by_role('button', name='On', exact=True).click()
-        expect(page.locator('#zigbeeFeedback')).to_contain_text('Command sent')
+        card.get_by_role('switch').click()
+        expect(card.locator('.zb-notice')).to_contain_text('Command sent')
         assert commands[-1] == {'action': 'set_power', 'value': True}
-        expect(card.locator('strong')).to_have_text('Off')  # No optimistic state.
-        slider = card.locator('input')
+        expect(card.get_by_role('switch')).to_have_attribute('aria-checked', 'false')
+        slider = card.locator('[data-zigbee-action="set_brightness"]')
         expect(slider).to_be_enabled()
         slider.fill('75')
-        slider.dispatch_event('change')
         page.wait_for_function('!zigbeeSending && !zigbeeLoading')
-        assert commands[-1] == {'action': 'set_brightness', 'value': 75}
+        assert commands[-1] == {'action': 'set_brightness', 'value': 75}, commands
         lamp['state'] = {'power': True, 'brightness': 75}
         page.locator('#zigbeeRefresh').click()
-        expect(card.locator('strong')).to_have_text('On')
+        expect(card.get_by_role('switch')).to_have_attribute('aria-checked', 'true')
         assert page.evaluate('window.originalLampCard === document.querySelector("#zigbeeLights article")')
+        for action, value in [('color_temp', '250'), ('color_xy', '#ff0000')]:
+            control = card.locator(f'[data-zigbee-action="set_{action}"]')
+            control.fill(value)
+            page.wait_for_function('!zigbeeSending && !zigbeeLoading')
+            assert commands[-1]['action'] == 'set_'+action
+        assert commands[-1]['value']['x'] > .6
+        card.locator('select').select_option('blink')
+        page.wait_for_function('!zigbeeSending && !zigbeeLoading')
+        assert commands[-1] == {'action': 'set_effect', 'value': 'blink'}
+        card.locator('summary').click()
+        card.locator('.zb-group-input').fill('Bedroom')
+        card.get_by_role('button', name='Save group').click()
+        expect(page.locator('#zigbeeFeedback')).to_have_text('Group saved.')
+        page.locator('#zigbeeGrouping').select_option('room')
+        expect(page.locator('.zb-group-title')).to_contain_text('Bedroom')
+        page.locator('#zigbeeRefresh').click()
+        expect(card.locator('.zb-group-input')).to_have_value('Bedroom')
         state['failed'] = True
         page.locator('#zigbeeRefresh').click()
         expect(page.locator('#zigbeeStatus')).to_contain_text('Unable to refresh')
@@ -69,7 +91,7 @@ def main():
         lamp['available'] = False
         state['status'] = 'bridge_offline'
         page.locator('#zigbeeRefresh').click()
-        expect(page.locator('#zigbeeStatus')).to_contain_text('waiting for Zigbee2MQTT')
+        expect(page.locator('#zigbeeStatus')).to_contain_text('Waiting for Zigbee2MQTT')
         expect(slider).to_be_disabled()
         state['status'] = 'online'
         lamp['available'] = True
@@ -83,7 +105,7 @@ def main():
         state['objects'] = []
         page.locator('#zigbeeRefresh').click()
         expect(card).to_have_count(0)
-        expect(page.locator('#zigbeeStatus')).to_contain_text('No supported lights')
+        expect(page.locator('#zigbeeLights')).to_contain_text('No supported devices')
         page.locator('[data-view="containers"]').click()
         expect(page.locator('#containersPanel')).to_be_visible()
         assert not errors, errors
