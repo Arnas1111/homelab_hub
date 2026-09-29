@@ -23,9 +23,10 @@ async function loadZigbee() {
     if (zigbeeSending) return;
     const module = modules.modules.find(item => item.id === 'zigbee');
     const messages = {
-      disabled: 'MQTT is not configured. Set HUB_MQTT_HOST in the Unraid container template and restart the Hub.',
+      disabled: 'Zigbee is disabled. Open Settings → Zigbee / MQTT to configure your broker.',
+      authentication_failed: 'Broker rejected authentication. Check username and password in Settings → Zigbee / MQTT.',
       connecting: 'Connecting to MQTT…', connection_failed: 'MQTT connection failed. Check broker, credentials and network access.',
-      configuration_error: 'MQTT configuration is invalid. Check the Hub environment settings.',
+      configuration_error: 'MQTT configuration is invalid. Check Settings → Zigbee / MQTT.',
       subscription_failed: 'MQTT subscription failed. Check broker permissions.',
       disconnected: 'MQTT disconnected. Reconnecting automatically…',
       bridge_offline: 'MQTT connected; waiting for Zigbee2MQTT to report online.',

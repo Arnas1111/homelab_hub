@@ -142,3 +142,6 @@ body:has(#logsView.active) .top-actions { display:none; }
 .zigbee-actions { display: flex; gap: 8px; margin: 12px 0; }
 .zigbee-brightness { display: grid; gap: 8px; margin: 16px 0; }
 .zigbee-brightness input { width: 100%; }
+.settings-categories { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px; }
+#settingsView > .panel { margin-bottom:20px; }
+.brand-mark img { object-fit:contain; }

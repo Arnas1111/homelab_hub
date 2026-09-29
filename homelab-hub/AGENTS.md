@@ -9,6 +9,10 @@
 
 ## Runtime and security
 
+- New features must be configurable in the Hub Settings UI after container startup. Persist configuration under `/data`; environment variables may seed defaults but must not be the only configuration path.
+- Include enable/disable, validation, connection status and reconnect where applicable. Preserve saved secrets when password fields are blank, offer explicit clearing, and never return secrets to the browser.
+- Keep deployment-only choices (ports, networks, device/socket mappings and the data mount) in the container template. Do not require feature credentials to launch the Hub.
+
 - Preserve the `/data` data directory and the Docker socket deployment contract.
 - Never commit passwords, API tokens, session secrets, or host-specific URLs.
 - Treat Docker socket access as administrative access.

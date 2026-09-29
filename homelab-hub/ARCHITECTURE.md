@@ -26,7 +26,22 @@ in main. They are separate from the new Zigbee integration. FileBrowser Quantum
 and hosted WebCal are roadmap items, not implemented modules. The actual Unraid
 template currently defaults to host port **3333**, container port **8080**.
 
-## First milestone implemented
+## In-app configuration
+
+Settings is the entry point for general preferences, appearance, account password,
+Zigbee/MQTT, service connections and history storage. `core/preferences.py` stores
+module configuration in the existing SQLite settings table. `modules/zigbee/settings.py`
+owns validated configuration, secret preservation, environment defaults and live
+reconnection. Saved settings win over environment defaults. `core/branding.py`
+stores bounded raster uploads in SQLite and serves the public login/sidebar icons.
+`core/identity.py` persists a generated session key and a salted PBKDF2 administrator
+password hash under `/data`. First-run setup removes the requirement for manually
+provisioned admin credentials; password changes invalidate existing sessions.
+
+Future features follow the same Settings-first configuration policy documented
+in AGENTS.md. Container network/volume/device mapping remains deployment configuration.
+
+## Object platform
 
 `core/objects.py` defines `HubObject`, `Capability`, `ActionRequest`, a small
 explicit registry and an authenticated API router. `modules/zigbee/connector.py`

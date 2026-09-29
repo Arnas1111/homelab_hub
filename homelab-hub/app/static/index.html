@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ settings.title }}</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link id="hubFavicon" rel="icon" href="/branding/favicon">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/workspace.css">
 </head>
 <body>
   <aside class="sidebar">
-    <div class="brand"><div class="brand-mark small"><img src="/static/favicon.svg" alt=""></div><span id="brandTitle">{{ settings.title }}</span></div>
+    <div class="brand"><div class="brand-mark small"><img id="hubLogo" src="/branding/logo" alt=""></div><span id="brandTitle">{{ settings.title }}</span></div>
     <nav aria-label="Main navigation">
       <span class="nav-heading">Workspace</span>
       <button class="nav-item active" data-view="home"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v10H3z M9 20v-7h6v7"/></svg></span> Home</button>
@@ -175,6 +175,7 @@
     </section>
 
     <section id="databaseView" class="view">
+      <div class="settings-categories"><button class="btn" data-open-view="settings">Back to Settings</button></div>
       <div class="panel settings-panel">
         <div class="panel-head"><div><h2>PostgreSQL history storage</h2><p class="muted">Connect an existing database. Collection runs even when the Hub is closed in your browser.</p></div></div>
         <form id="historySettingsForm" class="history-settings">
@@ -200,6 +201,7 @@
     </section>
 
     <section id="settingsView" class="view">
+      <div class="settings-categories"><button class="btn" data-open-view="connectors">Service connections</button><button class="btn" data-open-view="database">History storage</button><a class="btn" href="#mqttSettings">Zigbee / MQTT</a><a class="btn" href="#appearanceSettings">Appearance</a></div>
       <div class="panel settings-panel">
           <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div><span class="version-label">Version <strong id="appVersion">{{ settings.version }}</strong></span></div>
         <form id="settingsForm" class="settings-form">
@@ -209,9 +211,46 @@
           <div><button class="btn primary" type="submit">Save settings</button> <span id="settingsSaved" class="tiny muted"></span></div>
         </form>
       </div>
+      <div id="mqttSettings" class="panel settings-panel">
+        <div class="panel-head"><div><h2>Zigbee / MQTT connection</h2><p class="muted">Save and connect without restarting the Hub. Zigbee2MQTT and an MQTT broker run separately.</p></div></div>
+        <form id="mqttForm" class="settings-form">
+          <label class="check"><input id="mqttEnabled" type="checkbox"> Enable Zigbee integration</label>
+          <label>Broker hostname or IP<input id="mqttHost" maxlength="253" placeholder="Broker address, without mqtt://"></label>
+          <label>Broker port<input id="mqttPort" type="number" min="1" max="65535" value="1883" required></label>
+          <label>Username<input id="mqttUser" maxlength="200" autocomplete="off"></label>
+          <label>Password<input id="mqttPassword" type="password" maxlength="2000" autocomplete="new-password" placeholder="Leave blank to keep saved password"></label>
+          <label class="check"><input id="mqttClear" type="checkbox"> Clear saved password</label>
+          <label class="check"><input id="mqttTls" type="checkbox"> Use TLS (certificate verified)</label>
+          <label>Zigbee2MQTT base topic<input id="mqttTopic" value="zigbee2mqtt" maxlength="200" required></label>
+          <p id="mqttSecretStatus" class="muted tiny"></p>
+          <div><button class="btn primary" type="submit">Save and connect</button> <button id="mqttReconnect" class="btn" type="button">Reconnect saved settings</button></div>
+          <p id="mqttStatus" role="status"></p>
+        </form>
+      </div>
+      <div id="appearanceSettings" class="panel settings-panel">
+        <div class="panel-head"><div><h2>Appearance</h2><p class="muted">PNG, JPEG or WebP, up to 512 KB. Square images work best.</p></div></div>
+        <div class="settings-form">
+          <label>Top-left logo<input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
+          <div><button class="btn" type="button" data-brand-upload="logo">Upload logo</button> <button class="btn" type="button" data-brand-reset="logo">Restore default logo</button></div>
+          <label>Favicon<input id="faviconFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
+          <div><button class="btn" type="button" data-brand-upload="favicon">Upload favicon</button> <button class="btn" type="button" data-brand-reset="favicon">Restore default favicon</button></div>
+          <p id="brandingStatus" role="status"></p>
+        </div>
+      </div>
+      <div class="panel settings-panel">
+        <div class="panel-head"><h2>Administrator password</h2></div>
+        <form id="passwordForm" class="settings-form">
+          <label>Current password<input id="currentPassword" type="password" maxlength="1024" autocomplete="current-password" required></label>
+          <label>New password<input id="newPassword" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label>
+          <label>Confirm new password<input id="confirmPassword" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label>
+          <button class="btn" type="submit">Change password and sign out</button>
+          <p id="passwordStatus" role="status"></p>
+        </form>
+      </div>
     </section>
 
     <section id="connectorsView" class="view">
+      <div class="settings-categories"><button class="btn" data-open-view="settings">Back to Settings</button></div>
       <div class="panel settings-panel">
         <div class="panel-head"><div><h2>Connectors</h2><p class="muted">Stored locally in appdata</p></div></div>
         <form id="integrationSettingsForm" class="connector-form">
@@ -289,5 +328,6 @@
   <script src="/static/history.js"></script>
   <script src="/static/logs.js"></script>
   <script src="/static/zigbee.js"></script>
+  <script src="/static/settings.js"></script>
 </body>
 </html>

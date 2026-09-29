@@ -6,6 +6,18 @@ Hub container; keep the Hub's existing `/data` and Docker socket mounts.
 
 ## Unraid configuration
 
+Open **Settings → Zigbee / MQTT** in the Hub. Enable the integration and enter
+the broker hostname/IP (without a URL prefix), port, username, password, TLS
+choice and base topic. **Save and connect** persists the configuration in SQLite
+under `/data` and immediately reconnects. **Reconnect saved settings** retries
+the stored configuration. No container restart is needed.
+
+Blank password fields retain the saved password; use **Clear saved password** to
+remove it. Saved in-app settings take precedence over all MQTT environment
+defaults, including an explicitly disabled integration. The environment variables
+below remain available for initial provisioning without saved Zigbee settings.
+The broker, Zigbee2MQTT and USB device mapping remain separate deployment requirements.
+
 In the Hub container template, configure these environment variables (the
 MQTT fields are optional and appear under advanced settings):
 
@@ -18,7 +30,7 @@ MQTT fields are optional and appear under advanced settings):
 | `HUB_MQTT_TLS` | `false` | `true` enables certificate-verified TLS; set port explicitly |
 | `HUB_ZIGBEE_BASE_TOPIC` | `zigbee2mqtt` | Must match Zigbee2MQTT's MQTT base topic |
 
-Apply/restart the Hub after changing these values. The broker must be reachable
+Apply/restart the Hub after changing environment defaults. The broker must be reachable
 from the Hub's Docker network. A broker on the same internal user-defined bridge
 can be addressed by its container name. Existing deployed templates can add
 these variables using Unraid's **Add another Path, Port, Variable…**.

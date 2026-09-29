@@ -14,6 +14,13 @@ In **Services**, pin applications for Home, search with Ctrl/Cmd+K, or use **Man
 
 ## Current features
 
+- Settings includes Zigbee/MQTT setup, custom logo/favicon uploads, administrator password changes, and entry points to service connections and history storage. Changes persist under `/data`.
+- Fresh installations need no feature credentials or manually supplied session secret: open the Hub and create the administrator password. Existing `HUB_ADMIN_PASSWORD` remains valid until you change the password in Settings. The session key is generated and persisted automatically when `HUB_SESSION_SECRET` is absent.
+
+Configure a fresh Hub before exposing it to other users: the first completed setup creates its administrator. Changing the password invalidates existing login sessions. Logo and favicon uploads accept PNG/JPEG/WebP up to 512 KB each and appear on the login page as well. MQTT credentials are stored locally in the appdata database and are not returned by settings APIs; protect `/data` and its backups.
+
+Container ports, network attachment, USB/Docker device access and the `/data` volume remain deployment settings. All new feature configuration belongs in the Hub Settings UI; environment variables are optional provisioning defaults.
+
 - Zigbee2MQTT light discovery, On/Off and brightness through the generic authenticated `/api/v1/objects` API and **Zigbee** page — [setup and API](ZIGBEE.md), [architecture and integration plan](ARCHITECTURE.md)
 
 - Central container **Logs** page with error/warning detection, service/time/text filters, context and collection coverage — [scope and setup](LOGS.md)
@@ -72,10 +79,10 @@ Go to:
 Docker -> Add Container -> Template -> Homelab-Hub
 ```
 
-Set at least:
+Review these deployment options:
 
-- **Admin Password** – password for the Hub WebUI.
-- **Session Secret** – a long random value. Generate one in the Unraid terminal with `openssl rand -hex 32`.
+- **Admin Password** – optional; leave blank to create an administrator in the first-run setup screen.
+- **Session Secret** – optional; the Hub generates and persists one under `/data` when omitted.
 - **Server Name** – optional display name, e.g. `Tower`.
 - **Network Type** – use `docker-internal` if it is a user-defined internal Docker bridge network.
 - **WebUI Port** – defaults to `3333`. This is the host/LAN port; the container target stays `8080`.

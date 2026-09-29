@@ -5,21 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Homelab Hub – Login</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="/branding/favicon">
 </head>
 <body class="login-body">
   <main class="login-card">
-    <div class="brand-mark">H</div>
-    <h1>Homelab Hub</h1>
-    <p class="muted">Sign in to manage your infrastructure.</p>
+    <div class="brand-mark"><img src="/branding/logo" alt="" style="width:100%;height:100%;object-fit:contain"></div>
+    <h1>{{ settings.title }}</h1>
     {% if not password_configured %}
-      <div class="alert danger">HUB_ADMIN_PASSWORD is not configured. Set it on the container and restart.</div>
-    {% endif %}
+      <p>Create your administrator password to set up this Hub.</p>
+      <form method="post" action="/setup" class="login-form">
+        <label>New password (at least 12 characters)<input name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label>
+        <label>Confirm password<input name="confirm_password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label>
+        <button class="btn primary" type="submit">Create administrator</button>
+      </form>
+    {% else %}
+    <p class="muted">Sign in to manage your infrastructure.</p>
     <form method="post" action="/login" class="login-form">
       <label>Password</label>
       <input name="password" type="password" autocomplete="current-password" required autofocus>
       <button class="btn primary" type="submit">Sign in</button>
     </form>
+    {% endif %}
+    <p id="loginError" role="alert"></p>
     <p class="tiny muted">The Docker socket grants administrative control over the Docker host. Keep this UI private.</p>
   </main>
 </body>
+<script>
+const error = new URLSearchParams(location.search).get('error');
+document.getElementById('loginError').textContent = error === 'setup' ? 'Passwords must match and contain at least 12 characters.' : error === 'invalid' ? 'Incorrect password.' : '';
+</script>
 </html>

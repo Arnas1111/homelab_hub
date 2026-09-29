@@ -37,6 +37,26 @@ class HistoryAPITests(unittest.TestCase):
     def login(self):
         self.client.cookies.set('hub_session', self.main.signer.dumps({'authenticated': True}))
 
+    def test_first_run_setup_and_password_change_revoke_old_sessions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            identity = self.main.Identity(Path(directory))
+            with patch.object(self.main, 'identity', identity), patch.object(self.main, 'ADMIN_PASSWORD', ''):
+                page = self.client.get('/login')
+                self.assertIn('Create administrator', page.text)
+                self.assertEqual(self.client.post('/setup', data={'password':'short','confirm_password':'short'}, follow_redirects=False).status_code, 303)
+                self.assertFalse(identity.configured(''))
+                self.client.post('/setup', data={'password':'initial password','confirm_password':'initial password'}, follow_redirects=False)
+                self.assertEqual(self.client.get('/api/settings').status_code, 200)
+                self.assertEqual(self.client.post('/setup', data={'password':'other password','confirm_password':'other password'}).status_code, 409)
+                old_token = self.client.cookies.get('hub_session')
+                result = self.client.put('/api/account/password', json={'current_password':'initial password','new_password':'changed password'})
+                self.assertEqual(result.status_code, 200)
+                self.client.cookies.set('hub_session', old_token)
+                self.assertEqual(self.client.get('/api/settings').status_code, 401)
+                self.client.cookies.clear()
+                self.client.post('/login', data={'password':'changed password'}, follow_redirects=False)
+                self.assertEqual(self.client.get('/api/settings').status_code, 200)
+
     def test_board_and_unraid_require_authentication(self):
         self.assertEqual(self.client.put('/api/board', json={'favorites': []}).status_code, 401)
         self.assertEqual(self.client.get('/api/unraid').status_code, 401)

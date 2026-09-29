@@ -35,6 +35,10 @@ from app.modules.unraid.connector import read_unraid
 from app.modules.logs.collector import collect_logs, query_logs
 from app.core.objects import ModuleRegistry, object_router
 from app.modules.zigbee.connector import ZigbeeModule
+from app.modules.zigbee.settings import ZigbeeConfiguration, settings_router
+from app.core.preferences import Preferences
+from app.core.identity import Identity
+from app.core.branding import branding_router
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("HUB_DATA_DIR", "/data"))
@@ -63,7 +67,8 @@ WHITE_MODE_KELVIN = {
 }
 
 ADMIN_PASSWORD = os.getenv("HUB_ADMIN_PASSWORD", "")
-SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or secrets.token_urlsafe(48)
+identity = Identity(DATA_DIR)
+SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or identity.secret
 SERVER_NAME = os.getenv("HUB_SERVER_NAME", "Unraid")
 APP_VERSION = os.getenv("HUB_VERSION", "0.1.0")
 
@@ -240,7 +245,7 @@ def startup() -> None:
     host_cache.read()
     metrics_history.initialize()
     metrics_history.start()
-    zigbee_module.start()
+    zigbee_configuration.start()
 
 
 @app.on_event("shutdown")
@@ -421,14 +426,14 @@ def docker_client():
 
 
 def is_authenticated(request: Request) -> bool:
-    if not ADMIN_PASSWORD:
+    if not identity.configured(ADMIN_PASSWORD):
         return False
     token = request.cookies.get("hub_session")
     if not token:
         return False
     try:
         data = signer.loads(token)
-        return data.get("authenticated") is True
+        return data.get("authenticated") is True and data.get('credential_version') == identity.version()
     except BadSignature:
         return False
 
@@ -439,6 +444,10 @@ def require_auth(request: Request) -> None:
 
 
 app.include_router(object_router(module_registry, require_auth))
+preferences = Preferences(db)
+zigbee_configuration = ZigbeeConfiguration(preferences, zigbee_module)
+app.include_router(settings_router(zigbee_configuration, require_auth))
+app.include_router(branding_router(preferences, require_auth, APP_DIR / 'static'))
 
 
 def cpu_percent(stats: dict) -> float:
@@ -1322,17 +1331,17 @@ def dashboard_icon(icon: str):
 def login_page(request: Request):
     if is_authenticated(request):
         return RedirectResponse("/", status_code=303)
-    html = templates.get_template("login.html").render(password_configured=bool(ADMIN_PASSWORD))
+    html = templates.get_template("login.html").render(password_configured=identity.configured(ADMIN_PASSWORD), settings=get_settings())
     return HTMLResponse(html)
 
 
 @app.post("/login")
 def login(password: str = Form(...)):
-    if not ADMIN_PASSWORD:
+    if not identity.configured(ADMIN_PASSWORD):
         return RedirectResponse("/login?error=missing", status_code=303)
-    if not secrets.compare_digest(password, ADMIN_PASSWORD):
+    if len(password) > 1024 or not identity.verify(password, ADMIN_PASSWORD):
         return RedirectResponse("/login?error=invalid", status_code=303)
-    token = signer.dumps({"authenticated": True, "iat": int(time.time())})
+    token = signer.dumps({"authenticated": True, "iat": int(time.time()), 'credential_version': identity.version()})
     response = RedirectResponse("/", status_code=303)
     response.set_cookie(
         "hub_session",
@@ -1349,6 +1358,34 @@ def login(password: str = Form(...)):
 def logout():
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie("hub_session")
+    return response
+
+
+@app.post('/setup')
+def setup(password: str = Form(...), confirm_password: str = Form(...)):
+    with identity.lock:
+        if identity.configured(ADMIN_PASSWORD):
+            raise HTTPException(409, 'Administrator already configured')
+        if not 12 <= len(password) <= 1024 or password != confirm_password:
+            return RedirectResponse('/login?error=setup', status_code=303)
+        identity.save(password)
+    return login(password)
+
+
+class PasswordPayload(BaseModel):
+    current_password: str = Field(max_length=1024, repr=False)
+    new_password: str = Field(min_length=12, max_length=1024, repr=False)
+
+
+@app.put('/api/account/password')
+def change_password(payload: PasswordPayload, request: Request):
+    require_auth(request)
+    with identity.lock:
+        if not identity.verify(payload.current_password, ADMIN_PASSWORD):
+            raise HTTPException(403, 'Current password is incorrect')
+        identity.save(payload.new_password)
+    response = JSONResponse({'ok': True, 'message': 'Password changed. Please sign in again.'})
+    response.delete_cookie('hub_session')
     return response
 
 

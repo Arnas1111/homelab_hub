@@ -1,5 +1,6 @@
 """Bounded in-memory Zigbee discovery and one reconnecting MQTT network thread."""
 import json
+import logging
 import math
 import os
 import re
@@ -75,6 +76,9 @@ class ZigbeeModule:
             self.bridge_online = False
             self.availability.clear()
             self.status = "connected" if self.connected else "connection_failed"
+            if reason_code.is_failure:
+                self.status = 'authentication_failed' if getattr(reason_code, 'value', None) in (134, 135) else 'connection_failed'
+                logging.getLogger(__name__).warning('MQTT connection rejected (%s)', self.status)
         if self.connected:
             result, _ = client.subscribe(f"{self.base}/#", qos=0)
             if result != 0:
@@ -86,7 +90,8 @@ class ZigbeeModule:
         with self.lock:
             self.connected = False
             self.bridge_online = False
-            self.status = "disconnected"
+            if self.status not in ('authentication_failed', 'connection_failed', 'subscription_failed', 'configuration_error'):
+                self.status = "disconnected"
 
     def _subscribed(self, client, userdata, mid, reason_codes, properties):
         if any(code.is_failure for code in reason_codes):
