@@ -32,6 +32,7 @@ class ZigbeeModule:
         self.states = {}
         self.availability = {}
         self.updated = {}
+        self.on_report = None
 
     def start(self):
         if not self.host or self.client is not None:
@@ -107,11 +108,11 @@ class ZigbeeModule:
     def _message(self, client, userdata, message):
         # Invalid external payloads must never terminate the MQTT loop.
         try:
-            self.ingest(message.topic, message.payload)
+            self.ingest(message.topic, message.payload, retained=bool(message.retain))
         except Exception:
             pass
 
-    def ingest(self, topic, payload):
+    def ingest(self, topic, payload, retained=False):
         if len(payload) > 2_000_000 or not topic.startswith(self.base + "/"):
             return
         suffix = topic[len(self.base) + 1:]
@@ -147,6 +148,13 @@ class ZigbeeModule:
                                for f in d["features"].values()}
                     self.states.setdefault(suffix, {}).update({k: v for k, v in data.items() if k in allowed})
                     self.updated[suffix] = datetime.now(timezone.utc).isoformat()
+                    if self.on_report and not retained and self.connected and self.bridge_online:
+                        for object_id, device in self.devices.items():
+                            if device['topic'] == suffix:
+                                values = {key: state_value(key, feature, data[feature['property']])
+                                          for key, feature in device['features'].items()
+                                          if feature['property'] in data and feature['access'] & 1}
+                                self.on_report(object_id, values)
                 elif suffix.endswith("/availability") and suffix[:-13] in names:
                     self.availability[suffix[:-13]] = (data.get("state") if isinstance(data, dict) else data) == "online"
 

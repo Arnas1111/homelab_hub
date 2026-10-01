@@ -21,6 +21,7 @@
     {% else %}
     <p class="muted">Sign in to manage your infrastructure.</p>
     <form method="post" action="/login" class="login-form">
+      <input type="hidden" name="next" value="{{ next_page }}">
       <label>Password</label>
       <input name="password" type="password" autocomplete="current-password" required autofocus>
       <button class="btn primary" type="submit">Sign in</button>

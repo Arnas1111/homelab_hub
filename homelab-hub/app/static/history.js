@@ -92,7 +92,7 @@ async function loadHistory(clear = false) {
 
 function openMetricPage(metric) {
   if (!METRIC_PAGES[metric]) return;
-  if (location.hash !== `#metrics/${metric}`) { location.hash = `metrics/${metric}`; return; }
+  if (location.pathname !== '/history' || location.hash !== `#metrics/${metric}`) history.pushState(null, '', `/history#metrics/${metric}`);
   historyMetric = metric;
   document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
   $('metricDetailView').classList.add('active');

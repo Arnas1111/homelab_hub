@@ -184,3 +184,28 @@ python -m unittest discover -s tests
 - Web terminal/exec with explicit permissions (optional)
 - Docker update status and image update actions
 - Compose stack grouping and stack controls
+# Section links and Zigbee automations
+
+Every workspace section has a bookmarkable URL: `/home`, `/services`, `/containers`,
+`/metrics`, `/history`, `/integrations`, `/logs`, `/zigbee`, `/automations`, `/settings`,
+`/connectors`, and `/database`. `/` still opens Home. Reload and browser back/forward
+restore the selected section; signing in returns to the requested section.
+
+Open **Automations** (also linked from Settings) to configure a rule without Docker
+environment variables. For example: select a motion sensor, `occupancy = true`, a
+light, and `5` seconds. Each fresh matching report turns the target on and extends
+its switch-off timer. The Hub executes rules without an open browser. Rules can be
+edited, disabled or deleted. Button devices with an exposed `action` enum support
+rules such as `action = single` using the same editor.
+
+Rules and pending switch-off deadlines persist in `/data/hub.db`. Retained MQTT
+messages are ignored for triggering; unrelated partial reports do not retrigger.
+After a Hub restart, overdue switch-offs are attempted when Zigbee is reachable.
+Failed switch-offs retry every five seconds; failed activations are not replayed.
+Disabling/deleting a rule does not cancel an existing switch-off. Rules sharing a
+target use the latest deadline. Manual control does not cancel that deadline.
+
+This first version supports sensor/button equality triggers and one timed on/off
+target per rule (1 second to 24 hours), with up to 100 rules. Timers run on the Hub,
+so an outage may delay switch-off. Status reports command delivery, not guaranteed
+physical device state. Zigbee2MQTT and the MQTT broker must remain reachable.

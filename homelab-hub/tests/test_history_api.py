@@ -62,6 +62,19 @@ class HistoryAPITests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/unraid').status_code, 401)
         self.assertEqual(self.client.get('/api/logs').status_code, 401)
 
+    def test_section_links_and_login_return_path(self):
+        for page in self.main.PAGES:
+            result = self.client.get('/' + page, follow_redirects=False)
+            self.assertEqual(result.status_code, 303)
+            self.assertIn('next=', result.headers['location'])
+        result = self.client.post('/login', data={'password':'test-only-password', 'next':'/automations'}, follow_redirects=False)
+        self.assertEqual(result.headers['location'], '/automations')
+        for page in self.main.PAGES:
+            self.assertEqual(self.client.get('/' + page).status_code, 200)
+        result = self.client.post('/login', data={'password':'test-only-password', 'next':'//evil.invalid'}, follow_redirects=False)
+        self.assertEqual(result.headers['location'], '/')
+        self.assertEqual(self.client.get('/unknown-page').status_code, 404)
+
     def test_v1_object_routes_use_existing_login(self):
         for path in ['/api/v1/modules', '/api/v1/objects', '/api/v1/objects/zigbee.unknown']:
             self.assertEqual(self.client.get(path).status_code, 401)

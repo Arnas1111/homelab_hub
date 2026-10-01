@@ -107,3 +107,16 @@ Reference contracts: [Zigbee2MQTT exposes](https://www.zigbee2mqtt.io/guide/usag
 [MQTT topics](https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html),
 [Paho client lifecycle](https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html).
 Architecture and later phases: [ARCHITECTURE.md](ARCHITECTURE.md).
+## Automations
+
+Open `/automations`, or Settings → Configure Zigbee automations. Choose a sensor,
+property and matching value, then a light/switch and switch-off delay. For motion:
+`occupancy = true → light on → 5 seconds → light off`. Repeated matching reports
+restart the timer. Button `action` values (single, double, etc.) are discovered from
+Zigbee2MQTT and selectable in the same editor.
+
+Only fresh, non-retained reports activate rules. Pending OFF deadlines survive Hub
+restarts and retry after connection failures. Disabling/deleting a rule prevents
+new triggers but preserves scheduled OFF; manual changes do not cancel a timer.
+Multiple rules targeting the same light use the latest deadline. Configuration is
+stored in the existing `/data/hub.db`; no additional container configuration is needed.

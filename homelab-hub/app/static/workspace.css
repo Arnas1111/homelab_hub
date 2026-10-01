@@ -170,3 +170,13 @@ body:has(#logsView.active) .top-actions { display:none; }
 .zb-notice { min-height:16px; font-size:11px; color:var(--accent); margin:10px 0; }
 .zb-details { border-top:1px solid var(--border); padding-top:12px; font-size:12px; }.zb-details summary { cursor:pointer; color:var(--muted); }.zb-details label { display:grid; gap:6px; margin:12px 0; }.zb-details input { width:100%; box-sizing:border-box; }
 .zb-card button:disabled,.zb-card input:disabled,.zb-card select:disabled { opacity:.45; cursor:not-allowed; }
+.nav-item { text-decoration: none; }
+.automation-layout { display:grid; grid-template-columns:minmax(280px, 400px) minmax(0, 1fr); gap:24px; align-items:start; }
+.automation-editor, .automation-card { padding:24px; margin-bottom:16px; }
+.automation-editor label { display:grid; gap:8px; margin:16px 0; }
+.automation-editor input:not([type=checkbox]), .automation-editor select { width:100%; padding:10px; border:1px solid #384452; border-radius:8px; background:#151c25; color:#e5edf5; }
+.automation-editor .check { display:flex; align-items:center; }
+.automation-pair { display:flex; gap:12px; flex-wrap:wrap; }
+.automation-pair > label { flex:1; min-width:100px; }
+.automation-summary { line-height:1.8; overflow-wrap:anywhere; }
+@media(max-width:900px) { .automation-layout { grid-template-columns:1fr; } }

@@ -66,7 +66,7 @@ def handler(route):
         data = {'jellyfin': {'active': []}, 'home_assistant': {'entities': []}}
     elif path.startswith('/api/'):
         data = {}
-    elif path == '/':
+    elif path in ('/', '/home', '/services', '/containers', '/metrics', '/integrations', '/zigbee', '/automations', '/logs', '/settings', '/connectors', '/database', '/history'):
         html = (STATIC / 'index.html').read_text(encoding='utf-8')
         for key, value in settings.items():
             html = html.replace('{{ settings.' + key + ' }}', str(value))

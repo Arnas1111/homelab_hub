@@ -39,6 +39,8 @@ from app.modules.zigbee.settings import ZigbeeConfiguration, settings_router
 from app.core.preferences import Preferences
 from app.core.identity import Identity
 from app.core.branding import branding_router
+from app.core.pages import PAGES, safe_page
+from app.modules.zigbee.automation import Automations, automation_router
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("HUB_DATA_DIR", "/data"))
@@ -245,12 +247,14 @@ def startup() -> None:
     host_cache.read()
     metrics_history.initialize()
     metrics_history.start()
+    automations.start()
     zigbee_configuration.start()
 
 
 @app.on_event("shutdown")
 def shutdown() -> None:
     zigbee_module.stop()
+    automations.stop()
     metrics_history.stop()
 
 
@@ -445,6 +449,9 @@ def require_auth(request: Request) -> None:
 
 app.include_router(object_router(module_registry, require_auth))
 preferences = Preferences(db)
+automations = Automations(preferences, zigbee_module)
+zigbee_module.on_report = automations.notify
+app.include_router(automation_router(automations, require_auth))
 zigbee_configuration = ZigbeeConfiguration(preferences, zigbee_module)
 app.include_router(settings_router(zigbee_configuration, require_auth))
 app.include_router(branding_router(preferences, require_auth, APP_DIR / 'static'))
@@ -1329,20 +1336,22 @@ def dashboard_icon(icon: str):
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
+    destination = safe_page(request.query_params.get('next', '/'))
     if is_authenticated(request):
-        return RedirectResponse("/", status_code=303)
-    html = templates.get_template("login.html").render(password_configured=identity.configured(ADMIN_PASSWORD), settings=get_settings())
+        return RedirectResponse(destination, status_code=303)
+    html = templates.get_template("login.html").render(password_configured=identity.configured(ADMIN_PASSWORD), settings=get_settings(), next_page=destination)
     return HTMLResponse(html)
 
 
 @app.post("/login")
-def login(password: str = Form(...)):
+def login(password: str = Form(...), next_page: str = Form('/', alias='next')):
+    destination = safe_page(next_page)
     if not identity.configured(ADMIN_PASSWORD):
         return RedirectResponse("/login?error=missing", status_code=303)
     if len(password) > 1024 or not identity.verify(password, ADMIN_PASSWORD):
-        return RedirectResponse("/login?error=invalid", status_code=303)
+        return RedirectResponse('/login?error=invalid&next=' + quote(destination, safe=''), status_code=303)
     token = signer.dumps({"authenticated": True, "iat": int(time.time()), 'credential_version': identity.version()})
-    response = RedirectResponse("/", status_code=303)
+    response = RedirectResponse(destination, status_code=303)
     response.set_cookie(
         "hub_session",
         token,
@@ -1392,9 +1401,13 @@ def change_password(payload: PasswordPayload, request: Request):
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     if not is_authenticated(request):
-        return RedirectResponse("/login", status_code=303)
+        return RedirectResponse('/login?next=' + quote(safe_page(request.url.path), safe=''), status_code=303)
     html = templates.get_template("index.html").render(server_name=SERVER_NAME, settings=get_settings())
     return HTMLResponse(html)
+
+
+for page in PAGES:
+    app.add_api_route('/' + page, index, methods=['GET'], response_class=HTMLResponse, include_in_schema=False)
 
 
 def load_resource_stats():

@@ -1557,7 +1557,10 @@ $('containerRows').addEventListener('click', event => {
 });
 
 for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', event => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (!window.hubRestoringRoute && location.pathname !== '/' + btn.dataset.view) history.pushState(null, '', '/' + btn.dataset.view);
     if (location.hash.startsWith('#metrics/')) history.replaceState(null, '', location.pathname + location.search);
     document.querySelectorAll('.nav-item[data-view]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
     const overviewViews = { metrics: 'server', containers: 'containers', integrations: 'integrations' };
@@ -1578,6 +1581,7 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
       services:['Services','Discover, organize and open your applications'],
       logs:['Logs','Errors, warnings and context across Docker containers'],
       zigbee:['Zigbee','Discovered lights and device controls'],
+      automations:['Automations','Device events, timed actions and smart buttons'],
       metrics:['Metrics','Host utilization, saturation, and trends'],
       containers:['Containers','Docker state, resources, ports, and logs'],
       integrations:['Integrations','Live service status and controls'],
@@ -1589,6 +1593,7 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     if (btn.dataset.view === 'connectors') loadIntegrationSettings();
     if (btn.dataset.view === 'logs' && typeof loadAggregateLogs === 'function') loadAggregateLogs();
     if (btn.dataset.view === 'zigbee' && typeof loadZigbee === 'function') loadZigbee();
+    if (btn.dataset.view === 'automations' && typeof loadAutomations === 'function') loadAutomations();
     if (overviewView === 'integrations') loadIntegrations();
     applySectionState();
     refresh();

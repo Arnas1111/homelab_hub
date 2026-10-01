@@ -13,18 +13,19 @@
     <div class="brand"><div class="brand-mark small"><img id="hubLogo" src="/branding/logo" alt=""></div><span id="brandTitle">{{ settings.title }}</span></div>
     <nav aria-label="Main navigation">
       <span class="nav-heading">Workspace</span>
-      <button class="nav-item active" data-view="home"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v10H3z M9 20v-7h6v7"/></svg></span> Home</button>
-      <button class="nav-item" data-view="services"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg></span> Services</button>
-      <button class="nav-item" data-view="containers"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18v6H3z M3 14h18v6H3z M6 7h1 M6 17h1"/></svg></span> Containers</button>
-      <button class="nav-item" data-view="metrics"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-7 5 4 8-11 M3 21h18"/></svg></span> Metrics</button>
+      <a class="nav-item active" data-view="home" href="/home"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v10H3z M9 20v-7h6v7"/></svg></span> Home</a>
+      <a class="nav-item" data-view="services" href="/services"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg></span> Services</a>
+      <a class="nav-item" data-view="containers" href="/containers"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18v6H3z M3 14h18v6H3z M6 7h1 M6 17h1"/></svg></span> Containers</a>
+      <a class="nav-item" data-view="metrics" href="/metrics"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-7 5 4 8-11 M3 21h18"/></svg></span> Metrics</a>
       <button class="nav-item history-nav" data-metric-page="cpu"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a9 9 0 1 1-1 9 M3 3v5h5 M12 7v5l3 2"/></svg></span> History</button>
-      <button class="nav-item" data-view="integrations"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6v6H4z M14 13h6v6h-6z M10 8h7v5"/></svg></span> Integrations</button>
-      <button class="nav-item" data-view="logs"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 3h16v18H4z M8 7h8 M8 12h8 M8 17h5"/></svg></span> Logs</button>
-      <button class="nav-item" data-view="zigbee"><span class="nav-symbol" aria-hidden="true">&#9788;</span> Zigbee</button>
+      <a class="nav-item" data-view="integrations" href="/integrations"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6v6H4z M14 13h6v6h-6z M10 8h7v5"/></svg></span> Integrations</a>
+      <a class="nav-item" data-view="logs" href="/logs"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 3h16v18H4z M8 7h8 M8 12h8 M8 17h5"/></svg></span> Logs</a>
+      <a class="nav-item" data-view="zigbee" href="/zigbee"><span class="nav-symbol" aria-hidden="true">&#9788;</span> Zigbee</a>
       <span class="nav-heading">Manage</span>
-      <button class="nav-item" data-view="settings"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16 M4 17h16 M8 4v6 M16 14v6"/></svg></span> Settings</button>
-      <button class="nav-item" data-view="database"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6c0-4 16-4 16 0v12c0 4-16 4-16 0z M4 6c0 4 16 4 16 0 M4 12c0 4 16 4 16 0"/></svg></span> History storage</button>
-      <button class="nav-item" data-view="connectors"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h8v6a4 4 0 0 1-8 0z M10 4v4 M14 4v4 M12 18v3"/></svg></span> Connections</button>
+      <a class="nav-item" data-view="automations" href="/automations"><span class="nav-symbol" aria-hidden="true">&#9889;</span> Automations</a>
+      <a class="nav-item" data-view="settings" href="/settings"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16 M4 17h16 M8 4v6 M16 14v6"/></svg></span> Settings</a>
+      <a class="nav-item" data-view="database" href="/database"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6c0-4 16-4 16 0v12c0 4-16 4-16 0z M4 6c0 4 16 4 16 0 M4 12c0 4 16 4 16 0"/></svg></span> History storage</a>
+      <a class="nav-item" data-view="connectors" href="/connectors"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h8v6a4 4 0 0 1-8 0z M10 4v4 M14 4v4 M12 18v3"/></svg></span> Connections</a>
     </nav>
     <div class="sidebar-bottom">
       <div class="server-pill"><span class="dot"></span><div><strong>{{ server_name }}</strong><small id="dockerVersion">Connecting…</small></div></div>
@@ -137,6 +138,26 @@
       </div>
     </section>
 
+    <section id="automationsView" class="view">
+      <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Automations</h2><p class="muted">When a device reports a value, turn on a light or switch for a set time.</p></div><button id="automationRefresh" class="btn">Refresh</button></div>
+      <p id="automationStatus" role="status"></p>
+      <div class="automation-layout">
+        <form id="automationForm" class="panel automation-editor">
+          <h3 id="automationEditorTitle">New automation</h3>
+          <label>Name<input id="automationName" required maxlength="80" placeholder="Hallway motion light"></label>
+          <label>When this device reports<select id="automationSource" required></select></label>
+          <div class="automation-pair"><label>Property<select id="automationProperty" required></select></label><label>Equals<span id="automationValueHost"></span></label></div>
+          <label>Turn on<select id="automationTarget" required></select></label>
+          <label>Then turn off after (seconds)<input id="automationSeconds" type="number" min="1" max="86400" value="5" required></label>
+          <label class="check"><input id="automationEnabled" type="checkbox" checked> Enabled</label>
+          <p class="muted tiny">Repeated matching reports extend the countdown. Button actions such as single or double press work when exposed by Zigbee2MQTT. Timers run on the Hub, even with this page closed.</p>
+          <div class="automation-pair"><button type="submit" class="btn primary">Save automation</button><button id="automationCancel" type="button" class="btn">New / clear</button></div>
+          <p id="automationFeedback" role="status" aria-live="polite"></p>
+        </form>
+        <div><div id="automationRules"></div><p class="muted tiny">Disabling or deleting a rule stops new activations. Existing switch-off timers still finish. If several rules control one light, the latest deadline wins. Manual changes do not cancel a timer.</p></div>
+      </div>
+    </section>
+
     <section id="zigbeeView" class="view">
       <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Zigbee devices</h2><p class="muted tiny">Lights, switches and sensors. Controls follow the capabilities reported by each device.</p></div><button id="zigbeeRefresh" class="btn">Refresh</button></div>
       <p id="zigbeeStatus" role="status">Loading connection status...</p>
@@ -201,6 +222,7 @@
     </section>
 
     <section id="settingsView" class="view">
+      <p><a href="/automations" class="btn">Configure Zigbee automations</a></p>
       <div class="settings-categories"><button class="btn" data-open-view="connectors">Service connections</button><button class="btn" data-open-view="database">History storage</button><a class="btn" href="#mqttSettings">Zigbee / MQTT</a><a class="btn" href="#appearanceSettings">Appearance</a></div>
       <div class="panel settings-panel">
           <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div><span class="version-label">Version <strong id="appVersion">{{ settings.version }}</strong></span></div>
@@ -329,5 +351,7 @@
   <script src="/static/logs.js"></script>
   <script src="/static/zigbee.js"></script>
   <script src="/static/settings.js"></script>
+  <script src="/static/automations.js"></script>
+  <script src="/static/navigation.js"></script>
 </body>
 </html>
