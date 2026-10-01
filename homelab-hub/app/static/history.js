@@ -92,7 +92,7 @@ async function loadHistory(clear = false) {
 
 function openMetricPage(metric) {
   if (!METRIC_PAGES[metric]) return;
-  if (location.pathname !== '/history' || location.hash !== `#metrics/${metric}`) history.pushState(null, '', `/history#metrics/${metric}`);
+  if (!window.hubRestoringRoute && (location.pathname !== '/history' || location.hash !== `#metrics/${metric}`)) history.pushState(null, '', `/history#metrics/${metric}`);
   historyMetric = metric;
   document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
   $('metricDetailView').classList.add('active');
@@ -169,6 +169,7 @@ $('pgTest').addEventListener('click', async () => {
   finally { $('pgTest').disabled = false; }
 });
 window.addEventListener('hashchange', () => {
+  if (typeof restoreHubRoute === 'function') { restoreHubRoute(); return; }
   const metric = location.hash.split('/')[1];
   if (location.hash.startsWith('#metrics/') && METRIC_PAGES[metric]) openMetricPage(metric);
   else if ($('metricDetailView').classList.contains('active')) document.querySelector('[data-view="home"]').click();

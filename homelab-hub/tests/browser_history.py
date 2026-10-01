@@ -70,7 +70,7 @@ def handler(route):
         html = (STATIC / 'index.html').read_text(encoding='utf-8')
         for key, value in settings.items():
             html = html.replace('{{ settings.' + key + ' }}', str(value))
-        html = html.replace('{{ server_name }}', 'Unraid')
+        html = html.replace('{{ server_name }}', 'Unraid').replace('{{ asset_version }}', 'test')
         route.fulfill(content_type='text/html', body=html)
         return
     elif path.startswith('/static/'):

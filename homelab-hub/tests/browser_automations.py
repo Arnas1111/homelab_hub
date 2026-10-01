@@ -3,6 +3,7 @@ import os
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
 from browser_dashboard import handler as dashboard_handler
+from browser_history import STATIC
 
 rules = []
 objects = [dict(id='zigbee.sensor', name='Hall motion', type='sensor', actions=[], capabilities={
@@ -31,10 +32,15 @@ def main():
         browser = p.chromium.launch(**options)
         page = browser.new_page(viewport={'width':1440, 'height':1000})
         errors = []
+        documents = []
         page.on('pageerror', lambda error:errors.append(str(error)))
+        page.on('request', lambda request: documents.append(request.url) if request.resource_type == 'document' else None)
         page.route('**/*', handler)
         page.goto('http://hub.test/containers')
         expect(page.locator('#pageTitle')).to_have_text('Containers')
+        page.wait_for_timeout(1000)
+        assert len(documents) == 1, documents
+        assert page.locator('.nav-item').first.evaluate("node => getComputedStyle(node).textDecorationLine") == 'none'
         page.locator('[data-view="services"]').click()
         expect(page).to_have_url('http://hub.test/services')
         page.go_back()
@@ -49,6 +55,23 @@ def main():
         expect(page.locator('#pageTitle')).to_have_text('Services')
         page.go_forward()
         expect(page.locator('#metricDetailView')).to_have_class('view active')
+        page.goto('http://hub.test/history')
+        expect(page.locator('#pageTitle')).to_have_text('CPU history')
+        expect(page).to_have_url('http://hub.test/history')
+        page.locator('.metric-tabs [data-metric-page="memory"]').click()
+        page.go_back()
+        expect(page).to_have_url('http://hub.test/history')
+        expect(page.locator('#pageTitle')).to_have_text('CPU history')
+        page.go_forward()
+        expect(page.locator('#pageTitle')).to_have_text('Memory history')
+        page.go_back()
+        expect(page.locator('#pageTitle')).to_have_text('CPU history')
+        page.locator('[data-view="services"]').click()
+        page.go_back()
+        expect(page).to_have_url('http://hub.test/history')
+        expect(page.locator('#pageTitle')).to_have_text('CPU history')
+        page.go_forward()
+        expect(page.locator('#pageTitle')).to_have_text('Services')
         page.goto('http://hub.test/automations')
         expect(page.locator('#pageTitle')).to_have_text('Automations')
         expect(page.locator('#automationSource')).to_have_value('zigbee.sensor')
@@ -73,6 +96,16 @@ def main():
         page.on('dialog', lambda dialog:dialog.accept())
         page.get_by_role('button', name='Delete', exact=True).click()
         expect(page.locator('#automationRules')).to_contain_text('No automations yet')
+        # Reproduce the previous handler's lack of preventDefault. Restoration
+        # must still select the view without following the section anchor.
+        legacy_source = (STATIC / 'app.js').read_text(encoding='utf-8').replace(
+            "    event.preventDefault();\n    if (!window.hubRestoringRoute", "    if (!window.hubRestoringRoute")
+        page.route('**/static/app.js*', lambda route: route.fulfill(content_type='application/javascript', body=legacy_source))
+        before = len(documents)
+        page.goto('http://hub.test/containers')
+        expect(page.locator('#pageTitle')).to_have_text('Containers')
+        page.wait_for_timeout(1000)
+        assert len(documents) == before + 1, documents
         assert not errors, errors
         browser.close()
         print('PASS: deep links, reload, back/forward/history, motion/button rules, stable drafts, mobile, delete')

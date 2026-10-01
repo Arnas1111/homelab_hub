@@ -2,6 +2,7 @@
 import importlib
 import os
 from pathlib import Path
+from re import findall
 import sys
 import tempfile
 import types
@@ -71,6 +72,13 @@ class HistoryAPITests(unittest.TestCase):
         self.assertEqual(result.headers['location'], '/automations')
         for page in self.main.PAGES:
             self.assertEqual(self.client.get('/' + page).status_code, 200)
+        html = self.client.get('/home')
+        self.assertEqual(html.headers['cache-control'], 'no-cache')
+        assets = findall(r'(?:src|href)="(/static/[^\"]+)"', html.text)
+        self.assertTrue(assets)
+        for asset in assets:
+            self.assertTrue(asset.endswith('?v=' + self.main.ASSET_VERSION), asset)
+            self.assertEqual(self.client.get(asset).status_code, 200)
         result = self.client.post('/login', data={'password':'test-only-password', 'next':'//evil.invalid'}, follow_redirects=False)
         self.assertEqual(result.headers['location'], '/')
         self.assertEqual(self.client.get('/unknown-page').status_code, 404)

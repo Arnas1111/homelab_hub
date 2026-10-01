@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ settings.title }}</title>
   <link id="hubFavicon" rel="icon" href="/branding/favicon">
-  <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/workspace.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/workspace.css?v={{ asset_version }}">
 </head>
 <body>
   <aside class="sidebar">
@@ -345,13 +345,13 @@
   </div>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/static/app.js"></script>
-  <script src="/static/board.js"></script>
-  <script src="/static/history.js"></script>
-  <script src="/static/logs.js"></script>
-  <script src="/static/zigbee.js"></script>
-  <script src="/static/settings.js"></script>
-  <script src="/static/automations.js"></script>
-  <script src="/static/navigation.js"></script>
+  <script src="/static/app.js?v={{ asset_version }}"></script>
+  <script src="/static/board.js?v={{ asset_version }}"></script>
+  <script src="/static/history.js?v={{ asset_version }}"></script>
+  <script src="/static/logs.js?v={{ asset_version }}"></script>
+  <script src="/static/zigbee.js?v={{ asset_version }}"></script>
+  <script src="/static/settings.js?v={{ asset_version }}"></script>
+  <script src="/static/automations.js?v={{ asset_version }}"></script>
+  <script src="/static/navigation.js?v={{ asset_version }}"></script>
 </body>
 </html>

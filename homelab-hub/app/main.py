@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import pwd
@@ -73,6 +74,11 @@ identity = Identity(DATA_DIR)
 SESSION_SECRET = os.getenv("HUB_SESSION_SECRET", "") or identity.secret
 SERVER_NAME = os.getenv("HUB_SERVER_NAME", "Unraid")
 APP_VERSION = os.getenv("HUB_VERSION", "0.1.0")
+# Content, rather than a deployment version, also covers local/dev builds.
+ASSET_VERSION = hashlib.sha256(b''.join(
+    path.read_bytes() for path in sorted((APP_DIR / 'static').iterdir())
+    if path.suffix in ('.js', '.css')
+)).hexdigest()[:16]
 
 app = FastAPI(title="Homelab Hub", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
@@ -1402,8 +1408,8 @@ def change_password(payload: PasswordPayload, request: Request):
 def index(request: Request):
     if not is_authenticated(request):
         return RedirectResponse('/login?next=' + quote(safe_page(request.url.path), safe=''), status_code=303)
-    html = templates.get_template("index.html").render(server_name=SERVER_NAME, settings=get_settings())
-    return HTMLResponse(html)
+    html = templates.get_template("index.html").render(server_name=SERVER_NAME, settings=get_settings(), asset_version=ASSET_VERSION)
+    return HTMLResponse(html, headers={'Cache-Control': 'no-cache'})
 
 
 for page in PAGES:
