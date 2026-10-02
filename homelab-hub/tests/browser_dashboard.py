@@ -23,7 +23,7 @@ def handler(route):
         route.fulfill(json=dict(settings=settings, containers=containers, board={'favorites': favorites},
             webui_links=[], group_order={}, connections={'unraid': True},
             discovery={'loading': False, 'error': None, 'updated_at': '2026-09-18T12:00:00Z'},
-            server=dict(name='Tower', cpus=8, memory_total=34359738368, containers_running=6, containers_total=6,
+            server=dict(name='Tower', webui_url='http://tower.test', cpus=8, memory_total=34359738368, containers_running=6, containers_total=6,
                 metrics={'cpu': {'total_percent': 14, 'cores': [{'name': 'CPU 0', 'percent': 14}]},
                          'memory': {'total': 34359738368, 'percent': 42, 'available_human': '18.6 GB'},
                          'data_mount': {'total': 100000, 'percent': 78, 'free_human': '2.4 TB'}})))
@@ -54,6 +54,8 @@ def main():
         page.route('**/*', handler)
         page.goto('http://hub.test/')
         expect(page.locator('#homeServices .service-card')).to_have_count(6)
+        expect(page.locator('#homeServerLink')).to_have_attribute('href', 'http://tower.test/')
+        expect(page.locator('#homeServerLink')).to_have_attribute('target', '_blank')
         assert page.evaluate('new Set([...document.querySelectorAll("[id]")].map(e => e.id)).size === document.querySelectorAll("[id]").length'), 'Duplicate element IDs'
         expect(page.locator('#homeAttention')).to_contain_text('Backups')
         assert not any(r.path in ('/api/icons', '/api/integrations', '/api/unraid') for r in requests)

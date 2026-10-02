@@ -42,7 +42,7 @@ from app.core.preferences import Preferences
 from app.core.identity import Identity
 from app.core.branding import branding_router
 from app.core.pages import PAGES, safe_page
-from app.core.connectors import CONNECTOR_FIELDS, configured_connectors
+from app.core.connectors import CONNECTOR_FIELDS, configured_connectors, unraid_webui_url
 from app.modules.zigbee.automation import Automations, automation_router
 
 APP_DIR = Path(__file__).resolve().parent
@@ -1532,6 +1532,7 @@ def overview(request: Request, include_containers: bool = Query(True),
         row = conn.execute("SELECT value FROM settings WHERE key='board_favorites'").fetchone()
     payload["board"] = {"favorites": json.loads(row["value"]) if row else []}
     configured = get_integration_values()
+    payload['server']['webui_url'] = unraid_webui_url(configured['unraid_url'])
     payload['connector_types'] = configured_connectors(configured)
     payload["connections"] = {"jellyfin": bool(configured["jellyfin_api_key"]),
                               "home_assistant": bool(configured["home_assistant_url"] and configured["home_assistant_token"]),

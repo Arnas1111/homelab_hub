@@ -208,6 +208,23 @@ other rules from switching off the same target. Holds and deadlines persist acro
 restarts; a recovered hold waits for a fresh false report. Disabling, deleting or
 changing an occupied rule to another target schedules cleanup for its old target.
 
+Check **Only activate when a time condition matches** to limit a sensor/button rule
+to before or after a local clock time, sunrise, or sunset. **After this time is true**
+allows activation at/after the boundary; unchecked means before. Solar offsets from
+-180 to +180 minutes are supported. Boundaries use the current local calendar day
+and reset at midnight; this is an activation condition, not a scheduled on/off action.
+Existing switch-off timers and occupancy releases always finish regardless of time.
+
+In **Settings → Automation time and solar location**, save your IANA timezone and
+editable latitude/longitude (or use the browser's **Use current location** button).
+Sunrise and sunset are calculated daily on the Hub using [Astral](https://astral.readthedocs.io/en/latest/package.html),
+without an internet API. You can disable solar times or recalculate the preview.
+If a solar event is unavailable, the associated rule does not activate; other rules
+keep working. Configuration persists under `/data` and follows timezone/DST changes.
+
+The Unraid server name on **Home** opens the Unraid WebUI in a new tab using the
+server address saved in its connector. It stays plain text until an address is saved.
+
 Rules and pending switch-off deadlines persist in `/data/hub.db`. Retained MQTT
 messages are ignored for triggering; unrelated partial reports do not retrigger.
 After a Hub restart, overdue switch-offs are attempted when Zigbee is reachable.

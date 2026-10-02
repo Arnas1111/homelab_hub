@@ -7,6 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from app.core.objects import ActionRequest
+from app.modules.zigbee.time_conditions import AutomationTime, TimeCondition, TimeSettings
 
 
 class Rule(BaseModel):
@@ -19,6 +20,7 @@ class Rule(BaseModel):
     target: str = Field(min_length=1, max_length=160)
     seconds: int = Field(ge=1, le=86400)
     while_occupied: bool = False
+    time_condition: TimeCondition | None = None
 
 
 class Automations:
@@ -30,6 +32,7 @@ class Automations:
         self.thread = None
         self.rules, self.pending, self.status = {}, {}, {}
         self.holds = {}
+        self.time = AutomationTime(preferences)
 
     def start(self):
         with self.lock:
@@ -100,6 +103,11 @@ class Automations:
                 raise HTTPException(422, 'Occupancy mode requires occupancy = true')
             if rule.source == rule.target:
                 raise HTTPException(422, 'Trigger and target must be different devices')
+            if rule.time_condition:
+                if self.preferences.read('automation_time') is None:
+                    raise HTTPException(422, 'Save your automation timezone in Settings first')
+                if rule.time_condition.boundary != 'clock' and not self.time.settings().solar_enabled:
+                    raise HTTPException(422, 'Enable solar times and set your location in Settings first')
             rule_id = rule_id or uuid.uuid4().hex
             if rule_id in self.holds:
                 old = self.rules[rule_id]
@@ -150,6 +158,8 @@ class Automations:
                         continue
                     if value is not True:
                         continue
+                    if not self._time_allows(key, rule):
+                        continue
                     self.holds[key] = True
                     self._save()
                     try:
@@ -160,6 +170,8 @@ class Automations:
                     continue
                 if value != rule['equals'] or isinstance(value, bool) != isinstance(rule['equals'], bool):
                     continue
+                if not self._time_allows(key, rule):
+                    continue
                 target = rule['target']
                 self._schedule_off(target, rule['seconds'])
                 # Persist cleanup before sending ON, including ambiguous publish failures.
@@ -169,6 +181,16 @@ class Automations:
                     self.status[key] = 'Light on; countdown restarted'
                 except Exception:
                     self.status[key] = 'On command failed; check Zigbee connection'
+
+    def _time_allows(self, key, rule):
+        try:
+            allowed = self.time.allows(rule.get('time_condition'), self.clock())
+        except ValueError:
+            self.status[key] = 'Time condition unavailable; check timezone and solar settings'
+            return False
+        if not allowed:
+            self.status[key] = 'Skipped; time condition is false'
+        return allowed
 
     def tick(self):
         with self.lock:
@@ -199,6 +221,21 @@ def automation_router(engine, require_auth):
     @router.get('')
     def read():
         return engine.snapshot()
+
+    @router.get('/time-settings')
+    def time_settings():
+        return engine.time.snapshot(engine.clock())
+
+    @router.put('/time-settings')
+    def save_time_settings(settings: TimeSettings):
+        engine.time.save(settings)
+        return engine.time.snapshot(engine.clock())
+
+    @router.post('/time-settings/refresh')
+    def refresh_time_settings():
+        from app.modules.zigbee.time_conditions import solar_boundary
+        solar_boundary.cache_clear()
+        return engine.time.snapshot(engine.clock())
 
     @router.post('', status_code=201)
     def create(rule: Rule):

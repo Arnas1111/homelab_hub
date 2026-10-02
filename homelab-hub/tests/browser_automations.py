@@ -15,6 +15,8 @@ def handler(route):
     path = urlparse(route.request.url).path
     if path == '/api/v1/objects':
         return route.fulfill(json={'objects':objects})
+    if path.startswith('/api/zigbee/automations/time-settings'):
+        return dashboard_handler(route)
     if path.startswith('/api/zigbee/automations'):
         method = route.request.method
         if method in ('POST', 'PUT'):
@@ -78,6 +80,9 @@ def main():
         page.locator('#automationName').fill('Motion <hall>')
         page.locator('#automationSeconds').fill('5')
         page.locator('#automationWhileOccupied').check()
+        page.locator('#automationTimeEnabled').check()
+        page.locator('#automationClock').fill('20:15')
+        page.locator('#automationTimeAfter').uncheck()
         expect(page.locator('#automationEqualsLabel')).to_be_hidden()
         expect(page.locator('#automationSecondsLabel')).to_contain_text('occupancy becomes false')
         page.get_by_role('button', name='Save automation').click()
@@ -85,9 +90,17 @@ def main():
         assert rules[0]['equals'] is True
         assert rules[0]['seconds'] == 5
         assert rules[0]['while_occupied'] is True
+        assert rules[0]['time_condition']['time'] == '20:15'
+        assert rules[0]['time_condition']['after'] is False
+        expect(page.locator('.automation-summary')).to_contain_text('before 20:15')
         expect(page.locator('.automation-summary')).to_contain_text('stays on')
         page.get_by_role('button', name='Edit', exact=True).click()
         expect(page.locator('#automationWhileOccupied')).to_be_checked()
+        expect(page.locator('#automationTimeEnabled')).to_be_checked()
+        expect(page.locator('#automationClock')).to_have_value('20:15')
+        page.locator('#automationTimeBoundary').select_option('sunset')
+        expect(page.locator('#automationClockLabel')).to_be_hidden()
+        page.locator('#automationSolarOffset').fill('-15')
         page.locator('#automationName').fill('Unsaved draft')
         page.evaluate('loadAutomations()')
         expect(page.locator('#automationName')).to_have_value('Unsaved draft')
@@ -99,6 +112,8 @@ def main():
         expect(page.locator('.automation-card h3')).to_contain_text('Disabled')
         assert rules[0]['equals'] == 'double'
         assert rules[0]['while_occupied'] is False
+        assert rules[0]['time_condition']['boundary'] == 'sunset'
+        assert rules[0]['time_condition']['offset_minutes'] == -15
         page.set_viewport_size({'width':390, 'height':844})
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.on('dialog', lambda dialog:dialog.accept())

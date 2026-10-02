@@ -1,4 +1,5 @@
 let automationObjects = [], automationRules = [], automationEditing = null, automationBusy = false;
+let automationTimeSettings = null;
 const automationOptions = (items, selected) => items.map(([value, label]) => `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
 
 function automationProperties(selected, value) {
@@ -36,6 +37,23 @@ function automationDevices() {
   $('automationTarget').innerHTML = automationOptions(automationObjects.filter(o => o.actions.includes('set_power')).map(o => [o.id, o.name]), target);
   automationProperties();
 }
+function automationTimeMode() {
+  const enabled = $('automationTimeEnabled').checked;
+  const solar = $('automationTimeBoundary').value !== 'clock';
+  $('automationTimeFields').hidden = !enabled;
+  $('automationClockLabel').hidden = solar;
+  $('automationSolarOffsetLabel').hidden = !solar;
+  $('automationClock').disabled = !enabled || solar;
+  $('automationClock').required = enabled && !solar;
+  $('automationSolarOffset').disabled = !enabled || !solar;
+  $('automationSolarOffset').required = enabled && solar;
+  const config = automationTimeSettings;
+  if (!config?.configured) $('automationTimeContext').textContent = 'Save your timezone and solar location in Settings first.';
+  else {
+    const today = solar ? config[$('automationTimeBoundary').value] : null;
+    $('automationTimeContext').textContent = `Timezone: ${config.timezone}${today ? ` · Today: ${new Date(today).toLocaleTimeString([], {timeZone:config.timezone, hour:'2-digit', minute:'2-digit'})}` : solar ? ' · Solar time unavailable; check Settings.' : ''}`;
+  }
+}
 function automationRender() {
   const host = $('automationRules');
   const ids = new Set(automationRules.map(r => r.id));
@@ -59,6 +77,8 @@ function automationRender() {
     card.querySelector('h3').textContent = rule.name + (rule.enabled ? '' : ' · Disabled');
     card.querySelector('.automation-summary').textContent = rule.while_occupied ? `${name(rule.source)}: occupied → ${name(rule.target)} stays on; unoccupied → off after ${rule.seconds}s` : `${name(rule.source)}: ${rule.property} = ${rule.equals} → ${name(rule.target)} on → ${rule.seconds}s → off`;
     card.querySelector('.automation-state').textContent = rule.status + (rule.off_at ? ` · Off due ${new Date(rule.off_at * 1000).toLocaleTimeString()}` : '');
+    const condition = rule.time_condition;
+    if (condition) card.querySelector('.automation-summary').textContent += ` · Only ${condition.after ? 'after' : 'before'} ${condition.boundary === 'clock' ? condition.time : condition.boundary}${condition.boundary !== 'clock' && condition.offset_minutes ? ` (${condition.offset_minutes > 0 ? '+' : ''}${condition.offset_minutes} min)` : ''}`;
   }
 }
 function automationEdit(id) {
@@ -75,17 +95,26 @@ function automationEdit(id) {
   $('automationWhileOccupied').checked = Boolean(rule.while_occupied);
   automationOccupancyMode();
   $('automationSeconds').value = rule.seconds; $('automationEnabled').checked = rule.enabled;
+  $('automationTimeEnabled').checked = Boolean(rule.time_condition);
+  $('automationTimeBoundary').value = rule.time_condition?.boundary || 'clock';
+  $('automationClock').value = rule.time_condition?.time || '18:00';
+  $('automationTimeAfter').checked = rule.time_condition?.after ?? true;
+  $('automationSolarOffset').value = rule.time_condition?.offset_minutes || 0;
+  automationTimeMode();
   $('automationName').focus();
 }
 function automationReset() {
   automationEditing = null; $('automationForm').reset(); $('automationEditorTitle').textContent = 'New automation';
   automationDevices(); $('automationFeedback').textContent = '';
+  automationTimeMode();
 }
 async function loadAutomations() {
   if (automationBusy) return;
   automationBusy = true;
   try {
-    const [data, devices] = await Promise.all([api('/api/zigbee/automations'), api('/api/v1/objects?module=zigbee')]);
+    const [data, devices, timeSettings] = await Promise.all([api('/api/zigbee/automations'), api('/api/v1/objects?module=zigbee'), api('/api/zigbee/automations/time-settings').catch(() => null)]);
+    automationTimeSettings = timeSettings;
+    automationTimeMode();
     const first = !automationObjects.length;
     automationObjects = devices.objects; automationRules = data.rules;
     if (first && !automationEditing) automationDevices();
@@ -97,6 +126,8 @@ async function loadAutomations() {
 $('automationSource').onchange = () => automationProperties();
 $('automationProperty').onchange = () => automationValue();
 $('automationWhileOccupied').onchange = automationOccupancyMode;
+$('automationTimeEnabled').onchange = automationTimeMode;
+$('automationTimeBoundary').onchange = automationTimeMode;
 $('automationCancel').onclick = automationReset;
 $('automationRefresh').onclick = async () => { await loadAutomations(); if (!automationEditing) automationDevices(); };
 $('automationForm').onsubmit = async event => {
@@ -107,6 +138,7 @@ $('automationForm').onsubmit = async event => {
   if (cap?.type === 'number') value = Number(value);
   const rule = {name:$('automationName').value.trim(), enabled:$('automationEnabled').checked, source:$('automationSource').value,
     property:$('automationProperty').value, equals:value, target:$('automationTarget').value, seconds:Number($('automationSeconds').value), while_occupied:$('automationWhileOccupied').checked};
+  rule.time_condition = $('automationTimeEnabled').checked ? {boundary:$('automationTimeBoundary').value, time:$('automationClock').value || '18:00', after:$('automationTimeAfter').checked, offset_minutes:Number($('automationSolarOffset').value)} : null;
   const submit = event.target.querySelector('[type="submit"]'); submit.disabled = true;
   try {
     await api('/api/zigbee/automations' + (automationEditing ? '/' + automationEditing : ''), {method:automationEditing ? 'PUT' : 'POST', body:JSON.stringify(rule)});

@@ -171,6 +171,7 @@ body:has(#logsView.active) .top-actions { display:none; }
 .zb-details { border-top:1px solid var(--border); padding-top:12px; font-size:12px; }.zb-details summary { cursor:pointer; color:var(--muted); }.zb-details label { display:grid; gap:6px; margin:12px 0; }.zb-details input { width:100%; box-sizing:border-box; }
 .zb-card button:disabled,.zb-card input:disabled,.zb-card select:disabled { opacity:.45; cursor:not-allowed; }
 .nav-item { text-decoration: none; }
+#homeServerLink { color:inherit; text-decoration:none; } #homeServerLink[href]:hover { color:var(--accent); } #homeServerLink[href]::after { content:' ↗'; font-size:.55em; color:var(--muted); vertical-align:middle; }
 .connector-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); gap:14px; padding:0 20px 20px; }
 .connection-card { display:flex; flex-direction:column; justify-content:space-between; gap:20px; padding:20px; border:1px solid var(--border); border-radius:10px; background:var(--panel); }
 .connection-card h3 { margin:0; font-size:15px; }.connection-card p { color:var(--muted); font-size:12px; }.connection-card small { color:var(--accent); }

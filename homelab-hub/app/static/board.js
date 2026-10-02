@@ -65,6 +65,10 @@ function renderBoard() {
   const pinned = services.filter(service => favorites.includes(service.key));
   const visibleHome = (homeQuery ? services.filter(service => match(service, homeQuery)) : pinned.length ? pinned : services).slice(0, 8);
   $('homeServerTitle').textContent = s.name || 'Your homelab';
+  const serverUrl = boardLink(s.webui_url || '');
+  const serverLink = $('homeServerLink');
+  if (serverUrl) { serverLink.href = serverUrl; serverLink.title = 'Open Unraid WebUI'; }
+  else { serverLink.removeAttribute('href'); serverLink.removeAttribute('title'); }
   $('favoriteTitle').textContent = homeQuery ? 'Search results' : pinned.length ? 'Favorites' : 'Your services';
   $('boardStatus').textContent = discovery.error || (!discovery.updated_at && discovery.loading ? 'Discovering Docker services… Host readings load independently.' : `${services.length} services · ${s.cpus || metrics.cpu?.cores?.length || '—'} logical cores · ${bytes(s.memory_total || metrics.memory?.total)} memory${discovery.updated_at ? ` · discovered ${new Date(discovery.updated_at).toLocaleTimeString()}` : ''}`);
   $('boardStatus').classList.toggle('attention', Boolean(discovery.error));

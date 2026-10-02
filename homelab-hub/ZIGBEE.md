@@ -123,6 +123,14 @@ occupancy rules share the target, it stays on until all occupied sensors are cle
 Holds persist across restarts and wait for a fresh false report. Disabling or
 deleting a held rule releases the hold and schedules switch-off after its delay.
 
+An optional **Only activate when a time condition matches** checkbox filters new
+sensor/button activations to before/after a clock time, sunrise or sunset. Configure
+the timezone and editable solar coordinates in Settings; the Hub calculates solar
+times locally. Solar offsets are in minutes. The after/before test uses today's
+boundary in the saved timezone and resets at midnight. No solar event for the day
+means no activation for that condition. OFF timers and occupancy false reports are
+processed even when the time condition is false or unavailable.
+
 Only fresh, non-retained reports activate rules. Pending OFF deadlines survive Hub
 restarts and retry after connection failures. Disabling/deleting a rule prevents
 new triggers but preserves scheduled OFF; manual changes do not cancel a timer.

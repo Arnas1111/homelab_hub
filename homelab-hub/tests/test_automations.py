@@ -11,6 +11,8 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from app.modules.zigbee.automation import Automations, Rule, automation_router
+from app.modules.zigbee.time_conditions import TimeCondition, TimeSettings
+from datetime import datetime, timezone
 from app.modules.zigbee.connector import ZigbeeModule
 from test_zigbee import light
 
@@ -232,6 +234,54 @@ class AutomationTests(unittest.TestCase):
         for changes in ({'equals':False}, {'property':'action', 'equals':'single'}, {'property':'battery', 'equals':90}):
             with self.assertRaises(HTTPException):
                 self.engine.save_rule(self.rule.model_copy(update={**changes, 'while_occupied':True}), self.id)
+
+    def test_time_filters_activation_but_never_occupancy_cleanup(self):
+        self.engine.time.save(TimeSettings(timezone='UTC'))
+        self.engine.save_rule(self.rule.model_copy(update={'while_occupied':True, 'time_condition':TimeCondition(time='18:00', after=False)}), self.id)
+        self.now = datetime(2026, 10, 2, 17, 59, tzinfo=timezone.utc).timestamp()
+        self.engine.process(self.sensor, {'occupancy':True})
+        self.assertTrue(self.engine.holds)
+        self.now += 61
+        self.engine.process(self.sensor, {'occupancy':False})
+        self.assertFalse(self.engine.holds)
+        self.engine.process(self.sensor, {'occupancy':True})
+        self.assertEqual(self.module.act.call_count, 1)
+        self.now += 5
+        self.engine.tick()
+        self.assertFalse(self.module.act.call_args.args[1].value)
+
+    def test_unavailable_solar_before_condition_does_not_activate(self):
+        self.engine.time.save(TimeSettings(timezone='UTC', solar_enabled=True, latitude=52, longitude=13))
+        self.engine.save_rule(self.rule.model_copy(update={'time_condition':TimeCondition(boundary='sunset', after=False)}), self.id)
+        self.engine.time.save(TimeSettings(timezone='UTC', solar_enabled=False))
+        self.engine.process(self.sensor, {'occupancy':True})
+        self.module.act.assert_not_called()
+        self.assertIn('unavailable', self.engine.snapshot()['rules'][0]['status'])
+
+    def test_time_settings_endpoints_require_auth_and_persist(self):
+        def auth(request: Request):
+            if request.headers.get('x-test-auth') != 'yes': raise HTTPException(401)
+        app = FastAPI()
+        app.include_router(automation_router(self.engine, auth))
+        with TestClient(app) as client:
+            path = '/api/zigbee/automations/time-settings'
+            self.assertEqual(client.get(path).status_code, 401)
+            self.assertEqual(client.put(path, json={}).status_code, 401)
+            self.assertEqual(client.post(path+'/refresh').status_code, 401)
+            client.headers['x-test-auth'] = 'yes'
+            self.assertEqual(client.put(path, json={'timezone':'bad'}).status_code, 422)
+            result = client.put(path, json={'timezone':'Europe/Berlin', 'solar_enabled':True, 'latitude':52.52, 'longitude':13.405})
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(client.get(path).json()['latitude'], 52.52)
+            self.assertIsNotNone(client.post(path+'/refresh').json()['sunset'])
+
+    def test_time_rule_requires_saved_timezone_and_solar_setup(self):
+        with self.assertRaises(HTTPException):
+            self.engine.save_rule(self.rule.model_copy(update={'time_condition':TimeCondition()}), self.id)
+        self.engine.time.save(TimeSettings(timezone='Europe/Berlin'))
+        self.engine.save_rule(self.rule.model_copy(update={'time_condition':TimeCondition()}), self.id)
+        with self.assertRaises(HTTPException):
+            self.engine.save_rule(self.rule.model_copy(update={'time_condition':TimeCondition(boundary='sunset')}), self.id)
 
 
 if __name__ == '__main__': unittest.main()

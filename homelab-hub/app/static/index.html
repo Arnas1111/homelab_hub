@@ -43,7 +43,7 @@
     </header>
 
     <section id="homeView" class="view active">
-      <div class="home-heading"><div><span class="eyebrow">YOUR HOMELAB</span><h2 id="homeServerTitle">{{ server_name }}</h2><p>Everything in its place. Open a service or see what needs attention.</p></div><label class="board-search"><span class="sr-only">Search services</span><input id="homeSearch" class="search" placeholder="Search your services..." autocomplete="off"><kbd>Ctrl K</kbd></label></div>
+      <div class="home-heading"><div><span class="eyebrow">YOUR HOMELAB</span><h2><a id="homeServerLink" target="_blank" rel="noreferrer"><span id="homeServerTitle">{{ server_name }}</span></a></h2><p>Everything in its place. Open a service or see what needs attention.</p></div><label class="board-search"><span class="sr-only">Search services</span><input id="homeSearch" class="search" placeholder="Search your services..." autocomplete="off"><kbd>Ctrl K</kbd></label></div>
       <p id="boardStatus" class="discovery-status" role="status">Discovering your Docker environment...</p>
       <div id="homePulse" class="home-pulse" aria-label="Host summary"><div class="pulse-placeholder">Host readings are loading independently.</div></div>
       <div class="home-columns"><div><div class="board-section-heading"><div><span class="eyebrow">QUICK ACCESS</span><h2 id="favoriteTitle">Your services</h2></div><button class="btn subtle" data-open-view="services">View all services &rarr;</button></div><div id="homeServices"><div class="board-empty">Discovering services from Docker. Your page is ready while discovery runs.</div></div></div>
@@ -148,6 +148,15 @@
           <label>When this device reports<select id="automationSource" required></select></label>
           <div class="automation-pair"><label>Property<select id="automationProperty" required></select></label><label id="automationEqualsLabel">Equals<span id="automationValueHost"></span></label></div>
           <label id="automationOccupancyLabel" class="check" hidden><input id="automationWhileOccupied" type="checkbox"> Keep the light on while occupied</label>
+          <label class="check"><input id="automationTimeEnabled" type="checkbox"> Only activate when a time condition matches</label>
+          <div id="automationTimeFields" hidden>
+            <label>Time boundary<select id="automationTimeBoundary"><option value="clock">Clock time</option><option value="sunset">Sunset</option><option value="sunrise">Sunrise</option></select></label>
+            <label id="automationClockLabel">Local time<input id="automationClock" type="time" value="18:00"></label>
+            <label id="automationSolarOffsetLabel" hidden>Offset from solar time (minutes)<input id="automationSolarOffset" type="number" min="-180" max="180" value="0"></label>
+            <label class="check"><input id="automationTimeAfter" type="checkbox" checked> After this time is true (uncheck for before)</label>
+            <p id="automationTimeContext" class="muted tiny"></p><button class="btn" type="button" data-open-view="settings">Timezone and solar location in Settings</button>
+            <p class="muted tiny">Uses today's boundary in your saved timezone; conditions reset at midnight. Existing switch-off timers still finish.</p>
+          </div>
           <label>Turn on<select id="automationTarget" required></select></label>
           <label><span id="automationSecondsLabel">Then turn off after (seconds)</span><input id="automationSeconds" type="number" min="1" max="86400" value="5" required></label>
           <label class="check"><input id="automationEnabled" type="checkbox" checked> Enabled</label>
@@ -232,6 +241,18 @@
           <label>Refresh interval (seconds)<input id="settingRefresh" type="number" min="1" max="60" required></label>
           <label class="check"><input id="settingConfirm" type="checkbox"><span>Confirm Docker actions before executing</span></label>
           <div><button class="btn primary" type="submit">Save settings</button> <span id="settingsSaved" class="tiny muted"></span></div>
+        </form>
+      </div>
+      <div class="panel settings-panel" id="automationTimeSettings">
+        <div class="panel-head"><h2>Automation time and solar location</h2></div>
+        <form id="automationTimeSettingsForm" class="settings-form">
+          <label>Timezone<input id="automationTimezone" maxlength="100" placeholder="Europe/Berlin" required><small class="muted">Use an IANA timezone such as Europe/Berlin. Daylight saving follows this timezone.</small></label>
+          <label class="check"><input id="solarEnabled" type="checkbox"> Enable sunrise and sunset conditions</label>
+          <label>Location label<input id="solarLocation" maxlength="100" placeholder="My home"></label>
+          <div class="automation-pair"><label>Latitude<input id="solarLatitude" type="number" min="-90" max="90" step="any"></label><label>Longitude<input id="solarLongitude" type="number" min="-180" max="180" step="any"></label></div>
+          <div class="automation-pair"><button id="solarUseLocation" class="btn" type="button">Use current location</button><button id="saveAutomationTime" class="btn primary" type="submit" disabled>Save time settings</button><button id="refreshSolarTimes" class="btn" type="button">Recalculate solar times</button></div>
+          <p class="muted tiny">Solar times are calculated locally from these coordinates. No internet service is required. You can change the location at any time.</p>
+          <p id="solarTimeStatus" role="status"></p><p id="automationTimeSettingsFeedback" role="status"></p>
         </form>
       </div>
       <div id="mqttSettings" class="panel settings-panel">

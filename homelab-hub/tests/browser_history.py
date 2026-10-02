@@ -15,6 +15,9 @@ database = dict(enabled=False, host='', port=5432, database='homelab', username=
                 sslmode='prefer', sample_seconds=30, retention_days=30, include_containers=True,
                 password_set=False, status={'last_saved': None, 'error': None, 'running': True})
 state = {'history_error': False}
+time_settings = dict(configured=True, timezone='Europe/Berlin', solar_enabled=True, location='Example city',
+                     latitude=52.52, longitude=13.405, sunrise='2026-10-02T07:10:00+02:00',
+                     sunset='2026-10-02T18:40:00+02:00', status='Calculated locally for today.')
 SERIES = {'cpu': [('cpu_percent', 'Host CPU', '%')], 'memory': [('memory_percent', 'Memory utilization', '%'), ('memory_used', 'Used memory', 'B')],
           'storage': [('storage_percent', 'Storage utilization', '%'), ('storage_free', 'Free space', 'B')],
           'network': [('rx_rate', 'Receive', 'B/s'), ('tx_rate', 'Transmit', 'B/s')],
@@ -68,6 +71,11 @@ def handler(route):
         data = {'connectors': []}
     elif path == '/api/account/access':
         data = {'login_required':True, 'password_configured':True}
+    elif path.startswith('/api/zigbee/automations/time-settings'):
+        if route.request.method == 'PUT':
+            time_settings.update(route.request.post_data_json)
+            time_settings['configured'] = True
+        data = time_settings
     elif path.startswith('/api/'):
         data = {}
     elif path in ('/', '/home', '/services', '/containers', '/metrics', '/integrations', '/zigbee', '/automations', '/logs', '/settings', '/connectors', '/database', '/history'):
