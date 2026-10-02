@@ -34,6 +34,8 @@ def handler(route):
         route.fulfill(json={'data': {'configured': True, 'info': {'cpu': {'brand': 'Test processor'}, 'os': {'distro': 'Unraid', 'release': '7'}},
                                     'array': {'state': 'STARTED', 'capacity_bytes': {'free': 2400000000000},
                                               'disks': [{'name': 'disk1', 'status': 'DISK_OK', 'temp': 34}]}}})
+    elif url.path == '/api/integration-settings':
+        route.fulfill(json={'connectors':['unraid'], 'unraid_url':'http://unraid.test', 'unraid_api_key_configured':True})
     elif url.path.startswith('/icons/'):
         route.fulfill(content_type='image/svg+xml', body='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" fill="#9ac4ff"/></svg>')
     else:

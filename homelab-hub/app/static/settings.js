@@ -13,6 +13,7 @@ function showMqttStatus(status) {
   $('mqttStatus').textContent = mqttMessages[status?.status] || 'Connection status unavailable.';
 }
 async function loadHubSettings() {
+  loadAccessSettings();
   try {
     const config = await api('/api/zigbee/settings');
     $('mqttEnabled').checked = config.enabled;
@@ -80,3 +81,27 @@ $('passwordForm').addEventListener('submit', async event => {
     location.href = '/login';
   } catch (error) { $('passwordStatus').textContent = error.message; }
 });
+
+function renderAccessSetting(config) {
+  $('loginRequired').checked = config.login_required;
+  $('signOutForm').hidden = !config.login_required;
+  $('accessStatus').textContent = config.login_required ? 'Password login is on.' : 'Password login is off.';
+}
+async function loadAccessSettings() {
+  $('accessSave').disabled = true;
+  try {
+    renderAccessSetting(await api('/api/account/access'));
+    $('accessSave').disabled = false;
+  } catch (error) { $('accessStatus').textContent = error.message; }
+}
+$('accessForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  $('accessSave').disabled = true;
+  try {
+    const config = await api('/api/account/access', {method:'PUT', body:JSON.stringify({login_required:$('loginRequired').checked})});
+    renderAccessSetting(config);
+    if (config.login_required) location.href = '/login?next=%2Fsettings';
+  } catch (error) { $('accessStatus').textContent = error.message; }
+  finally { $('accessSave').disabled = false; }
+});
+loadAccessSettings();

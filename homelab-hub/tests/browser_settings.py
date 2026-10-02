@@ -8,11 +8,18 @@ from browser_dashboard import handler as dashboard_handler
 config = dict(enabled=False, host='', port=1883, username='', password_set=False,
               tls=False, base_topic='zigbee2mqtt', status={'status':'disabled'})
 commands = []
+access = {'login_required':True, 'password_configured':True}
 png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=')
 
 
 def handler(route):
     path = urlparse(route.request.url).path
+    if path == '/api/account/access':
+        if route.request.method == 'PUT':
+            access.update(route.request.post_data_json)
+        return route.fulfill(json=access)
+    if path == '/login':
+        return route.fulfill(content_type='text/html', body='Password login')
     if path == '/api/zigbee/settings':
         if route.request.method == 'PUT':
             body = route.request.post_data_json
@@ -71,11 +78,21 @@ def main():
             expect(target).to_have_attribute('src' if kind == 'logo' else 'href', f'/branding/{kind}?v=test-image')
             page.locator(f'[data-brand-reset="{kind}"]').click()
             expect(page.locator('#brandingStatus')).to_have_text('Default image restored.')
-        page.get_by_role('button', name='Service connections', exact=True).click()
-        expect(page.locator('#connectorsView')).to_be_visible()
+        page.locator('#loginRequired').uncheck()
+        page.get_by_role('button', name='Save login setting', exact=True).click()
+        expect(page.locator('#accessStatus')).to_have_text('Password login is off.')
+        expect(page.locator('#signOutForm')).to_be_hidden()
+        page.reload()
+        expect(page.locator('#loginRequired')).not_to_be_checked()
+        page.get_by_role('button', name='Integrations', exact=True).click()
+        expect(page.locator('#connectorCards')).to_be_visible()
         page.locator('[data-view="settings"]').click()
         page.set_viewport_size({'width':390,'height':844})
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Settings overflow on mobile'
+        page.locator('#loginRequired').check()
+        page.get_by_role('button', name='Save login setting', exact=True).click()
+        expect(page).to_have_url('http://hub.test/login?next=%2Fsettings')
+        assert access['login_required'] is True
         assert not errors, errors
         browser.close()
         print('Settings UI: MQTT save/preserve/clear, reconnect, logo/favicon upload/reset, navigation and mobile passed.')

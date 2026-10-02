@@ -501,17 +501,23 @@ function renderHomeAssistantCard(home = {}) {
 function renderIntegrations() {
   const target = $('integrationsPanelBody');
   if (!target) return;
+  const selected = (integrationSettings?.connectors || []).filter(key => integrationSettings[key + '_enabled'] !== false);
+  if (!selected.some(key => ['jellyfin', 'home_assistant'].includes(key))) {
+    target.innerHTML = '';
+    return;
+  }
   if (!integrationData) {
     target.innerHTML = '<div class="empty">Waiting for integrations…</div>';
     return;
   }
   patchContent(target, [
-    renderJellyfinCard(integrationData.jellyfin),
-    renderHomeAssistantCard(integrationData.home_assistant),
+    selected.includes('jellyfin') ? renderJellyfinCard(integrationData.jellyfin) : '',
+    selected.includes('home_assistant') ? renderHomeAssistantCard(integrationData.home_assistant) : '',
   ].join(''));
 }
 
 async function loadIntegrations({ force = false } = {}) {
+  if (!(integrationSettings?.connectors || []).some(key => ['jellyfin', 'home_assistant'].includes(key) && integrationSettings[key + '_enabled'] !== false)) { renderIntegrations(); return; }
   if (!isSectionOpen('integrations') || integrationLoading || integrationControlsActive()) return;
   integrationLoading = true;
   if (force || !integrationData) renderIntegrations();
@@ -618,44 +624,9 @@ function fillIntegrationSettingsForm(data) {
   $('homeAssistantEntities').value = integrationSettings.home_assistant_entities || '';
 }
 
-async function loadIntegrationSettings() {
-  try {
-    fillIntegrationSettingsForm(await api('/api/integration-settings'));
-  } catch (e) { toast(e.message); }
-}
-
 async function saveIntegrationSettings(event) {
   event.preventDefault();
-  try {
-    const saved = await api('/api/integration-settings', {
-      method: 'PUT',
-      body: JSON.stringify({
-        unraid_url: $('unraidUrl').value,
-        unraid_api_key: $('unraidApiKey').value,
-        unraid_api_key_clear: $('unraidApiKeyClear').checked,
-        jellyfin_url: $('jellyfinUrl').value,
-        jellyfin_public_url: $('jellyfinPublicUrl').value,
-        jellyfin_api_key: $('jellyfinApiKey').value,
-        jellyfin_api_key_clear: $('jellyfinApiKeyClear').checked,
-        nextcloud_url: $('nextcloudUrl').value,
-        nextcloud_username: $('nextcloudUsername').value,
-        nextcloud_app_password: $('nextcloudAppPassword').value,
-        nextcloud_app_password_clear: $('nextcloudAppPasswordClear').checked,
-        nextcloud_calendar_name: $('nextcloudCalendarName').value,
-        nextcloud_calendar_url: $('nextcloudCalendarUrl').value,
-        home_assistant_url: $('homeAssistantUrl').value,
-        home_assistant_token: $('homeAssistantToken').value,
-        home_assistant_token_clear: $('homeAssistantTokenClear').checked,
-        home_assistant_entities: $('homeAssistantEntities').value,
-      }),
-    });
-    fillIntegrationSettingsForm(saved);
-    integrationData = null;
-    if (typeof loadUnraid === 'function') loadUnraid();
-    if (isSectionOpen('integrations')) loadIntegrations({ force: true });
-    $('integrationSettingsSaved').textContent = 'Saved.';
-    setTimeout(() => $('integrationSettingsSaved').textContent = '', 1800);
-  } catch (e) { toast(e.message); }
+  await saveConnectorConfiguration();
 }
 
 function sectionSearchActive(section) {
@@ -1586,15 +1557,13 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
       containers:['Containers','Docker state, resources, ports, and logs'],
       integrations:['Integrations','Live service status and controls'],
       settings:['Settings','Configure this hub'],
-      connectors:['Connector setup','Configure service URLs and credentials'],
       database:['History storage','PostgreSQL connection and background collection'],
     };
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
-    if (btn.dataset.view === 'connectors') loadIntegrationSettings();
     if (btn.dataset.view === 'logs' && typeof loadAggregateLogs === 'function') loadAggregateLogs();
     if (btn.dataset.view === 'zigbee' && typeof loadZigbee === 'function') loadZigbee();
     if (btn.dataset.view === 'automations' && typeof loadAutomations === 'function') loadAutomations();
-    if (overviewView === 'integrations') loadIntegrations();
+    if (overviewView === 'integrations' && typeof loadConnectorWorkspace === 'function') loadConnectorWorkspace();
     applySectionState();
     refresh();
   });

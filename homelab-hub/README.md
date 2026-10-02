@@ -151,7 +151,9 @@ The Unraid template stores configured environment values in Unraid's Docker temp
 
 Live integration credentials are stored locally in Homelab Hub's SQLite database under appdata. Do not commit real values to this repository.
 
-Open **Settings -> Connectors** in Homelab Hub to configure Jellyfin, Nextcloud, and Home Assistant. Secret fields are not echoed back to the browser; leave them blank to keep the saved value or use the clear checkbox to remove them.
+Open **Integrations** and press **+ Add integration** to add Unraid, Jellyfin or Home Assistant. Only added connectors appear as cards, with configuration, enable/disable, reconnect and removal controls alongside their live readings. Saving a connector preserves the others; blank secret fields retain saved values. Disabling preserves configuration; removing clears that connector's settings. Existing connections carry over, and old `/connectors` bookmarks open Integrations.
+
+Under **Settings → Login and password**, uncheck **Require password login** and save to open the Hub without signing in. This persists in `/data/access.json`, keeps the administrator password and applies to dashboard and API access. Anyone who can reach the Hub can then use its controls. Turn login back on to require the saved password again; changing this setting invalidates existing sessions.
 
 ## Server metrics design
 
@@ -188,7 +190,7 @@ python -m unittest discover -s tests
 
 Every workspace section has a bookmarkable URL: `/home`, `/services`, `/containers`,
 `/metrics`, `/history`, `/integrations`, `/logs`, `/zigbee`, `/automations`, `/settings`,
-`/connectors`, and `/database`. `/` still opens Home. Reload and browser back/forward
+and `/database`. `/connectors` remains an alias for Integrations. `/` still opens Home. Reload and browser back/forward
 restore the selected section; signing in returns to the requested section.
 
 Open **Automations** (also linked from Settings) to configure a rule without Docker
@@ -198,6 +200,14 @@ its switch-off timer. The Hub executes rules without an open browser. Rules can 
 edited, disabled or deleted. Button devices with an exposed `action` enum support
 rules such as `action = single` using the same editor.
 
+For motion sensors, select `occupancy` and check **Keep the light on while occupied**.
+The Hub holds the light on while occupancy is true, then starts the configured
+switch-off countdown on the first fresh false report. Repeated false reports do
+not extend that countdown; a fresh true report cancels it. An occupied rule prevents
+other rules from switching off the same target. Holds and deadlines persist across
+restarts; a recovered hold waits for a fresh false report. Disabling, deleting or
+changing an occupied rule to another target schedules cleanup for its old target.
+
 Rules and pending switch-off deadlines persist in `/data/hub.db`. Retained MQTT
 messages are ignored for triggering; unrelated partial reports do not retrigger.
 After a Hub restart, overdue switch-offs are attempted when Zigbee is reachable.
@@ -205,7 +215,7 @@ Failed switch-offs retry every five seconds; failed activations are not replayed
 Disabling/deleting a rule does not cancel an existing switch-off. Rules sharing a
 target use the latest deadline. Manual control does not cancel that deadline.
 
-This first version supports sensor/button equality triggers and one timed on/off
-target per rule (1 second to 24 hours), with up to 100 rules. Timers run on the Hub,
+Automations support sensor/button equality triggers and occupancy holds, with one
+on/off target per rule (1 second to 24 hours), and up to 100 rules. Timers run on the Hub,
 so an outage may delay switch-off. Status reports command delivery, not guaranteed
 physical device state. Zigbee2MQTT and the MQTT broker must remain reachable.

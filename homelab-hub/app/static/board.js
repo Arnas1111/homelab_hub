@@ -79,7 +79,8 @@ function renderBoard() {
   $('attentionCount').textContent = attention.length;
   patchContent($('homeAttention'), discovery.error ? `<p class="attention">Docker discovery is unavailable. These readings may be stale.</p>` : !discovery.updated_at && !services.length ? '<p class="muted tiny">Waiting for Docker discovery.</p>' : attention.length ? attention.slice(0, 5).map(c => `<button class="attention-row" data-service-details="${escapeHtml(c.id)}"><span>${escapeHtml(c.name)}</span><small>${escapeHtml(c.health === 'unhealthy' ? 'Unhealthy' : c.status)}</small></button>`).join('') : '<div class="quiet-state"><span>✓</span><strong>No container alerts</strong><p>No unhealthy or restarting containers were reported. Stopped containers are not treated as incidents.</p></div>');
   const configured = currentData.connections || {};
-  patchContent($('homeConnections'), [['unraid','Unraid','Array & disks'],['jellyfin','Jellyfin','Media activity'],['home_assistant','Home Assistant','Home controls']].map(([key,label,description]) => `<button class="connection-row" data-open-view="${configured[key] ? 'integrations' : 'connectors'}"><span><strong>${label}</strong><small>${description}</small></span><span class="connection-state">${configured[key] ? 'Configured' : services.some(c => c.integration === key) ? 'Detected · set up' : 'Connect'} ↗</span></button>`).join(''));
+  const added = currentData.connector_types || Object.keys(configured).filter(key => configured[key]);
+  patchContent($('homeConnections'), [['unraid','Unraid','Array & disks'],['jellyfin','Jellyfin','Media activity'],['home_assistant','Home Assistant','Home controls']].filter(([key]) => added.includes(key)).map(([key,label,description]) => `<button class="connection-row" data-open-view="integrations"><span><strong>${label}</strong><small>${description}</small></span><span class="connection-state">${configured[key] ? 'Configured' : 'Setup incomplete'} ↗</span></button>`).join('') || '<p class="muted tiny">Add your first connection in Integrations.</p>');
   const query = $('serviceSearch').value.trim().toLowerCase();
   const filter = $('serviceFilter').value;
   const filtered = services.filter(c => match(c, query) && (filter === 'all' || filter === 'favorites' && favorites.includes(c.key) || filter === 'attention' && needsAttention(c) || filter === 'running' && c.status === 'running'));
@@ -88,6 +89,7 @@ function renderBoard() {
 }
 
 async function loadUnraid() {
+  if (!(integrationSettings?.connectors || []).includes('unraid') || integrationSettings.unraid_enabled === false) return;
   if (unraidLoading) return;
   unraidLoading = true;
   try {
@@ -102,7 +104,7 @@ async function loadUnraid() {
 
 document.addEventListener('click', async event => {
   const navigation = event.target.closest('[data-open-view]');
-  if (navigation) document.querySelector(`.nav-item[data-view="${navigation.dataset.openView}"]`)?.click();
+  if (navigation) document.querySelector(`.nav-item[data-view="${navigation.dataset.openView === 'connectors' ? 'integrations' : navigation.dataset.openView}"]`)?.click();
   const details = event.target.closest('[data-service-details]');
   if (details) openContainer(details.dataset.serviceDetails);
   const pin = event.target.closest('[data-pin]');

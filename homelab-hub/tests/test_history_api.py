@@ -1,5 +1,6 @@
 """Authenticated route checks using a disposable appdata directory."""
 import importlib
+from contextlib import closing
 import os
 from pathlib import Path
 from re import findall
@@ -91,6 +92,71 @@ class HistoryAPITests(unittest.TestCase):
         self.login()
         self.assertEqual(self.client.get('/api/v1/modules').status_code, 200)
         self.assertEqual(self.client.get('/api/v1/objects').status_code, 200)
+
+    def test_password_login_can_be_disabled_persisted_and_reenabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            identity = self.main.Identity(Path(directory))
+            identity.save('test administrator password')
+            with patch.object(self.main, 'identity', identity), patch.object(self.main, 'ADMIN_PASSWORD', ''):
+                self.assertEqual(self.client.put('/api/account/access', json={'login_required':False}).status_code, 401)
+                self.client.post('/login', data={'password':'test administrator password'}, follow_redirects=False)
+                old_token = self.client.cookies.get('hub_session')
+                self.assertEqual(self.client.put('/api/account/access', json={'login_required':False}).status_code, 200)
+                self.client.cookies.clear()
+                for path in ['/home', '/settings', '/api/settings', '/api/v1/objects']:
+                    self.assertEqual(self.client.get(path).status_code, 200, path)
+                self.assertEqual(self.client.get('/login', follow_redirects=False).headers['location'], '/')
+                reloaded = self.main.Identity(Path(directory))
+                self.assertFalse(reloaded.login_required())
+                self.assertTrue(reloaded.verify('test administrator password', ''))
+                self.assertEqual(self.client.put('/api/account/access', json={'login_required':True}).status_code, 200)
+                self.assertEqual(self.client.get('/api/settings').status_code, 401)
+                self.client.cookies.set('hub_session', old_token)
+                self.assertEqual(self.client.get('/api/settings').status_code, 401)
+                self.client.cookies.clear()
+                self.client.post('/login', data={'password':'test administrator password'}, follow_redirects=False)
+                self.assertEqual(self.client.get('/api/settings').status_code, 200)
+
+    def test_connector_edits_preserve_other_connections_and_saved_secrets(self):
+        self.assertEqual(self.client.delete('/api/connectors/unraid').status_code, 401)
+        self.login()
+        with closing(self.main.db()) as conn, conn:
+            original = [(row['key'], row['value']) for row in conn.execute('SELECT key,value FROM integration_settings')]
+            conn.execute('DELETE FROM integration_settings')
+        try:
+            path = '/api/integration-settings'
+            self.client.put(path, json={'unraid_url':'http://unraid.test', 'unraid_api_key':'PRIVATE_UNRAID'})
+            self.client.put(path, json={'jellyfin_url':'http://media.test', 'jellyfin_api_key':'PRIVATE_MEDIA'})
+            result = self.client.put(path, json={'home_assistant_url':'http://home.test', 'home_assistant_token':'PRIVATE_HOME'})
+            self.assertNotIn('PRIVATE', result.text)
+            self.assertEqual(result.json()['connectors'], ['unraid', 'jellyfin', 'home_assistant'])
+            self.client.put(path, json={'jellyfin_url':'http://new-media.test', 'jellyfin_api_key':''})
+            values = self.main.get_integration_values()
+            self.assertEqual(values['unraid_url'], 'http://unraid.test')
+            self.assertEqual(values['jellyfin_api_key'], 'PRIVATE_MEDIA')
+            self.assertEqual(values['home_assistant_token'], 'PRIVATE_HOME')
+            self.client.put(path, json={'home_assistant_enabled':False, 'unraid_enabled':False})
+            self.assertEqual(self.main.integration_config()['home_assistant_token'], '')
+            self.assertEqual(self.main.get_integration_values()['home_assistant_token'], 'PRIVATE_HOME')
+            self.assertFalse(self.main.public_integration_settings()['unraid_enabled'])
+            self.client.put(path, json={'home_assistant_enabled':True})
+            self.assertEqual(self.main.integration_config()['home_assistant_token'], 'PRIVATE_HOME')
+            for invalid in ('ftp://service.test', 'http://user:PRIVATE@service.test', 'http://[invalid'):
+                result = self.client.put(path, json={'unraid_url':invalid})
+                self.assertEqual(result.status_code, 422)
+                self.assertNotIn('PRIVATE', result.text)
+            self.assertEqual(self.client.post('/api/connectors/unraid/reconnect').status_code, 200)
+            result = self.client.delete('/api/connectors/unraid')
+            self.assertEqual(result.json()['connectors'], ['jellyfin', 'home_assistant'])
+            self.assertNotIn('PRIVATE', result.text)
+            self.assertEqual(self.main.get_integration_values()['unraid_api_key'], '')
+            self.assertTrue(self.main.public_integration_settings()['unraid_enabled'])
+            self.assertEqual(self.main.get_integration_values()['jellyfin_api_key'], 'PRIVATE_MEDIA')
+            self.assertEqual(self.client.delete('/api/connectors/unknown').status_code, 404)
+        finally:
+            with closing(self.main.db()) as conn, conn:
+                conn.execute('DELETE FROM integration_settings')
+                conn.executemany('INSERT INTO integration_settings(key,value) VALUES (?,?)', original)
 
     def test_log_filters_are_validated_and_collection_is_cached(self):
         self.login()

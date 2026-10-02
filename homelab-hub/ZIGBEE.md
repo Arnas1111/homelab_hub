@@ -115,6 +115,14 @@ property and matching value, then a light/switch and switch-off delay. For motio
 restart the timer. Button `action` values (single, double, etc.) are discovered from
 Zigbee2MQTT and selectable in the same editor.
 
+For occupancy-based lighting, select `occupancy` and check **Keep the light on
+while occupied**. The light stays on while occupancy is true. When occupancy
+becomes false, the Hub starts the configured switch-off countdown; repeated false
+reports leave that deadline alone. New occupancy cancels switch-off. If multiple
+occupancy rules share the target, it stays on until all occupied sensors are clear.
+Holds persist across restarts and wait for a fresh false report. Disabling or
+deleting a held rule releases the hold and schedules switch-off after its delay.
+
 Only fresh, non-retained reports activate rules. Pending OFF deadlines survive Hub
 restarts and retry after connection failures. Disabling/deleting a rule prevents
 new triggers but preserves scheduled OFF; manual changes do not cancel a timer.

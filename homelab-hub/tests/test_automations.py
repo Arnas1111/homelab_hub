@@ -136,5 +136,102 @@ class AutomationTests(unittest.TestCase):
             self.assertEqual(client.delete(path+'/'+rule_id).status_code, 200)
             self.assertEqual(len(client.get(path).json()['rules']), 1)
 
+    def test_occupancy_holds_until_false_and_reoccupancy_cancels_off(self):
+        self.engine.save_rule(self.rule.model_copy(update={'while_occupied':True}), self.id)
+        self.engine.process(self.sensor, {'occupancy':False})
+        self.module.act.assert_not_called()
+        self.engine.process(self.sensor, {'occupancy':True})
+        self.now += 60
+        self.engine.process(self.sensor, {'battery':90})
+        self.engine.tick()
+        self.assertEqual(self.module.act.call_count, 1)
+        self.assertIsNone(self.engine.snapshot()['rules'][0]['off_at'])
+        self.engine.process(self.sensor, {'occupancy':False})
+        first_due = self.engine.pending[self.target]['due']
+        self.now += 2
+        self.engine.process(self.sensor, {'occupancy':False})
+        self.assertEqual(self.engine.pending[self.target]['due'], first_due)
+        self.engine.process(self.sensor, {'occupancy':True})
+        self.now += 5
+        self.engine.tick()
+        self.assertTrue(self.module.act.call_args.args[1].value)
+        self.engine.process(self.sensor, {'occupancy':False})
+        self.now += 4
+        self.engine.tick()
+        self.assertTrue(self.module.act.call_args.args[1].value)
+        self.now += 1
+        self.engine.tick()
+        self.assertFalse(self.module.act.call_args.args[1].value)
+
+    def test_occupancy_hold_and_false_countdown_survive_restart(self):
+        self.engine.save_rule(self.rule.model_copy(update={'while_occupied':True}), self.id)
+        self.engine.process(self.sensor, {'occupancy':True})
+        self.now += 30
+        recovered = Automations(self.prefs, self.module, clock=lambda:self.now)
+        recovered.start()
+        try:
+            recovered.tick()
+            self.assertTrue(recovered.holds)
+            recovered.process(self.sensor, {'occupancy':False})
+        finally:
+            recovered.stop()
+        self.now += 5
+        done = threading.Event()
+        self.module.act.side_effect = lambda target, request: done.set() if request.value is False else None
+        restarted = Automations(self.prefs, self.module, clock=lambda:self.now)
+        restarted.start()
+        try:
+            self.assertTrue(done.wait(2))
+        finally:
+            restarted.stop()
+
+    def test_shared_target_does_not_turn_off_while_any_sensor_is_occupied(self):
+        self.engine.save_rule(self.rule.model_copy(update={'while_occupied':True}), self.id)
+        self.engine.save_rule(self.rule.model_copy(update={'property':'action', 'equals':'single', 'seconds':20}))
+        self.engine.process(self.sensor, {'occupancy':True})
+        self.engine.process(self.sensor, {'action':'single'})
+        self.now += 25
+        self.engine.tick()
+        self.assertTrue(self.module.act.call_args.args[1].value)
+        self.engine.process(self.sensor, {'occupancy':False})
+        self.now += 5
+        self.engine.tick()
+        self.assertFalse(self.module.act.call_args.args[1].value)
+
+    def test_disabling_or_deleting_held_rule_schedules_cleanup(self):
+        for delete in (False, True):
+            self.engine.save_rule(self.rule.model_copy(update={'while_occupied':True}), self.id)
+            self.engine.process(self.sensor, {'occupancy':True})
+            if delete:
+                self.engine.delete(self.id)
+            else:
+                self.engine.save_rule(self.rule.model_copy(update={'enabled':False, 'while_occupied':True}), self.id)
+            self.assertFalse(self.engine.holds)
+            self.now += 5
+            self.engine.tick()
+            self.assertFalse(self.module.act.call_args.args[1].value)
+
+    def test_two_occupancy_sensors_hold_until_both_are_clear(self):
+        objects = self.module.objects()
+        second_sensor = next(obj for obj in objects if obj.id == self.sensor).model_copy(update={'id':'zigbee.second-sensor'})
+        self.module.objects = Mock(return_value=objects + [second_sensor])
+        self.engine.save_rule(self.rule.model_copy(update={'while_occupied':True}), self.id)
+        self.engine.save_rule(self.rule.model_copy(update={'source':second_sensor.id, 'while_occupied':True}))
+        self.engine.process(self.sensor, {'occupancy':True})
+        self.engine.process(second_sensor.id, {'occupancy':True})
+        self.engine.process(self.sensor, {'occupancy':False})
+        self.now += 10
+        self.engine.tick()
+        self.assertTrue(self.module.act.call_args.args[1].value)
+        self.engine.process(second_sensor.id, {'occupancy':False})
+        self.now += 5
+        self.engine.tick()
+        self.assertFalse(self.module.act.call_args.args[1].value)
+
+    def test_occupancy_mode_rejects_nonoccupancy_and_false_triggers(self):
+        for changes in ({'equals':False}, {'property':'action', 'equals':'single'}, {'property':'battery', 'equals':90}):
+            with self.assertRaises(HTTPException):
+                self.engine.save_rule(self.rule.model_copy(update={**changes, 'while_occupied':True}), self.id)
+
 
 if __name__ == '__main__': unittest.main()

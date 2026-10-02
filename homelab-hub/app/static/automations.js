@@ -17,6 +17,18 @@ function automationValue(value) {
   if (cap?.type === 'number') { input.type = 'number'; input.step = 'any'; input.value = value ?? 0; }
   else input.innerHTML = automationOptions((cap?.type === 'boolean' ? ['true', 'false'] : cap?.options || []).map(v => [v, v]), String(value ?? 'true'));
   host.append(input);
+  automationOccupancyMode();
+}
+function automationOccupancyMode() {
+  const object = automationObjects.find(o => o.id === $('automationSource').value);
+  const eligible = $('automationProperty').value === 'occupancy' && object?.capabilities.occupancy?.type === 'boolean';
+  $('automationOccupancyLabel').hidden = !eligible;
+  if (!eligible) $('automationWhileOccupied').checked = false;
+  const hold = eligible && $('automationWhileOccupied').checked;
+  $('automationEqualsLabel').hidden = hold;
+  if (hold) $('automationValue').value = 'true';
+  $('automationSecondsLabel').textContent = hold ? 'Turn off after occupancy becomes false (seconds)' : 'Then turn off after (seconds)';
+  $('automationModeHelp').textContent = hold ? 'The light stays on while occupancy is true. The countdown starts when occupancy becomes false; new occupancy cancels it. Timers run on the Hub.' : 'Repeated matching reports extend the countdown. Button actions work when exposed by Zigbee2MQTT. Timers run on the Hub.';
 }
 function automationDevices() {
   const source = $('automationSource').value, target = $('automationTarget').value;
@@ -45,7 +57,7 @@ function automationRender() {
     }
     const name = id => automationObjects.find(o => o.id === id)?.name || id;
     card.querySelector('h3').textContent = rule.name + (rule.enabled ? '' : ' · Disabled');
-    card.querySelector('.automation-summary').textContent = `${name(rule.source)}: ${rule.property} = ${rule.equals} → ${name(rule.target)} on → ${rule.seconds}s → off`;
+    card.querySelector('.automation-summary').textContent = rule.while_occupied ? `${name(rule.source)}: occupied → ${name(rule.target)} stays on; unoccupied → off after ${rule.seconds}s` : `${name(rule.source)}: ${rule.property} = ${rule.equals} → ${name(rule.target)} on → ${rule.seconds}s → off`;
     card.querySelector('.automation-state').textContent = rule.status + (rule.off_at ? ` · Off due ${new Date(rule.off_at * 1000).toLocaleTimeString()}` : '');
   }
 }
@@ -60,6 +72,8 @@ function automationEdit(id) {
     $(field).value = value;
   }
   automationProperties(rule.property, rule.equals);
+  $('automationWhileOccupied').checked = Boolean(rule.while_occupied);
+  automationOccupancyMode();
   $('automationSeconds').value = rule.seconds; $('automationEnabled').checked = rule.enabled;
   $('automationName').focus();
 }
@@ -82,6 +96,7 @@ async function loadAutomations() {
 }
 $('automationSource').onchange = () => automationProperties();
 $('automationProperty').onchange = () => automationValue();
+$('automationWhileOccupied').onchange = automationOccupancyMode;
 $('automationCancel').onclick = automationReset;
 $('automationRefresh').onclick = async () => { await loadAutomations(); if (!automationEditing) automationDevices(); };
 $('automationForm').onsubmit = async event => {
@@ -91,7 +106,7 @@ $('automationForm').onsubmit = async event => {
   if (cap?.type === 'boolean') value = value === 'true';
   if (cap?.type === 'number') value = Number(value);
   const rule = {name:$('automationName').value.trim(), enabled:$('automationEnabled').checked, source:$('automationSource').value,
-    property:$('automationProperty').value, equals:value, target:$('automationTarget').value, seconds:Number($('automationSeconds').value)};
+    property:$('automationProperty').value, equals:value, target:$('automationTarget').value, seconds:Number($('automationSeconds').value), while_occupied:$('automationWhileOccupied').checked};
   const submit = event.target.querySelector('[type="submit"]'); submit.disabled = true;
   try {
     await api('/api/zigbee/automations' + (automationEditing ? '/' + automationEditing : ''), {method:automationEditing ? 'PUT' : 'POST', body:JSON.stringify(rule)});

@@ -37,7 +37,7 @@ class BackendTests(unittest.TestCase):
         ha = Mock(return_value={"entities": [{"entity_id": "light.test"}]})
         funcs = load_functions(
             "integrations", require_auth=Mock(),
-            integration_config=lambda: {"jellyfin_url": "", "jellyfin_api_key": "", "home_assistant_url": ""},
+            integration_config=lambda: {"jellyfin_enabled":True, "jellyfin_url": "", "jellyfin_api_key": "", "home_assistant_url": ""},
             docker_client=Mock(side_effect=RuntimeError("offline")), home_assistant_state=ha,
         )
         result = funcs["integrations"](object())
@@ -49,7 +49,7 @@ class BackendTests(unittest.TestCase):
         docker = Mock(side_effect=AssertionError("Docker should not be needed"))
         funcs = load_functions(
             "integrations", require_auth=Mock(), docker_client=docker,
-            integration_config=lambda: {"jellyfin_url": "http://example.invalid", "home_assistant_url": ""},
+            integration_config=lambda: {"jellyfin_enabled":True, "jellyfin_url": "http://example.invalid", "home_assistant_url": ""},
             jellyfin_sessions=Mock(return_value={"active": []}),
             home_assistant_state=Mock(side_effect=ValueError("invalid response")),
         )

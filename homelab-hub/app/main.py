@@ -12,6 +12,7 @@ import time
 import xml.etree.ElementTree as ET
 from base64 import b64encode
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
@@ -41,6 +42,7 @@ from app.core.preferences import Preferences
 from app.core.identity import Identity
 from app.core.branding import branding_router
 from app.core.pages import PAGES, safe_page
+from app.core.connectors import CONNECTOR_FIELDS, configured_connectors
 from app.modules.zigbee.automation import Automations, automation_router
 
 APP_DIR = Path(__file__).resolve().parent
@@ -136,6 +138,9 @@ class WebuiLinksPayload(BaseModel):
 
 
 class IntegrationSettingsPayload(BaseModel):
+    unraid_enabled: bool = True
+    jellyfin_enabled: bool = True
+    home_assistant_enabled: bool = True
     unraid_url: str = Field(default="", max_length=500)
     unraid_api_key: str = Field(default="", max_length=5000)
     unraid_api_key_clear: bool = False
@@ -436,6 +441,8 @@ def docker_client():
 
 
 def is_authenticated(request: Request) -> bool:
+    if not identity.login_required():
+        return True
     if not identity.configured(ADMIN_PASSWORD):
         return False
     token = request.cookies.get("hub_session")
@@ -819,7 +826,7 @@ def env_value(name: str, default: str = "") -> str:
 
 
 def get_integration_values() -> dict[str, str]:
-    with db() as conn:
+    with closing(db()) as conn:
         rows = conn.execute("SELECT key, value FROM integration_settings").fetchall()
     stored = {row["key"]: row["value"] for row in rows}
     return {
@@ -831,6 +838,8 @@ def get_integration_values() -> dict[str, str]:
 def public_integration_settings() -> dict:
     values = get_integration_values()
     return {
+        'connectors': configured_connectors(values),
+        **{name + '_enabled': connector_enabled(name) for name in CONNECTOR_FIELDS},
         "unraid_url": values["unraid_url"],
         "unraid_api_key_configured": bool(values["unraid_api_key"]),
         "jellyfin_url": values["jellyfin_url"],
@@ -848,7 +857,18 @@ def public_integration_settings() -> dict:
 
 
 def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
+    for field in ('unraid_url', 'jellyfin_url', 'jellyfin_public_url', 'home_assistant_url'):
+        if field in payload.model_fields_set and getattr(payload, field).strip():
+            try:
+                url = urlparse(getattr(payload, field).strip())
+                valid = url.scheme in ('http', 'https') and bool(url.hostname) and not url.username and not url.password
+                url.port
+            except ValueError:
+                valid = False
+            if not valid:
+                raise HTTPException(422, 'Use an http(s) service URL without embedded credentials')
     values = {
+        **{name + '_enabled': 'true' if getattr(payload, name + '_enabled') else 'false' for name in CONNECTOR_FIELDS},
         "unraid_url": payload.unraid_url.strip().rstrip("/"),
         "jellyfin_url": normalize_service_url(payload.jellyfin_url),
         "jellyfin_public_url": payload.jellyfin_public_url.strip().rstrip("/"),
@@ -879,8 +899,10 @@ def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
     elif payload.home_assistant_token.strip():
         secrets_to_write["home_assistant_token"] = payload.home_assistant_token.strip()
 
-    with db() as conn:
+    with closing(db()) as conn, conn:
         for key, value in {**values, **secrets_to_write}.items():
+            if key not in payload.model_fields_set and key not in secrets_to_write:
+                continue
             conn.execute(
                 """
                 INSERT INTO integration_settings(key, value)
@@ -890,12 +912,26 @@ def save_integration_settings(payload: IntegrationSettingsPayload) -> dict:
                 (key, value),
             )
     unraid_cache.invalidate()
+    if not connector_enabled('home_assistant'):
+        PARTY_MODE_STOP.set()
     return public_integration_settings()
+
+
+def connector_enabled(connector):
+    with closing(db()) as conn:
+        row = conn.execute('SELECT value FROM integration_settings WHERE key=?', (connector + '_enabled',)).fetchone()
+    return row is None or row['value'] != 'false'
 
 
 def integration_config() -> dict:
     values = get_integration_values()
+    enabled = {name: connector_enabled(name) for name in CONNECTOR_FIELDS}
+    for name, fields in CONNECTOR_FIELDS.items():
+        if not enabled[name]:
+            for field in fields:
+                values[field] = ''
     return {
+        **{name + '_enabled': value for name, value in enabled.items()},
         "jellyfin_url": normalize_service_url(values["jellyfin_url"]),
         "jellyfin_public_url": values["jellyfin_public_url"].rstrip("/"),
         "jellyfin_api_key": values["jellyfin_api_key"],
@@ -1392,6 +1428,28 @@ class PasswordPayload(BaseModel):
     new_password: str = Field(min_length=12, max_length=1024, repr=False)
 
 
+class AccessPayload(BaseModel):
+    login_required: bool
+
+
+@app.get('/api/account/access')
+def access_get(request: Request):
+    require_auth(request)
+    return {'login_required': identity.login_required(), 'password_configured': identity.configured(ADMIN_PASSWORD)}
+
+
+@app.put('/api/account/access')
+def access_put(payload: AccessPayload, request: Request):
+    require_auth(request)
+    with identity.lock:
+        if payload.login_required and not identity.configured(ADMIN_PASSWORD):
+            raise HTTPException(400, 'Set an administrator password before enabling login.')
+        identity.set_login_required(payload.login_required)
+    response = JSONResponse({'login_required': payload.login_required, 'password_configured': identity.configured(ADMIN_PASSWORD)})
+    response.delete_cookie('hub_session')
+    return response
+
+
 @app.put('/api/account/password')
 def change_password(payload: PasswordPayload, request: Request):
     require_auth(request)
@@ -1429,7 +1487,7 @@ def load_resource_stats():
 inventory_cache = Snapshot(lambda: load_inventory(docker_client), ttl=10, error_message="Docker is unavailable. Showing the last discovery result.")
 resource_cache = Snapshot(load_resource_stats, ttl=10, error_message="Resource samples unavailable.")
 host_cache = Snapshot(lambda: host_metrics({}), ttl=5, error_message="Host readings unavailable.")
-unraid_cache = Snapshot(lambda: read_unraid(get_integration_values()), ttl=30, error_message="Unraid API unavailable.")
+unraid_cache = Snapshot(lambda: read_unraid(get_integration_values() if connector_enabled('unraid') else {}), ttl=30, error_message="Unraid API unavailable.")
 logs_cache = Snapshot(lambda: collect_logs(docker_client), ttl=15, error_message="Docker log collection unavailable. Showing the previous snapshot.")
 
 
@@ -1474,6 +1532,7 @@ def overview(request: Request, include_containers: bool = Query(True),
         row = conn.execute("SELECT value FROM settings WHERE key='board_favorites'").fetchone()
     payload["board"] = {"favorites": json.loads(row["value"]) if row else []}
     configured = get_integration_values()
+    payload['connector_types'] = configured_connectors(configured)
     payload["connections"] = {"jellyfin": bool(configured["jellyfin_api_key"]),
                               "home_assistant": bool(configured["home_assistant_url"] and configured["home_assistant_token"]),
                               "unraid": bool(configured["unraid_url"] and configured["unraid_api_key"])}
@@ -1508,9 +1567,9 @@ def integrations(request: Request):
     cfg = integration_config()
     client = None
     try:
-        if not cfg["jellyfin_url"]:
+        if cfg['jellyfin_enabled'] and not cfg["jellyfin_url"]:
             client = docker_client()
-        jellyfin = jellyfin_sessions(client, request, cfg)
+        jellyfin = jellyfin_sessions(client, request, cfg) if cfg['jellyfin_enabled'] else {'configured':False, 'active':[], 'message':'Jellyfin is disabled.'}
     except Exception:
         jellyfin = {"configured": bool(cfg["jellyfin_api_key"]), "active": [],
                     "error": "Jellyfin unavailable. Check its URL and Docker discovery."}
@@ -1754,6 +1813,32 @@ def integration_settings_get(request: Request):
 def integration_settings_put(payload: IntegrationSettingsPayload, request: Request):
     require_auth(request)
     return save_integration_settings(payload)
+
+
+@app.delete('/api/connectors/{connector}')
+def connector_delete(connector: str, request: Request):
+    require_auth(request)
+    fields = CONNECTOR_FIELDS.get(connector)
+    if fields is None:
+        raise HTTPException(404, 'Unknown connector')
+    with closing(db()) as conn, conn:
+        conn.execute('INSERT INTO integration_settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (connector + '_enabled', 'true'))
+        for field in fields:
+            conn.execute('INSERT INTO integration_settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (field, ''))
+    if connector == 'home_assistant':
+        PARTY_MODE_STOP.set()
+    unraid_cache.invalidate()
+    return public_integration_settings()
+
+
+@app.post('/api/connectors/{connector}/reconnect')
+def connector_reconnect(connector: str, request: Request):
+    require_auth(request)
+    if connector not in CONNECTOR_FIELDS:
+        raise HTTPException(404, 'Unknown connector')
+    if connector == 'unraid':
+        unraid_cache.invalidate()
+    return {'ok': True}
 
 
 Action = Literal["start", "stop", "restart", "pause", "unpause"]

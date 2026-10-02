@@ -77,20 +77,28 @@ def main():
         expect(page.locator('#automationSource')).to_have_value('zigbee.sensor')
         page.locator('#automationName').fill('Motion <hall>')
         page.locator('#automationSeconds').fill('5')
+        page.locator('#automationWhileOccupied').check()
+        expect(page.locator('#automationEqualsLabel')).to_be_hidden()
+        expect(page.locator('#automationSecondsLabel')).to_contain_text('occupancy becomes false')
         page.get_by_role('button', name='Save automation').click()
         expect(page.locator('.automation-card h3')).to_have_text('Motion <hall>')
         assert rules[0]['equals'] is True
         assert rules[0]['seconds'] == 5
+        assert rules[0]['while_occupied'] is True
+        expect(page.locator('.automation-summary')).to_contain_text('stays on')
         page.get_by_role('button', name='Edit', exact=True).click()
+        expect(page.locator('#automationWhileOccupied')).to_be_checked()
         page.locator('#automationName').fill('Unsaved draft')
         page.evaluate('loadAutomations()')
         expect(page.locator('#automationName')).to_have_value('Unsaved draft')
         page.locator('#automationProperty').select_option('action')
+        expect(page.locator('#automationOccupancyLabel')).to_be_hidden()
         page.locator('#automationValue').select_option('double')
         page.locator('#automationEnabled').uncheck()
         page.get_by_role('button', name='Save automation').click()
         expect(page.locator('.automation-card h3')).to_contain_text('Disabled')
         assert rules[0]['equals'] == 'double'
+        assert rules[0]['while_occupied'] is False
         page.set_viewport_size({'width':390, 'height':844})
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.on('dialog', lambda dialog:dialog.accept())

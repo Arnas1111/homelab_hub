@@ -25,11 +25,10 @@
       <a class="nav-item" data-view="automations" href="/automations"><span class="nav-symbol" aria-hidden="true">&#9889;</span> Automations</a>
       <a class="nav-item" data-view="settings" href="/settings"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16 M4 17h16 M8 4v6 M16 14v6"/></svg></span> Settings</a>
       <a class="nav-item" data-view="database" href="/database"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6c0-4 16-4 16 0v12c0 4-16 4-16 0z M4 6c0 4 16 4 16 0 M4 12c0 4 16 4 16 0"/></svg></span> History storage</a>
-      <a class="nav-item" data-view="connectors" href="/connectors"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h8v6a4 4 0 0 1-8 0z M10 4v4 M14 4v4 M12 18v3"/></svg></span> Connections</a>
     </nav>
     <div class="sidebar-bottom">
       <div class="server-pill"><span class="dot"></span><div><strong>{{ server_name }}</strong><small id="dockerVersion">Connecting…</small></div></div>
-      <form method="post" action="/logout"><button class="nav-item logout" type="submit">Sign out</button></form>
+      <form id="signOutForm" method="post" action="/logout"><button class="nav-item logout" type="submit">Sign out</button></form>
     </div>
   </aside>
 
@@ -84,7 +83,8 @@
             </button>
             <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="integrations" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="integrations" aria-label="Move section down">▿</button></span>
           </div>
-          <div class="connections-toolbar"><p>Live data and controls from connected services. Detected applications still need their own credentials.</p><button class="btn" data-open-view="connectors">Configure connections</button></div>
+          <div class="connections-toolbar"><p>Your connections, live data and controls.</p><button id="addConnector" class="btn primary" aria-label="Add integration">+ Add integration</button></div>
+          <div id="connectorCards" class="connector-cards" aria-live="polite"></div>
           <div id="unraidPanel" class="unraid-panel"><div class="empty">Open Integrations to load Unraid data.</div></div>
           <div id="integrationsPanelBody" class="integration-grid">
             <div class="empty">Waiting for integrations…</div>
@@ -146,11 +146,12 @@
           <h3 id="automationEditorTitle">New automation</h3>
           <label>Name<input id="automationName" required maxlength="80" placeholder="Hallway motion light"></label>
           <label>When this device reports<select id="automationSource" required></select></label>
-          <div class="automation-pair"><label>Property<select id="automationProperty" required></select></label><label>Equals<span id="automationValueHost"></span></label></div>
+          <div class="automation-pair"><label>Property<select id="automationProperty" required></select></label><label id="automationEqualsLabel">Equals<span id="automationValueHost"></span></label></div>
+          <label id="automationOccupancyLabel" class="check" hidden><input id="automationWhileOccupied" type="checkbox"> Keep the light on while occupied</label>
           <label>Turn on<select id="automationTarget" required></select></label>
-          <label>Then turn off after (seconds)<input id="automationSeconds" type="number" min="1" max="86400" value="5" required></label>
+          <label><span id="automationSecondsLabel">Then turn off after (seconds)</span><input id="automationSeconds" type="number" min="1" max="86400" value="5" required></label>
           <label class="check"><input id="automationEnabled" type="checkbox" checked> Enabled</label>
-          <p class="muted tiny">Repeated matching reports extend the countdown. Button actions such as single or double press work when exposed by Zigbee2MQTT. Timers run on the Hub, even with this page closed.</p>
+          <p id="automationModeHelp" class="muted tiny">Repeated matching reports extend the countdown. Timers run on the Hub, even with this page closed.</p>
           <div class="automation-pair"><button type="submit" class="btn primary">Save automation</button><button id="automationCancel" type="button" class="btn">New / clear</button></div>
           <p id="automationFeedback" role="status" aria-live="polite"></p>
         </form>
@@ -223,7 +224,7 @@
 
     <section id="settingsView" class="view">
       <p><a href="/automations" class="btn">Configure Zigbee automations</a></p>
-      <div class="settings-categories"><button class="btn" data-open-view="connectors">Service connections</button><button class="btn" data-open-view="database">History storage</button><a class="btn" href="#mqttSettings">Zigbee / MQTT</a><a class="btn" href="#appearanceSettings">Appearance</a></div>
+      <div class="settings-categories"><button class="btn" data-open-view="integrations">Integrations</button><button class="btn" data-open-view="database">History storage</button><a class="btn" href="#mqttSettings">Zigbee / MQTT</a><a class="btn" href="#appearanceSettings">Appearance</a></div>
       <div class="panel settings-panel">
           <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div><span class="version-label">Version <strong id="appVersion">{{ settings.version }}</strong></span></div>
         <form id="settingsForm" class="settings-form">
@@ -260,7 +261,13 @@
         </div>
       </div>
       <div class="panel settings-panel">
-        <div class="panel-head"><h2>Administrator password</h2></div>
+        <div class="panel-head"><h2>Login and password</h2></div>
+        <form id="accessForm" class="settings-form">
+          <label class="check"><input id="loginRequired" type="checkbox" checked> Require password login</label>
+          <p class="muted tiny">With login off, anyone who can reach this Hub can use its controls. Your saved password is kept for when you turn login back on.</p>
+          <button id="accessSave" class="btn" type="submit" disabled>Save login setting</button>
+          <p id="accessStatus" role="status"></p>
+        </form>
         <form id="passwordForm" class="settings-form">
           <label>Current password<input id="currentPassword" type="password" maxlength="1024" autocomplete="current-password" required></label>
           <label>New password<input id="newPassword" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label>
@@ -271,10 +278,10 @@
       </div>
     </section>
 
-    <section id="connectorsView" class="view">
-      <div class="settings-categories"><button class="btn" data-open-view="settings">Back to Settings</button></div>
+    <dialog id="connectorEditor" class="connector-dialog" aria-labelledby="connectorEditorTitle">
+      <div class="dialog-heading"><h2 id="connectorEditorTitle">Configure integration</h2><button class="btn" type="button" data-close-connector>Cancel</button></div>
       <div class="panel settings-panel">
-        <div class="panel-head"><div><h2>Connectors</h2><p class="muted">Stored locally in appdata</p></div></div>
+        <p class="muted tiny">Leave a saved secret blank to keep it.</p>
         <form id="integrationSettingsForm" class="connector-form">
           <article class="connector-card"><h3>Unraid</h3><p class="muted tiny">Array state, disk temperatures and host hardware via the Unraid GraphQL API. Docker discovery works without this connection.</p><label>Server URL<input id="unraidUrl" maxlength="500" placeholder="https://unraid.example.com"></label><label>API key<input id="unraidApiKey" type="password" maxlength="5000" autocomplete="new-password"></label><label class="check"><input id="unraidApiKeyClear" type="checkbox"><span>Clear API key</span></label><p class="muted tiny">Create a key with Info and Array read permissions under Unraid Settings &rarr; Management Access &rarr; API Keys.</p></article>
           <article class="connector-card">
@@ -300,10 +307,14 @@
             <label class="check"><input id="homeAssistantTokenClear" type="checkbox"><span>Clear token</span></label>
             <label>Entities<textarea id="homeAssistantEntities" maxlength="2000" rows="4" placeholder="light.wohnzimmer,sensor.temperature"></textarea></label>
           </article>
-          <div class="connector-actions"><button class="btn primary" type="submit">Save connectors</button> <span id="integrationSettingsSaved" class="tiny muted"></span></div>
+          <div class="connector-actions"><button id="saveConnector" class="btn primary" type="submit">Save connection</button> <span id="integrationSettingsSaved" class="tiny muted" role="status"></span></div>
         </form>
       </div>
-    </section>
+    </dialog>
+    <dialog id="connectorPicker" class="connector-dialog" aria-labelledby="connectorPickerTitle">
+      <div class="dialog-heading"><h2 id="connectorPickerTitle">Add integration</h2><button class="btn" type="button" data-close-picker>Cancel</button></div>
+      <div id="connectorOptions" class="connector-options"></div>
+    </dialog>
   </main>
 
   <div id="modal" class="modal hidden">
@@ -351,6 +362,7 @@
   <script src="/static/logs.js?v={{ asset_version }}"></script>
   <script src="/static/zigbee.js?v={{ asset_version }}"></script>
   <script src="/static/settings.js?v={{ asset_version }}"></script>
+  <script src="/static/connectors.js?v={{ asset_version }}"></script>
   <script src="/static/automations.js?v={{ asset_version }}"></script>
   <script src="/static/navigation.js?v={{ asset_version }}"></script>
 </body>

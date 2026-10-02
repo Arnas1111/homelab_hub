@@ -3,7 +3,8 @@ function restoreHubRoute() {
   window.hubRestoringRoute = true;
   try {
     if (location.hash.startsWith('#metrics/')) { openMetricPage(location.hash.split('/')[1]); return; }
-    const view = location.pathname.replace(/^\//, '') || 'home';
+    let view = location.pathname.replace(/^\//, '') || 'home';
+    if (view === 'connectors') { view = 'integrations'; history.replaceState(null, '', '/integrations'); }
     if (view === 'history') { openMetricPage('cpu'); return; }
     const button = [...document.querySelectorAll('.nav-item[data-view]')].find(node => node.dataset.view === view);
     if (!button) return;

@@ -64,6 +64,10 @@ def handler(route):
         data = {'icons': []}
     elif path == '/api/integrations':
         data = {'jellyfin': {'active': []}, 'home_assistant': {'entities': []}}
+    elif path == '/api/integration-settings':
+        data = {'connectors': []}
+    elif path == '/api/account/access':
+        data = {'login_required':True, 'password_configured':True}
     elif path.startswith('/api/'):
         data = {}
     elif path in ('/', '/home', '/services', '/containers', '/metrics', '/integrations', '/zigbee', '/automations', '/logs', '/settings', '/connectors', '/database', '/history'):

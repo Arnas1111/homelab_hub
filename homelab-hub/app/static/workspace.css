@@ -171,11 +171,22 @@ body:has(#logsView.active) .top-actions { display:none; }
 .zb-details { border-top:1px solid var(--border); padding-top:12px; font-size:12px; }.zb-details summary { cursor:pointer; color:var(--muted); }.zb-details label { display:grid; gap:6px; margin:12px 0; }.zb-details input { width:100%; box-sizing:border-box; }
 .zb-card button:disabled,.zb-card input:disabled,.zb-card select:disabled { opacity:.45; cursor:not-allowed; }
 .nav-item { text-decoration: none; }
+.connector-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); gap:14px; padding:0 20px 20px; }
+.connection-card { display:flex; flex-direction:column; justify-content:space-between; gap:20px; padding:20px; border:1px solid var(--border); border-radius:10px; background:var(--panel); }
+.connection-card h3 { margin:0; font-size:15px; }.connection-card p { color:var(--muted); font-size:12px; }.connection-card small { color:var(--accent); }
+.connection-card-actions { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.connector-dialog { width:min(540px,calc(100vw - 32px)); max-height:calc(100vh - 32px); box-sizing:border-box; padding:24px; border:1px solid var(--border); border-radius:14px; background:var(--panel); color:var(--text); }
+.connector-dialog::backdrop { background:rgba(0,0,0,.65); }
+.dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }.dialog-heading h2 { margin:0; font-size:20px; }
+.connector-dialog .connector-form { display:block; }.connector-dialog .connector-card { padding:0; border:0; }.connector-dialog .connector-card[hidden] { display:none; }.connector-dialog .settings-panel { padding:16px; }
+.connector-options { display:grid; gap:12px; }.connector-option { display:grid; gap:8px; text-align:left; padding:20px; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:10px; cursor:pointer; }.connector-option:hover { border-color:var(--accent); }.connector-option span { color:var(--muted); font-size:12px; }
+#unraidPanel[hidden],#signOutForm[hidden] { display:none; }
 .automation-layout { display:grid; grid-template-columns:minmax(280px, 400px) minmax(0, 1fr); gap:24px; align-items:start; }
 .automation-editor, .automation-card { padding:24px; margin-bottom:16px; }
 .automation-editor label { display:grid; gap:8px; margin:16px 0; }
 .automation-editor input:not([type=checkbox]), .automation-editor select { width:100%; padding:10px; border:1px solid #384452; border-radius:8px; background:#151c25; color:#e5edf5; }
 .automation-editor .check { display:flex; align-items:center; }
+.automation-editor [hidden] { display:none; }
 .automation-pair { display:flex; gap:12px; flex-wrap:wrap; }
 .automation-pair > label { flex:1; min-width:100px; }
 .automation-summary { line-height:1.8; overflow-wrap:anywhere; }
