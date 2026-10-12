@@ -68,6 +68,7 @@ def main():
         page.locator('[data-view="settings"]').click()
         expect(page.locator('#appearanceTheme')).to_have_value('paper')
         expect(page.locator('#automationTimezone')).to_have_value('Europe/Berlin')
+        page.wait_for_function('!automationTimeLoading')
         # Hold an older response while editing: a late load must preserve the draft.
         page.evaluate('''() => {
           window.savedSettingsApi = api;
