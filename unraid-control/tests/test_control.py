@@ -111,6 +111,7 @@ class ApiTests(unittest.TestCase):
             (httpx.Response(401), 'access denied'),
             (httpx.Response(200,text='<html>private-token</html>'), 'web page'),
             (httpx.Response(400,json={'errors':[{'message':'private-token'}]}), 'HTTP 400'),
+            (httpx.Response(400,json={'errors':[{'message':'GraphQL introspection is disabled, but the requested query contained __schema; private-token'}]}), 'schema discovery'),
             (httpx.Response(200,json={'errors':[{'message':'GraphQL introspection is not allowed; private-token'}]}), 'schema discovery'),
         ]
         for response, expected in cases:

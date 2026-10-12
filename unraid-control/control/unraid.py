@@ -42,6 +42,16 @@ class ApiError(Exception):
 logger = logging.getLogger('uvicorn.error')
 
 
+def schema_discovery_denied(document, data):
+    if '__schema' not in document or not isinstance(data, dict) or not isinstance(data.get('errors'), list):
+        return False
+    messages = ' '.join(str(e.get('message', '')) for e in data['errors'] if isinstance(e, dict)).lower()
+    return 'introspection' in messages or '__schema' in messages
+
+
+SCHEMA_GUIDANCE = 'API schema discovery is disabled or denied. In Unraid Settings → Management Access → Developer Options, enable GraphQL Sandbox, then Test & reconnect.'
+
+
 def base_type(reference):
     while reference.get('ofType'):
         reference = reference['ofType']
@@ -94,6 +104,13 @@ class Unraid:
                     raise ApiError('Unraid redirected the API request. Enter the final WebUI address, including the correct http/https scheme and port. Credentials were not forwarded.')
                 if response.status_code == 404:
                     raise ApiError('No GraphQL API was found at this address. Use the Unraid WebUI address, not this preview container address, and check that the Unraid API is enabled.')
+                if response.status_code == 400:
+                    try:
+                        error_data = response.json()
+                    except ValueError:
+                        error_data = None
+                    if schema_discovery_denied(document, error_data):
+                        raise ApiError(SCHEMA_GUIDANCE)
                 if response.status_code != 200:
                     raise ApiError(f'Unraid API returned HTTP {response.status_code}. Check the address and API service.')
                 try:
@@ -122,9 +139,8 @@ class Unraid:
         if data.get('errors'):
             # Classify known protocol failures without returning upstream text,
             # which can include credentials or private server diagnostics.
-            messages = ' '.join(str(e.get('message', '')) for e in data['errors'] if isinstance(e, dict)).lower()
-            if '__schema' in document and ('introspection' in messages or '__schema' in messages):
-                raise ApiError('API schema discovery is disabled or denied. In Unraid Settings → Management Access → Developer Options, enable GraphQL Sandbox, then Test & reconnect.')
+            if schema_discovery_denied(document, data):
+                raise ApiError(SCHEMA_GUIDANCE)
             raise ApiError('Unraid rejected this operation. Check API compatibility and permissions.')
         if not isinstance(data.get('data'), dict):
             raise ApiError('Unraid returned no usable data.')
