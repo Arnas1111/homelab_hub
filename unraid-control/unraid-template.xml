@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+  <Name>unraid-control-preview</Name>
+  <Repository>ghcr.io/arnas1111/unraid-control-center:preview</Repository>
+  <Registry>https://ghcr.io/arnas1111/unraid-control-center</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <Overview>Independent Unraid API control center preview. Full native WebUI parity is still in development. Connect through Settings after startup. Uses a separate data directory; no Docker socket, boot mount or host shell access.</Overview>
+  <Config Name="Web UI" Target="8080" Default="3334" Mode="tcp" Description="Preview interface port" Type="Port" Display="always" Required="true" Mask="false">3334</Config>
+  <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/unraid-control-preview" Mode="rw" Description="Independent settings, administrator identity, tiles and activity" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/unraid-control-preview</Config>
+</Container>

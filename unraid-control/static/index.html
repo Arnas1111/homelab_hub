@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unraid Control</title><link rel="stylesheet" href="/static/control.css"><script defer src="/static/control.js"></script></head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="/"><span class="brand-mark">U<span>+</span></span><div>Control<span>UNRAID WORKSPACE</span></div></a>
+    <p class="nav-label">SERVER</p><nav id="navigation" aria-label="Server sections"></nav>
+    <div class="sidebar-bottom"><span class="connection-dot"></span><div id="connectionLabel">Not connected</div><small>Independent interface · preview</small></div>
+  </aside>
+  <div class="workspace">
+    <header><button id="menuToggle" class="icon-button" aria-label="Toggle navigation">☰</button><span id="breadcrumb">Server / Overview</span><div class="header-actions"><button id="commandOpen" class="command-button">Jump to… <kbd>Ctrl K</kbd></button><a id="nativeLink" class="button" hidden target="_blank" rel="noreferrer">Unraid WebUI ↗</a><button id="logout" class="icon-button" aria-label="Sign out">↪</button></div></header>
+    <main><div class="page-heading"><div><p class="eyebrow" id="pageEyebrow">YOUR SERVER, IN FOCUS</p><h1 id="pageTitle">Overview</h1><p class="subheading" id="pageDescription">Storage, workloads, and the things that need your attention.</p></div><div class="page-actions"><span id="refreshLabel" class="muted">Waiting for readings</span><button id="refresh" class="button">↻ Refresh</button></div></div>
+      <div id="notice" class="notice" hidden role="status"></div>
+      <section id="content" aria-live="polite"></section>
+    </main>
+    <footer><span>Unraid Control · independent preview</span><span id="footerStatus">No server data loaded</span></footer>
+  </div>
+  <dialog id="accessDialog"><form id="accessForm"><span class="brand-mark">U+</span><h2 id="accessTitle">Welcome to Control</h2><p id="accessHelp">Create your local administrator password.</p><label>Password<input id="accessPassword" type="password" required minlength="8" maxlength="200" autocomplete="new-password"></label><p id="accessError" role="status"></p><button class="button primary" type="submit">Continue</button></form></dialog>
+  <dialog id="confirmationDialog"><div class="dialog-heading"><h2>Review server operation</h2><button class="icon-button" data-close="confirmationDialog" aria-label="Close">×</button></div><p id="confirmationName"></p><p id="confirmationImpact"></p><form id="confirmationForm"><label id="confirmationPrompt">Type the operation name to confirm<input id="confirmationText" required autocomplete="off"></label><p id="confirmationError" role="status"></p><button class="button primary" type="submit">Send command</button></form></dialog>
+  <dialog id="tileDialog"><div class="dialog-heading"><h2 id="tileTitle">Add service tile</h2><button class="icon-button" data-close="tileDialog" aria-label="Close">×</button></div><form id="tileForm"><label>Suggestion<select id="tilePreset"><option value="">Custom service</option><option>Unraid</option><option>Homelab Hub</option><option>Automations</option><option>Home Assistant</option><option>Node-RED</option><option>Uptime Kuma</option><option>Grafana</option><option>Backups</option><option>Files</option><option>Network controller</option></select></label><label>Name<input id="tileName" required maxlength="80"></label><label>Web UI URL<input id="tileUrl" type="url" required maxlength="500" placeholder="http://server:port"></label><label>Group<input id="tileGroup" required maxlength="80" value="Services"></label><label>Icon<select id="tileIcon"><option value="server">Server</option><option value="automation">Automation</option><option value="network">Network</option><option value="media">Media</option><option value="files">Files</option><option value="shield">Security</option><option value="chart">Monitoring</option><option value="backup">Backup</option></select></label><label class="checkbox"><input id="tileEnabled" type="checkbox" checked> Show this tile</label><p id="tileError" role="status"></p><div class="page-actions"><button class="button primary" type="submit">Save tile</button><button class="button" id="tileDelete" type="button" hidden>Delete</button></div></form></dialog>
+  <dialog id="commandDialog"><div class="dialog-heading"><h2>Jump to a section</h2><button class="icon-button" data-close="commandDialog" aria-label="Close">×</button></div><label class="sr-only" for="commandSearch">Search sections</label><input id="commandSearch" placeholder="Storage, Docker, alerts…" autocomplete="off"><div id="commandResults"></div></dialog>
+</body>
+</html>
