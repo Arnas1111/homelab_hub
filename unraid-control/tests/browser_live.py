@@ -32,7 +32,10 @@ def main():
                     if key.lower() not in ('transfer-encoding','connection'):
                         self.send_header(key,value)
                 self.end_headers()
-                self.wfile.write(response.content)
+                try:
+                    self.wfile.write(response.content)
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                    pass  # Browser reloads can cancel an in-flight response.
 
             do_GET = do_POST = do_PUT = respond
         server = ThreadingHTTPServer(('127.0.0.1',0),Handler)
@@ -61,13 +64,21 @@ def main():
                 result = page.evaluate('fetch("/api/settings").then(r=>r.json())')
                 assert result['api_key_configured']
                 assert 'private-test-token' not in str(result)
+                page.locator('#appearanceTheme').select_option('dark')
+                expect(page.locator('body')).to_have_attribute('data-theme','dark')
+                page.locator('#settingsForm [type=submit]').click()
+                expect(page.locator('#settingsMessage')).to_contain_text('Settings saved')
                 page.reload()
+                expect(page.locator('body')).to_have_attribute('data-theme','dark')
+                expect(page.locator('#appearanceTheme')).to_have_value('dark')
                 expect(page.locator('[name=api_key]')).to_have_value('')
+                page.locator('#appearanceTheme').select_option('paper')
                 page.locator('[name=login_required]').uncheck()
                 page.locator('#settingsForm [type=submit]').click()
                 expect(page.locator('#settingsMessage')).to_contain_text('Settings saved')
                 page.context.clear_cookies()
                 page.reload()
+                expect(page.locator('body')).to_have_attribute('data-theme','paper')
                 expect(page.locator('#accessDialog')).not_to_be_visible()
                 page.locator('.nav-link[data-page=services]').click()
                 page.locator('#addTile').click()

@@ -14,6 +14,9 @@ Use [unraid-template.xml](unraid-template.xml) with the separate preview image
 host boot mount, shell access, or elevated container privileges are required.
 
 1. Open the preview and create its local administrator password.
+   **Settings → Appearance → Theme** selects **Artcraft-inspired light** or
+   **Dark**. Changes preview immediately; **Save settings** persists the choice
+   across reloads and container restarts. Existing installs default to the light theme.
 2. In Settings, save the Unraid URL and an API key. Blank keys preserve the
    saved key; **Clear saved API key** removes it. Credentials never return in
    the settings API. Configuration persists under `/data/control.sqlite`.

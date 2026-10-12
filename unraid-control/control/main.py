@@ -41,6 +41,7 @@ class Connection(BaseModel):
     login_required: bool = True
     homelab_url: str = Field(default='', max_length=500)
     title: str = Field(default='Unraid Control', min_length=1, max_length=80)
+    theme: Literal['paper', 'dark'] = 'paper'
 
     @field_validator('url', 'homelab_url')
     @classmethod
@@ -129,8 +130,10 @@ def create_app(directory=None):
     @app.get('/api/access')
     def access(request: Request):
         setup = not bool(store.read('identity'))
-        required = store.read('connection', {}).get('login_required', True)
-        return {'setup':setup, 'authenticated':not setup and (not required or store.authenticated(request.cookies.get('control_session', '')))}
+        config = store.read('connection', {})
+        required = config.get('login_required', True)
+        return {'setup':setup, 'theme':config.get('theme', 'paper'),
+                'authenticated':not setup and (not required or store.authenticated(request.cookies.get('control_session', '')))}
 
     @app.post('/api/setup')
     def setup(body: Password, response: Response, request: Request):
@@ -156,7 +159,7 @@ def create_app(directory=None):
 
     @app.get('/api/settings', dependencies=[Depends(auth)])
     def settings():
-        config = store.read('connection', Connection().model_dump())
+        config = Connection().model_dump() | store.read('connection', {})
         return {k:v for k,v in config.items() if k not in ('api_key', 'clear_api_key')} | {'api_key_configured':bool(config.get('api_key'))}
 
     @app.put('/api/settings', dependencies=[Depends(auth)])

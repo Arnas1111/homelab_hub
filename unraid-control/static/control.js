@@ -32,6 +32,7 @@ if (!paths[page]) page = 'overview';
 let settings = {}, samples = {}, tiles = [], capabilities = {actions:[], controls_enabled:false};
 let accessSetup = false, busy = false, pendingConfirmation = null, editingTile = null;
 let readings = [], search = '';
+function applyTheme(theme) { document.body.dataset.theme = theme === 'dark' ? 'dark' : 'paper'; }
 const needed = {
   overview:['system','metrics','storage','docker','notifications'], storage:['storage'], docker:['docker'],
   vms:['vms'], shares:['shares'], network:['network'], notifications:['notifications'], plugins:['plugins'], services:['docker'],
@@ -161,7 +162,7 @@ function servicesPage() {
   return `<div class="page-actions"><button class="button primary" id="addTile">+ Add tile</button><span class="muted">Custom tiles are links; availability is not monitored.</span></div><br><div class="service-grid">${cards.map(t => `<article class="service-tile"><a class="tile-main" href="${escape(safeLink(t.url))}" target="_blank" rel="noreferrer"><span class="row-icon">${icon(t.icon)}</span><div><h3>${escape(t.name)}</h3><p class="muted">${escape(t.group)}</p></div></a><div class="tile-footer">${badge(t.status)}${t.id ? `<button class="link-button" data-tile="${escape(t.id)}">Edit tile</button>` : '<span class="muted">Discovered from Unraid</span>'}</div></article>`).join('') || empty('No service links yet. Add your first tile.')}</div>`;
 }
 function settingsPage() {
-  return `<article class="panel"><div class="panel-head"><h2>Server connection & workspace</h2><span class="badge">Settings persist under /data</span></div><div class="panel-body"><form id="settingsForm" class="settings-form"><div class="settings-grid"><label>Workspace title<input name="title" value="${escape(settings.title || 'Unraid Control')}" maxlength="80" required></label><label>Unraid server URL<input name="url" type="url" value="${escape(settings.url || '')}" placeholder="http://tower.local" maxlength="500"></label></div><label>Unraid API key<input name="api_key" type="password" autocomplete="new-password" maxlength="2000" placeholder="${settings.api_key_configured ? 'Saved key · leave blank to keep' : 'Paste an API key'}"></label><label class="checkbox"><input name="clear_api_key" type="checkbox"> Clear saved API key</label><label class="checkbox"><input name="enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}> Enable Unraid connection</label><label class="checkbox"><input name="controls_enabled" type="checkbox" ${settings.controls_enabled ? 'checked' : ''}> Enable confirmed server controls</label><label class="checkbox"><input name="login_required" type="checkbox" ${settings.login_required !== false ? 'checked' : ''}> Require local password login</label><label>Homelab Hub URL (optional)<input name="homelab_url" type="url" value="${escape(settings.homelab_url || '')}" placeholder="http://server:3333"></label><p class="section-description">Unraid 7.2.3 target. The API key stays on the backend. Blank key fields preserve it; clear explicitly to remove it. Schema discovery detects installed API fields. Homelab is a separate integration target in this preview.</p><div class="page-actions"><button class="button primary" type="submit">Save settings</button><button class="button" id="reconnect" type="button">Test & reconnect</button></div><p id="settingsMessage" class="settings-message" role="status"></p></form></div></article>`;
+  return `<article class="panel"><div class="panel-head"><h2>Server connection & workspace</h2><span class="badge">Settings persist under /data</span></div><div class="panel-body"><form id="settingsForm" class="settings-form"><h3 id="appearanceSettings">Appearance</h3><label>Theme<select name="theme" id="appearanceTheme"><option value="paper" ${settings.theme !== 'dark' ? 'selected' : ''}>Artcraft-inspired light</option><option value="dark" ${settings.theme === 'dark' ? 'selected' : ''}>Dark</option></select></label><p class="section-description">Preview changes immediately. Save settings to keep your theme after reload and container restart.</p><h3>Server connection</h3><div class="settings-grid"><label>Workspace title<input name="title" value="${escape(settings.title || 'Unraid Control')}" maxlength="80" required></label><label>Unraid server URL<input name="url" type="url" value="${escape(settings.url || '')}" placeholder="http://tower.local" maxlength="500"></label></div><label>Unraid API key<input name="api_key" type="password" autocomplete="new-password" maxlength="2000" placeholder="${settings.api_key_configured ? 'Saved key · leave blank to keep' : 'Paste an API key'}"></label><label class="checkbox"><input name="clear_api_key" type="checkbox"> Clear saved API key</label><label class="checkbox"><input name="enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}> Enable Unraid connection</label><label class="checkbox"><input name="controls_enabled" type="checkbox" ${settings.controls_enabled ? 'checked' : ''}> Enable confirmed server controls</label><label class="checkbox"><input name="login_required" type="checkbox" ${settings.login_required !== false ? 'checked' : ''}> Require local password login</label><label>Homelab Hub URL (optional)<input name="homelab_url" type="url" value="${escape(settings.homelab_url || '')}" placeholder="http://server:3333"></label><p class="section-description">Unraid 7.2.3 target. The API key stays on the backend. Blank key fields preserve it; clear explicitly to remove it. Schema discovery detects installed API fields. Homelab is a separate integration target in this preview.</p><div class="page-actions"><button class="button primary" type="submit">Save settings</button><button class="button" id="reconnect" type="button">Test & reconnect</button></div><p id="settingsMessage" class="settings-message" role="status"></p></form></div></article>`;
 }
 function toolsPage() {
   return `<article class="panel"><div class="panel-head"><h2>Feature coverage</h2><span class="badge warn">Preview · parity incomplete</span></div><div class="panel-body"><p class="section-description">This is an original interface backed by supported API contracts. Features are marked by actual implementation coverage, not by the presence of a navigation tab.</p><div class="row"><span class="row-title">Native readings & confirmed controls<small>Storage, parity verification, Docker lifecycle, VM lifecycle, share inventory, network interfaces, notifications.</small></span>${badge('Implemented')}</div><div class="row"><span class="row-title">Homelab enhancements<small>Custom service tiles and icons, optional local login, command navigation, independent polling, stale-data status, audit activity.</small></span>${badge('Implemented')}</div><div class="row"><span class="row-title">Full Unraid configuration<small>Disk assignment and formatting, pools/ZFS, SMART tests, share editing, users, Docker templates, VM hardware, plugin management, OS updates, terminal and file manager.</small></span>${badge('Planned')}</div><div class="row"><span class="row-title">Homelab feature migration<small>Zigbee/MQTT, occupancy and solar automations, persistent metrics history, branding and connector cards.</small></span>${badge('Planned')}</div></div></article><article class="panel"><div class="panel-head"><h2>Native tools during migration</h2></div><div class="panel-body native-tools">${[['Main','Storage & disk operations'],['Users','Users & permissions'],['Settings','System configuration'],['Plugins','Plugin management'],['Apps','Community applications'],['Tools','Diagnostics, updates & maintenance']].map(([route,label]) => nativeUrl(route) ? `<a href="${escape(nativeUrl(route))}" target="_blank" rel="noreferrer">${label} ↗<small>Opens the native Unraid WebUI</small></a>` : '').join('') || empty('Connect a server to open its native tools.')}</div></article>`;
@@ -185,7 +186,7 @@ function render() {
 }
 function navigate(target, historyMode = true) {
   if (!paths[target]) return;
-  page = target; search = '';
+  page = target; search = ''; applyTheme(settings.theme);
   if (historyMode) history.pushState({}, '', '/' + (page === 'overview' ? '' : page));
   document.querySelectorAll('.nav-link').forEach(node => node.classList.toggle('active', node.dataset.page === page));
   $('breadcrumb').textContent = 'Server / ' + paths[page][0];
@@ -221,6 +222,7 @@ async function refresh(fresh = false) {
 }
 async function checkAccess() {
   const access = await api('access');
+  if (access.theme) applyTheme(access.theme);
   accessSetup = access.setup;
   if (!access.authenticated) {
     $('accessTitle').textContent = accessSetup ? 'Welcome to Control' : 'Sign in';
@@ -233,6 +235,7 @@ async function checkAccess() {
 async function start() {
   if (!await checkAccess()) return;
   [settings, {tiles}] = await Promise.all([api('settings'), api('tiles')]);
+  applyTheme(settings.theme);
   loadCpuReadings();
   const native = nativeUrl(); $('nativeLink').hidden = !native; if (native) $('nativeLink').href = native;
   navigate(page, false);
@@ -273,12 +276,13 @@ document.addEventListener('click', async event => {
 document.addEventListener('input', event => {
   if (event.target.id === 'sectionSearch') { search = event.target.value.toLowerCase(); render(); }
 });
+document.addEventListener('change', event => { if (event.target.name === 'theme') applyTheme(event.target.value); });
 document.addEventListener('submit', async event => {
   if (event.target.id !== 'settingsForm') return;
   event.preventDefault(); const form = event.target, button = form.querySelector('[type=submit]'); button.disabled = true;
   const data = new FormData(form), body = Object.fromEntries(data);
   for (const key of ['clear_api_key','enabled','controls_enabled','login_required']) body[key] = data.has(key);
-  try { const previousUrl = settings.url; settings = await send('settings','PUT',body); if (settings.url !== previousUrl) loadCpuReadings(); samples = {}; capabilities = {actions:[],controls_enabled:false};
+  try { const previousUrl = settings.url; settings = await send('settings','PUT',body); applyTheme(settings.theme); if (settings.url !== previousUrl) loadCpuReadings(); samples = {}; capabilities = {actions:[],controls_enabled:false};
     const native = nativeUrl(); $('nativeLink').hidden = !native; if (native) $('nativeLink').href = native;
     form.querySelector('[name=api_key]').value = ''; form.querySelector('[name=clear_api_key]').checked = false;
     $('settingsMessage').textContent = 'Settings saved. Test & reconnect to verify the server.'; await checkAccess();
