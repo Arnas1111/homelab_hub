@@ -51,7 +51,7 @@
     </section>
 
     <section id="servicesView" class="view">
-      <div class="board-section-heading"><div><span class="eyebrow">APPLICATION DIRECTORY</span><h2>Services</h2><p class="muted tiny">Discovered from Docker, organized for you. Pin frequently used services.</p></div><button class="btn" id="manageServices">Manage links</button></div>
+      <div class="board-section-heading"><div><span class="eyebrow">APPLICATION DIRECTORY</span><h2>Services</h2><p class="muted tiny">Docker apps, automation tools, and your custom tiles. Pin frequently used services.</p></div><div class="service-actions"><button class="btn" id="manageServices">Manage links</button><button class="btn primary" id="addServiceTile">+ Add tile</button></div></div>
       <div class="service-toolbar"><label class="sr-only" for="serviceSearch">Search services</label><input id="serviceSearch" class="search" placeholder="Search name, group, image..."><label class="sr-only" for="serviceFilter">Filter services</label><select id="serviceFilter" class="select"><option value="all">All services</option><option value="favorites">Favorites</option><option value="attention">Needs attention</option><option value="running">Running</option></select><span id="serviceCount" class="muted tiny"></span></div>
       <div id="allServices"><div class="board-empty">Discovering your applications...</div></div>
       <div id="webuiPanelBody" class="webui-manager"></div>
@@ -233,7 +233,7 @@
 
     <section id="settingsView" class="view">
       <p><a href="/automations" class="btn">Configure Zigbee automations</a></p>
-      <div class="settings-categories"><button class="btn" data-open-view="integrations">Integrations</button><button class="btn" data-open-view="database">History storage</button><a class="btn" href="#mqttSettings">Zigbee / MQTT</a><a class="btn" href="#appearanceSettings">Appearance</a></div>
+      <div class="settings-categories"><button class="btn" data-open-view="integrations">Integrations</button><button class="btn" data-open-view="services">Service tiles and Web UI links</button><button class="btn" data-open-view="database">History storage</button><a class="btn" href="#mqttSettings">Zigbee / MQTT</a><a class="btn" href="#appearanceSettings">Appearance</a></div>
       <div class="panel settings-panel">
           <div class="panel-head"><div><h2>Hub settings</h2><p class="muted">Stored locally in the hub database</p></div><span class="version-label">Version <strong id="appVersion">{{ settings.version }}</strong></span></div>
         <form id="settingsForm" class="settings-form">
@@ -376,9 +376,23 @@
     </div>
   </div>
 
+  <dialog id="serviceTileDialog" class="connector-dialog">
+    <div class="dialog-heading"><h2 id="serviceTileTitle">Add service tile</h2><button class="btn" type="button" id="serviceTileClose">Close</button></div>
+    <form id="serviceTileForm" class="service-tile-form">
+      <label id="serviceTilePresetLabel">Start with a suggestion<select id="serviceTilePreset"><option value="">Custom service</option></select></label>
+      <label>Name<input id="serviceTileName" required maxlength="80" placeholder="My service"></label>
+      <label>Web UI URL<input id="serviceTileUrl" required type="url" maxlength="500" placeholder="http://server:port"></label>
+      <label>Attach to a Docker service (optional)<select id="serviceTileContainer"><option value="">Standalone tile</option></select></label>
+      <label>Icon<select id="serviceTileIcon"></select></label>
+      <div class="service-tile-preview"><img id="serviceTilePreview" alt="" width="40" height="40"><span class="muted tiny">Choose a built-in icon for your tile.</span></div>
+      <p id="serviceTileFeedback" class="muted tiny" role="status"></p>
+      <div class="service-actions"><button class="btn primary" type="submit">Save tile</button><button class="btn" type="button" id="serviceTileDelete" hidden>Delete tile</button></div>
+    </form>
+  </dialog>
   <div id="toast" class="toast hidden"></div>
   <script src="/static/app.js?v={{ asset_version }}"></script>
   <script src="/static/board.js?v={{ asset_version }}"></script>
+  <script src="/static/services.js?v={{ asset_version }}"></script>
   <script src="/static/history.js?v={{ asset_version }}"></script>
   <script src="/static/logs.js?v={{ asset_version }}"></script>
   <script src="/static/zigbee.js?v={{ asset_version }}"></script>

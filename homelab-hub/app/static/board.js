@@ -11,9 +11,9 @@ function boardServices() {
   const links = mergedWebLinks();
   const containers = currentData?.containers || [];
   const result = containers.map(c => {
-    const link = links.find(l => l.container_name === c.name || l.label === c.name);
+    const link = webuiLinkForContainer(c);
     return { key: `container:${c.name}`, id: c.id, name: c.display_name || c.name, rawName: c.name,
-      group: c.group_name || 'Other services', icon: containerIcon(c), url: boardLink(link?.url || ''),
+      group: c.group_name || 'Other services', icon: link?.icon || containerIcon(c), url: boardLink(link?.url || ''),
       description: c.description || c.project || c.image, status: c.status, health: c.health, integration: c.integration };
   });
   for (const link of links.filter(l => l.source === 'manual' && !containers.some(c => c.name === l.container_name || c.name === l.label))) {
@@ -33,7 +33,7 @@ function serviceCard(service) {
   const label = needsAttention(service) ? (service.health === 'unhealthy' ? 'Unhealthy' : service.status) : service.status === 'external' ? 'External link' : service.status || 'Unknown';
   const icon = `<span class="service-icon"><img src="${iconPath(service.icon)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></span>`;
   const title = `${icon}<span class="service-name"><strong>${escapeHtml(service.name)}</strong><small>${escapeHtml(service.description || service.group)}</small></span>`;
-  return `<article class="service-card" data-service-key="${escapeHtml(service.key)}"><div class="service-main">${service.url ? `<a href="${escapeHtml(service.url)}" target="_blank" rel="noreferrer" title="Open ${escapeHtml(service.name)}">${title}</a>` : `<div class="service-title">${title}</div>`}<button class="pin-service ${favorite ? 'pinned' : ''}" data-pin="${escapeHtml(service.key)}" aria-label="${favorite ? 'Unpin' : 'Pin'} ${escapeHtml(service.name)}" aria-pressed="${favorite}">${favorite ? '★' : '☆'}</button></div><div class="service-footer"><span class="service-state ${state}"><i></i>${escapeHtml(label)}</span>${service.id ? `<button class="text-btn" data-service-details="${escapeHtml(service.id)}">Details ↗</button>` : '<span class="muted tiny">Link</span>'}</div></article>`;
+  return `<article class="service-card" data-service-key="${escapeHtml(service.key)}"><div class="service-main">${service.url ? `<a href="${escapeHtml(service.url)}" target="_blank" rel="noreferrer" title="Open ${escapeHtml(service.name)}">${title}</a>` : `<div class="service-title">${title}</div>`}<button class="pin-service ${favorite ? 'pinned' : ''}" data-pin="${escapeHtml(service.key)}" aria-label="${favorite ? 'Unpin' : 'Pin'} ${escapeHtml(service.name)}" aria-pressed="${favorite}">${favorite ? '★' : '☆'}</button></div><div class="service-footer"><span class="service-state ${state}"><i></i>${escapeHtml(label)}</span><button class="text-btn" data-service-edit="${escapeHtml(service.key)}">${service.id ? service.url ? 'Edit Web UI' : 'Add Web UI' : 'Edit tile'}</button>${service.id ? `<button class="text-btn" data-service-details="${escapeHtml(service.id)}">Details ↗</button>` : '<span class="muted tiny">Link</span>'}</div></article>`;
 }
 
 function boardGroups(services) {

@@ -7,6 +7,7 @@ from playwright.sync_api import sync_playwright, expect
 from browser_history import handler as history_handler, settings
 
 favorites = []
+webui_links = []
 requests = []
 containers = [dict(id=str(i), short_id=str(i), name=name.lower().replace(' ', '-'), display_name=name,
                    image='example/' + name.lower(), status='running', health='unhealthy' if i == 2 else None,
@@ -21,12 +22,15 @@ def handler(route):
     requests.append(url)
     if url.path == '/api/overview':
         route.fulfill(json=dict(settings=settings, containers=containers, board={'favorites': favorites},
-            webui_links=[], group_order={}, connections={'unraid': True},
+            webui_links=webui_links, group_order={}, connections={'unraid': True},
             discovery={'loading': False, 'error': None, 'updated_at': '2026-09-18T12:00:00Z'},
             server=dict(name='Tower', webui_url='http://tower.test', cpus=8, memory_total=34359738368, containers_running=6, containers_total=6,
                 metrics={'cpu': {'total_percent': 14, 'cores': [{'name': 'CPU 0', 'percent': 14}]},
                          'memory': {'total': 34359738368, 'percent': 42, 'available_human': '18.6 GB'},
                          'data_mount': {'total': 100000, 'percent': 78, 'free_human': '2.4 TB'}})))
+    elif url.path == '/api/webui-links':
+        webui_links[:] = route.request.post_data_json['links']
+        route.fulfill(json={'links':webui_links})
     elif url.path == '/api/board':
         favorites[:] = route.request.post_data_json['favorites']
         route.fulfill(json={'favorites': favorites})

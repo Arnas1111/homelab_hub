@@ -192,3 +192,8 @@ body:has(#logsView.active) .top-actions { display:none; }
 .automation-pair > label { flex:1; min-width:100px; }
 .automation-summary { line-height:1.8; overflow-wrap:anywhere; }
 @media(max-width:900px) { .automation-layout { grid-template-columns:1fr; } }
+.service-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.service-tile-form { display:grid; gap:14px; }
+.service-tile-form label { display:grid; gap:6px; }
+.service-tile-form input, .service-tile-form select { box-sizing:border-box; width:100%; min-width:0; padding:10px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; }
+.service-tile-preview { display:flex; align-items:center; gap:12px; }

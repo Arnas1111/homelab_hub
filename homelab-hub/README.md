@@ -10,7 +10,7 @@ See the [dashboard concept and research](DASHBOARD_CONCEPT.md) for design decisi
 
 Open **Connections** and save your Unraid server URL and an API key with Info and Array read permissions. **Integrations** then shows hardware, array state and disk temperatures. Docker discovery works through the existing socket mount without this API key. Unraid API readings are live snapshots; PostgreSQL history currently stores host/container performance metrics. Environment defaults are `HUB_UNRAID_URL` and `HUB_UNRAID_API_KEY`.
 
-In **Services**, pin applications for Home, search with Ctrl/Cmd+K, or use **Manage links** to override a URL. Favorites are shared by this Hub and persisted under `/data`. Explicit URLs are useful for host networking, dedicated container IPs or reverse proxies.
+In **Services**, pin applications for Home or search with Ctrl/Cmd+K. **+ Add tile** creates a custom service with a Web UI URL and built-in icon; suggestions include Unraid, Automations, Zigbee devices, Home Assistant, Node-RED, monitoring, backups, and files. Unraid uses the configured server URL when available. Automation and Zigbee suggestions link to the Hub's own pages. Standalone tiles open links and do not imply monitored availability. Use **Add Web UI / Edit Web UI** on a Docker service card to assign its URL and icon without creating a duplicate tile. **Edit tile** changes or deletes custom tiles; **Manage links** still supports bulk editing and hiding links. Favorites and tiles are shared by this Hub and persisted under `/data`. Explicit URLs are useful for host networking, dedicated container IPs or reverse proxies.
 
 ## Current features
 

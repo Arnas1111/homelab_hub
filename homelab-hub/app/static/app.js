@@ -894,7 +894,7 @@ function webuiLinkForContainer(container) {
     const label = String(link.label || '').toLowerCase();
     return containerName === name || label === name;
   });
-  return links[0] || null;
+  return links.find(link => link.source === 'manual') || links[0] || null;
 }
 
 async function saveWebuiLinks(links) {
