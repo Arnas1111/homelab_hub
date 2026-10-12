@@ -32,6 +32,23 @@ can be disabled in Settings for the user's local deployment. The administrator
 identity remains saved so login can be re-enabled. Sessions expire after 12 h
 and are invalidated on restart or login-setting changes.
 
+### Connection troubleshooting
+
+Use the URL of **Unraid's own WebUI**, including `http://` or `https://` and
+its configured port. Do not use this preview's port 3334 unless Unraid itself
+is actually listening there. The adapter appends `/graphql`; a URL already
+ending in `/graphql` is also accepted.
+
+**Test & reconnect** distinguishes redirects, HTTP status codes, missing API
+endpoints, HTML responses, TLS certificate failures, timeouts, denied keys,
+and disabled schema discovery. Non-200 status changes are also logged without
+addresses, keys or upstream response bodies. For redirects, enter the final
+WebUI URL rather than forwarding credentials automatically. For TLS failures,
+use the hostname on a trusted server certificate; an IP address may not match
+it. For schema discovery errors, review GraphQL Sandbox in Unraid's Management
+Access developer options. For reachability errors, check container networking,
+especially host access from custom Docker networks.
+
 Stopping the array also stops dependent Docker/VM workloads and can stop this
 control center itself. Array start/stop requires testing from an environment
 that remains available through the operation. Encrypted-array unlock is not

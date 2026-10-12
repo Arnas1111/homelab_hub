@@ -100,6 +100,48 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn('private-token',str(failure.exception))
         self.assertEqual(calls[0].headers['x-api-key'],'private-token')
 
+    def test_connection_failures_distinguish_redirect_endpoint_and_schema(self):
+        import httpx
+        original = httpx.Client
+        config = {'enabled':True,'url':'http://example.test','api_key':'private-token'}
+        cases = [
+            (httpx.Response(302,headers={'Location':'https://other.test/private-token'}), 'redirected'),
+            (httpx.Response(404), 'No GraphQL API'),
+            (httpx.Response(503), 'HTTP 503'),
+            (httpx.Response(401), 'access denied'),
+            (httpx.Response(200,text='<html>private-token</html>'), 'web page'),
+            (httpx.Response(400,json={'errors':[{'message':'private-token'}]}), 'HTTP 400'),
+            (httpx.Response(200,json={'errors':[{'message':'GraphQL introspection is not allowed; private-token'}]}), 'schema discovery'),
+        ]
+        for response, expected in cases:
+            with self.subTest(expected=expected):
+                requests = []
+                def respond(request):
+                    requests.append(request)
+                    return response
+                adapter = Unraid(lambda:config)
+                with patch('control.unraid.httpx.Client', side_effect=lambda **kwargs:original(transport=httpx.MockTransport(respond),**kwargs)):
+                    with self.assertRaises(ApiError) as failure:
+                        adapter.request('query { __schema { queryType { name } } }')
+                self.assertIn(expected,str(failure.exception))
+                self.assertNotIn('private-token',str(failure.exception))
+                self.assertEqual(len(requests),1,'A credential-bearing redirect was followed')
+
+    def test_network_timeout_and_certificate_failures_have_specific_guidance(self):
+        import httpx
+        config = {'enabled':True,'url':'https://example.test','api_key':'private-token'}
+        cases = [(httpx.ConnectError('connection refused'), 'Cannot connect'),
+                 (httpx.ConnectError('[SSL: CERTIFICATE_VERIFY_FAILED] private-token'), 'TLS certificate'),
+                 (httpx.ReadTimeout('private-token'), 'timed out')]
+        for exception, expected in cases:
+            with self.subTest(expected=expected):
+                adapter = Unraid(lambda:config)
+                with patch('control.unraid.httpx.Client') as client:
+                    client.return_value.__enter__.return_value.post.side_effect = exception
+                    with self.assertRaises(ApiError) as failure: adapter.request('query { test }')
+                self.assertIn(expected,str(failure.exception))
+                self.assertNotIn('private-token',str(failure.exception))
+
 
 class RouterTests(unittest.TestCase):
     def setUp(self):

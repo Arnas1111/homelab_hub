@@ -1,6 +1,8 @@
 """Allowlisted Unraid API operations with server-schema capability detection."""
 import threading
 import time
+import ssl
+import logging
 import httpx
 
 TYPE_REF = 'kind name ofType { kind name ofType { kind name ofType { kind name } } }'
@@ -37,6 +39,9 @@ class ApiError(Exception):
     pass
 
 
+logger = logging.getLogger('uvicorn.error')
+
+
 def base_type(reference):
     while reference.get('ofType'):
         reference = reference['ofType']
@@ -53,6 +58,7 @@ class Unraid:
         self.cache = {}
         self.section_locks = {section:threading.Lock() for section in SELECTIONS}
         self.generation = 0
+        self.last_http_status = None
 
     def reset(self):
         with self.lock:
@@ -60,11 +66,16 @@ class Unraid:
             self.catalog = {}
             self.cache.clear()
             self.generation += 1
+            self.last_http_status = None
 
     def request(self, document, variables=None):
         config = self.config()
-        if not config.get('enabled') or not config.get('url') or not config.get('api_key'):
-            raise ApiError('Connect your Unraid API in Settings.')
+        if not config.get('enabled'):
+            raise ApiError('The Unraid connection is disabled. Enable it in Settings.')
+        if not config.get('url'):
+            raise ApiError('Enter the Unraid WebUI address in Settings, including its port if needed.')
+        if not config.get('api_key'):
+            raise ApiError('Save an Unraid API key in Settings. The server address alone is not sufficient.')
         url = config['url'].rstrip('/')
         if not url.endswith('/graphql'):
             url += '/graphql'
@@ -72,16 +83,48 @@ class Unraid:
             # Never follow a redirect carrying a server credential.
             with httpx.Client(timeout=8, follow_redirects=False, trust_env=False) as client:
                 response = client.post(url, headers={'x-api-key':config['api_key']}, json={'query':document, 'variables':variables or {}})
+                with self.lock:
+                    changed = response.status_code != self.last_http_status
+                    self.last_http_status = response.status_code
+                if changed and response.status_code != 200:
+                    logger.warning('Unraid API returned HTTP %s. See Settings → Test & reconnect for connection guidance.', response.status_code)
                 if response.status_code in (401, 403):
                     raise ApiError('API access denied. Check the key and its permissions.')
+                if 300 <= response.status_code < 400:
+                    raise ApiError('Unraid redirected the API request. Enter the final WebUI address, including the correct http/https scheme and port. Credentials were not forwarded.')
+                if response.status_code == 404:
+                    raise ApiError('No GraphQL API was found at this address. Use the Unraid WebUI address, not this preview container address, and check that the Unraid API is enabled.')
                 if response.status_code != 200:
-                    raise ApiError('Unraid API request failed. Check the address and API service.')
-                data = response.json()
+                    raise ApiError(f'Unraid API returned HTTP {response.status_code}. Check the address and API service.')
+                try:
+                    data = response.json()
+                except ValueError:
+                    raise ApiError('This address returned a web page instead of GraphQL JSON. Use the Unraid WebUI address and port; check API access and reverse-proxy routing.') from None
+        except httpx.TimeoutException:
+            raise ApiError('The Unraid API request timed out. Check that this container can reach the server address and port.') from None
+        except httpx.ConnectError as error:
+            cause = error
+            certificate_error = False
+            for _ in range(8):
+                if isinstance(cause, ssl.SSLCertVerificationError) or 'CERTIFICATE_VERIFY_FAILED' in str(cause):
+                    certificate_error = True
+                    break
+                cause = cause.__cause__ or cause.__context__
+                if cause is None:
+                    break
+            if certificate_error:
+                raise ApiError('TLS certificate verification failed. Use the hostname covered by your Unraid certificate and a certificate trusted by this container. HTTPS by IP can fail when the certificate is for a hostname.') from None
+            raise ApiError('Cannot connect to the Unraid server. Check its address, port, and the container network. A custom Docker network may block access to the Unraid host.') from None
         except (httpx.HTTPError, ValueError):
-            raise ApiError('Unraid is unreachable. Check its address, TLS certificate, and network.') from None
+            raise ApiError('Unraid API transport failed. Check the address, port, and connection settings.') from None
         if not isinstance(data, dict):
             raise ApiError('Unraid returned no usable data.')
         if data.get('errors'):
+            # Classify known protocol failures without returning upstream text,
+            # which can include credentials or private server diagnostics.
+            messages = ' '.join(str(e.get('message', '')) for e in data['errors'] if isinstance(e, dict)).lower()
+            if '__schema' in document and ('introspection' in messages or '__schema' in messages):
+                raise ApiError('API schema discovery is disabled or denied. In Unraid Settings → Management Access → Developer Options, enable GraphQL Sandbox, then Test & reconnect.')
             raise ApiError('Unraid rejected this operation. Check API compatibility and permissions.')
         if not isinstance(data.get('data'), dict):
             raise ApiError('Unraid returned no usable data.')
