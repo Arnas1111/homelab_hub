@@ -90,15 +90,41 @@ function workloadRows(limit) {
 function alerts(limit = 100) {
   return (samples.notifications?.data?.list || []).slice(0, limit).map(n => `<div class="row"><div><span class="row-title ${n.importance === 'ALERT' ? 'alert-title' : ''}">${escape(n.title)}</span><small>${escape(n.subject)}</small><p class="section-description">${escape(n.description)}</p></div><div>${badge(n.importance)}${page === 'notifications' ? commands('notification', n.id, ['archive']) : ''}</div></div>`).join('') || empty('No unread notifications reported.');
 }
+function cpuChart(metrics) {
+  const series = ControlMetrics.cpuSeries(readings, Date.now()/1000);
+  const width = window.innerWidth <= 760 ? 340 : 760;
+  const x = point => 40+(point.x-40)/700*(width-60);
+  const ticks = [0,25,50,75,100].map(value => {
+    const y = 12+(100-value)/100*126;
+    return `<line class="chart-grid" x1="40" y1="${y}" x2="${width-20}" y2="${y}"/><text class="chart-axis" x="2" y="${y+4}">${value}%</text>`;
+  }).join('');
+  const plotted = series.segments.map(segment => {
+    const points = segment.map(point => `${x(point)},${point.y}`).join(' ');
+    const first = segment[0], last = segment.at(-1);
+    return `${segment.length > 1 ? `<polygon class="chart-area" points="${x(first)},138 ${points} ${x(last)},138"/><polyline class="chart-line" points="${points}"/>` : ''}<circle class="chart-point" cx="${x(last)}" cy="${last.y}" r="3"/>`;
+  }).join('');
+  const chart = `<svg class="cpu-chart" viewBox="0 0 ${width} 164" role="img" aria-label="CPU utilization over the last five minutes, fixed zero to one hundred percent scale; ${series.count} samples">${ticks}${plotted}<text class="chart-axis" x="40" y="160">5 min ago</text><text class="chart-axis" x="${width/2-10}" y="160">2.5 min ago</text><text class="chart-axis" x="${width-54}" y="160">Now</text></svg>`;
+  const cores = (metrics.cpu?.cpus || []).map((core,index) => `<div class="cpu-core"><span>Thread ${index+1}</span><strong>${percent(core.percentTotal)}%</strong><div class="meter"><div class="meter-fill" data-width="${ControlMetrics.number(core.percentTotal) || 0}"></div></div></div>`).join('');
+  return panel('CPU activity', `<div class="panel-body">${chart}<div class="chart-caption"><span>${series.count < 2 ? 'Collecting samples — the chart grows every 10 seconds.' : `${series.count} readings · gaps indicate unavailable samples`}</span><span>Last 5 minutes · browser session</span></div>${cores ? `<div class="cpu-cores">${cores}</div>` : ''}</div>`, 'metrics', '<span class="metric-tag">LIVE / 10 SEC</span>');
+}
+function rememberCpuReadings() {
+  try { sessionStorage.setItem('control-cpu:' + settings.url, JSON.stringify(readings)); } catch (_) {}
+}
+function loadCpuReadings() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('control-cpu:' + settings.url) || '[]');
+    readings = Array.isArray(saved) ? saved.filter(point => point && Number.isFinite(point.stamp) && Number.isFinite(point.value) && point.stamp >= Date.now()/1000-300).slice(-120) : [];
+  } catch (_) { readings = []; }
+}
 function overview() {
   const system = samples.system?.data || {}, metrics = samples.metrics?.data || {}, storage = samples.storage?.data || {};
   const capacity = storage.capacity?.kilobytes || {};
   const total = Number(capacity.total), used = Number(capacity.used);
   const ratio = capacity.total != null && capacity.used != null && total > 0 ? used / total * 100 : null;
   const containers = samples.docker?.data?.containers || [];
-  const graph = readings.length > 1 ? `<svg class="graph" viewBox="0 0 100 40" preserveAspectRatio="none" aria-label="CPU readings during this browser session"><polyline points="${readings.map((v,i) => `${i / (readings.length-1) * 100},${40-Math.min(100,Math.max(0,v.value))/100*38}`).join(' ')}"/></svg>` : '';
-  return `<div class="stats"><article class="stat"><div class="stat-label">CPU utilization</div><div class="stat-value">${percent(metrics.cpu?.percentTotal)}<small>%</small></div><div class="stat-caption">${escape(system.cpu?.brand || 'Hardware details unavailable')}</div>${graph}</article><article class="stat"><div class="stat-label">Memory used</div><div class="stat-value">${bytes(metrics.memory?.used)}</div><div class="stat-caption">${bytes(metrics.memory?.total)} installed · ${percent(metrics.memory?.percentTotal)}%</div><div class="meter"><div class="meter-fill" data-width="${Number(metrics.memory?.percentTotal) || 0}"></div></div></article><article class="stat"><div class="stat-label">Array capacity</div><div class="stat-value">${bytes(capacity.free,1024)}</div><div class="stat-caption">Free of ${bytes(capacity.total,1024)}</div><div class="meter"><div class="meter-fill" data-width="${ratio || 0}"></div></div></article><article class="stat"><div class="stat-label">Docker workloads</div><div class="stat-value">${samples.docker?.data ? containers.filter(c => String(c.state).toLowerCase() === 'running').length : '—'}<small>/ ${containers.length}</small></div><div class="stat-caption">Running containers · API state</div></article></div>
-  <div class="columns"><div>${panel('Storage at a glance', `<div class="panel-body">${badge(storage.state)}<div class="storage-track"><div class="storage-fill" data-width="${ratio || 0}"></div></div><div class="row"><div class="row-title">${bytes(capacity.used,1024)} used<small>${bytes(capacity.free,1024)} available</small></div><a class="button" href="/storage" data-page="storage">Inspect storage →</a></div><div class="row"><span class="muted">Parity verification</span>${badge(storage.parityCheckStatus?.status)}</div></div>`, 'storage')}${panel('Workloads', `<div class="panel-body">${workloadRows(5)}</div>`, 'docker', '<a class="link-button" href="/docker" data-page="docker">View all →</a>')}</div><div>${panel('Needs attention', `<div class="panel-body">${alerts(4)}</div>`, 'notifications', '<a class="link-button" href="/notifications" data-page="notifications">All notifications →</a>')}${panel('Server details', `<div class="panel-body"><div class="row"><span class="muted">Hostname</span>${escape(system.os?.hostname || '—')}</div><div class="row"><span class="muted">Unraid version</span>${escape(system.versions?.unraid || system.os?.release || '—')}</div><div class="row"><span class="muted">Processor</span>${escape(system.cpu?.cores ?? '—')} cores / ${escape(system.cpu?.threads ?? '—')} threads</div><div class="row"><span class="muted">Uptime</span>${escape(system.os?.uptime || '—')}</div></div>`, 'system')}</div></div>`;
+  const memory = ControlMetrics.memorySummary(metrics.memory, system.memory?.layout);
+  return `<div class="stats"><article class="stat stat-cpu"><div class="stat-label">CPU utilization</div><div class="stat-value">${percent(metrics.cpu?.percentTotal)}<small>%</small></div><div class="stat-caption">${escape(system.cpu?.brand || 'Hardware details unavailable')}</div></article><article class="stat stat-memory"><div class="stat-label">Memory in use</div><div class="stat-value">${bytes(memory.used)}</div><div class="stat-caption">${percent(memory.percentage)}% of ${bytes(memory.total)} usable</div><div class="meter" role="progressbar" aria-label="Memory in use" aria-valuemin="0" aria-valuemax="100" ${memory.percentage === null ? 'aria-valuetext="Unavailable"' : `aria-valuenow="${memory.percentage.toFixed(1)}"`}><div class="meter-fill" data-width="${memory.percentage || 0}"></div></div><div class="stat-detail">${memory.installed ? `${bytes(memory.installed)} installed &middot; ` : ''}${bytes(memory.available)} available</div>${memory.cache === null ? '' : `<div class="stat-detail">${bytes(memory.cache)} buffer/cache &middot; reclaimable memory included in available</div>`}</article><article class="stat stat-storage"><div class="stat-label">Array capacity</div><div class="stat-value">${bytes(capacity.free,1024)}</div><div class="stat-caption">Free of ${bytes(capacity.total,1024)}</div><div class="meter"><div class="meter-fill" data-width="${ratio || 0}"></div></div></article><article class="stat stat-docker"><div class="stat-label">Docker workloads</div><div class="stat-value">${samples.docker?.data ? containers.filter(c => String(c.state).toLowerCase() === 'running').length : '—'}<small>/ ${containers.length}</small></div><div class="stat-caption">Running containers · API state</div></article></div>
+  ${cpuChart(metrics)}<div class="columns"><div>${panel('Storage at a glance', `<div class="panel-body">${badge(storage.state)}<div class="storage-track"><div class="storage-fill" data-width="${ratio || 0}"></div></div><div class="row"><div class="row-title">${bytes(capacity.used,1024)} used<small>${bytes(capacity.free,1024)} available</small></div><a class="button" href="/storage" data-page="storage">Inspect storage →</a></div><div class="row"><span class="muted">Parity verification</span>${badge(storage.parityCheckStatus?.status)}</div></div>`, 'storage')}${panel('Workloads', `<div class="panel-body">${workloadRows(5)}</div>`, 'docker', '<a class="link-button" href="/docker" data-page="docker">View all →</a>')}</div><div>${panel('Needs attention', `<div class="panel-body">${alerts(4)}</div>`, 'notifications', '<a class="link-button" href="/notifications" data-page="notifications">All notifications →</a>')}${panel('Server details', `<div class="panel-body"><div class="row"><span class="muted">Hostname</span>${escape(system.os?.hostname || '—')}</div><div class="row"><span class="muted">Unraid version</span>${escape(system.versions?.unraid || system.os?.release || '—')}</div><div class="row"><span class="muted">Processor</span>${escape(system.cpu?.cores ?? '—')} cores / ${escape(system.cpu?.threads ?? '—')} threads</div><div class="row"><span class="muted">Uptime</span>${escape(system.os?.uptime || '—')}</div></div>`, 'system')}</div></div>`;
 }
 function storagePage() {
   const array = samples.storage?.data;
@@ -183,7 +209,8 @@ async function refresh(fresh = false) {
       if (section === 'metrics' && samples[section].data?.cpu?.percentTotal != null && !samples[section].error) {
         const last = readings.at(-1);
         if (last?.stamp !== samples[section].sampled_at) readings.push({stamp:samples[section].sampled_at, value:samples[section].data.cpu.percentTotal});
-        readings = readings.slice(-30);
+        readings = readings.filter(point => point.stamp >= Date.now()/1000-300).slice(-120);
+        rememberCpuReadings();
       }
     }));
     capabilities = await api('capabilities');
@@ -206,6 +233,7 @@ async function checkAccess() {
 async function start() {
   if (!await checkAccess()) return;
   [settings, {tiles}] = await Promise.all([api('settings'), api('tiles')]);
+  loadCpuReadings();
   const native = nativeUrl(); $('nativeLink').hidden = !native; if (native) $('nativeLink').href = native;
   navigate(page, false);
 }
@@ -250,7 +278,7 @@ document.addEventListener('submit', async event => {
   event.preventDefault(); const form = event.target, button = form.querySelector('[type=submit]'); button.disabled = true;
   const data = new FormData(form), body = Object.fromEntries(data);
   for (const key of ['clear_api_key','enabled','controls_enabled','login_required']) body[key] = data.has(key);
-  try { settings = await send('settings','PUT',body); samples = {}; capabilities = {actions:[],controls_enabled:false};
+  try { const previousUrl = settings.url; settings = await send('settings','PUT',body); if (settings.url !== previousUrl) loadCpuReadings(); samples = {}; capabilities = {actions:[],controls_enabled:false};
     const native = nativeUrl(); $('nativeLink').hidden = !native; if (native) $('nativeLink').href = native;
     form.querySelector('[name=api_key]').value = ''; form.querySelector('[name=clear_api_key]').checked = false;
     $('settingsMessage').textContent = 'Settings saved. Test & reconnect to verify the server.'; await checkAccess();
@@ -306,5 +334,6 @@ $('commandOpen').onclick = openCommands; $('commandSearch').oninput = commandRes
 $('commandResults').onclick = event => { if (event.target.closest('[data-page]')) $('commandDialog').close(); };
 document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openCommands(); } });
 window.addEventListener('popstate', () => navigate(location.pathname.slice(1) || 'overview',false));
+window.addEventListener('resize', () => { if (page === 'overview') render(); });
 setInterval(() => { if (!document.hidden) refresh(); }, 10000);
 start().catch(error => { $('notice').hidden = false; $('notice').textContent = error.message; });

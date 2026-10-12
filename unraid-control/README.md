@@ -57,7 +57,8 @@ lost; commands are never automatically retried. Inspect server state first.
 
 ## Implemented
 
-- Original responsive interface, bookmarked routes, back/forward navigation,
+- Artcraft-inspired light paper/grid interface, bold typography, colorful metric
+  and navigation accents, and original service icons. Bookmarked routes, back/forward navigation,
   command navigation, focused pages and independent section errors.
 - API schema capability detection; optional fields are omitted for older APIs.
 - Array, parity/cache/boot devices, temperatures, errors and capacity. Sizes
@@ -66,8 +67,17 @@ lost; commands are never automatically retried. Inspect server state first.
   cancel, Docker lifecycle, VM lifecycle, and notification archive operations.
 - Share inventory/placement, network interfaces, unread notifications, and
   API-plugin inventory (explicitly **not** all installed `.plg` plugins).
-- CPU/memory readings and a short browser-session CPU chart. It is not durable
-  metrics history. API polling is bounded, cached 10 s and per-section single
+- Memory in use is `total - available`, matching Unraid's memory-pressure
+  percentage; the amount, percent and meter all use this same calculation.
+  Linux's cache-inclusive `used` bytes are not mixed with that percentage.
+  Installed DIMM capacity is shown separately from OS-usable RAM when available;
+  buffer/cache and available memory have their own labels.
+- A filled five-minute CPU activity chart uses actual timestamps and a fixed
+  0–100% scale, marks sampling gaps, starts with a point while collecting samples,
+  and shows per-thread load when exposed by the API. A constant load correctly
+  produces a flat trace. Recent samples survive reload in browser session storage,
+  scoped to the configured server. It is not durable metrics history.
+  API polling is bounded, cached 10 s and per-section single
   flight; raw disk-layout queries that can wake sleeping disks are not polled.
 - Custom service tiles with original vector icons, suggestions, groups,
   enable/hide, editing and deletion. Docker Web UI links come from the API.
@@ -98,6 +108,8 @@ independent writable directory, then run:
 uvicorn control.main:app --host 127.0.0.1 --port 8080
 python -m unittest discover -s tests
 node --check static/control.js
+node --check static/metrics.js
+node --test tests/*.test.cjs
 ```
 
 Browser checks additionally need Playwright/Chromium; `CONTROL_BROWSER_EXECUTABLE`

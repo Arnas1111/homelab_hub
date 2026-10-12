@@ -11,8 +11,8 @@ DISK = dict.fromkeys(['id', 'name', 'device', 'size', 'status', 'temp', 'fsSize'
 SELECTIONS = {
     'system': ('info', {'os':dict.fromkeys(['hostname', 'distro', 'release', 'uptime', 'kernel'], True),
                         'cpu':dict.fromkeys(['brand', 'cores', 'threads', 'speed'], True),
-                        'versions':{'unraid':True}}),
-    'metrics': ('metrics', {'cpu':{'percentTotal':True}, 'memory':dict.fromkeys(['total', 'used', 'free', 'available', 'percentTotal'], True)}),
+                        'versions':{'unraid':True}, 'memory':{'layout':{'size':True}}}),
+    'metrics': ('metrics', {'cpu':{'percentTotal':True, 'cpus':{'percentTotal':True}}, 'memory':dict.fromkeys(['total', 'used', 'free', 'available', 'buffcache', 'percentTotal'], True)}),
     'storage': ('array', {'state':True, 'capacity':{'kilobytes':dict.fromkeys(['free', 'used', 'total'], True)},
                           'disks':DISK, 'caches':DISK, 'parities':DISK, 'boot':DISK,
                           'parityCheckStatus':dict.fromkeys(['status', 'progress', 'errors', 'speed', 'running', 'paused', 'correcting'], True)}),

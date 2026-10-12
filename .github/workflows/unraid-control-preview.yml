@@ -21,6 +21,8 @@ jobs:
       - run: pip install -r unraid-control/requirements.txt playwright
       - run: python -m compileall -q unraid-control/control
       - run: node --check unraid-control/static/control.js
+      - run: node --check unraid-control/static/metrics.js
+      - run: node --test unraid-control/tests/*.test.cjs
       - run: python -m unittest discover -s unraid-control/tests
       - run: playwright install --with-deps chromium
       - run: python unraid-control/tests/browser_control.py

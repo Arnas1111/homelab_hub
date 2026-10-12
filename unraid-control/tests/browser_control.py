@@ -1,6 +1,7 @@
 """Original workspace interactions with deterministic API contracts."""
 import os
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
@@ -10,8 +11,8 @@ settings = {'title':'Unraid Control','url':'https://tower.example','enabled':Tru
             'controls_enabled':True,'login_required':True,'homelab_url':'http://hub.example:3333'}
 tiles, commands, errors = [], [], []
 sections = {
-    'system':{'os':{'hostname':'Tower','release':'7.2.3','uptime':'4 days'},'cpu':{'brand':'AMD Ryzen 7','cores':8,'threads':16},'versions':{'unraid':'7.2.3'}},
-    'metrics':{'cpu':{'percentTotal':18.4},'memory':{'total':34359738368,'used':12884901888,'percentTotal':37.5}},
+    'system':{'os':{'hostname':'Tower','release':'7.2.3','uptime':'4 days'},'cpu':{'brand':'AMD Ryzen 7','cores':8,'threads':16},'versions':{'unraid':'7.2.3'},'memory':{'layout':[{'size':16*1024**3}]}},
+    'metrics':{'cpu':{'percentTotal':18.4,'cpus':[{'percentTotal':value} for value in [12,22,9,38,17,11,18,20]]},'memory':{'total':15.4*1024**3,'used':15.2*1024**3,'available':15.4*1024**3*.648,'buffcache':9*1024**3,'percentTotal':35.2}},
     'storage':{'state':'STARTED','capacity':{'kilobytes':{'free':6442450944,'used':12884901888,'total':19327352832}},
                'disks':[{'id':'disk:1','name':'disk1','device':'sdb','size':8589934592,'status':'DISK_OK','temp':33,'fsUsed':6442450944,'fsFree':2147483648,'fsType':'xfs','numErrors':0}],
                'caches':[{'id':'cache:1','name':'cache','device':'nvme0n1','size':1073741824,'status':'DISK_OK','temp':39,'fsUsed':268435456,'fsFree':805306368,'fsType':'btrfs','numErrors':0}],
@@ -48,7 +49,7 @@ def handler(route):
         data = {'controls_enabled':True,'actions':['docker.start','docker.stop','docker.restart','vm.stop','array.stop','parity.start','notification.archive']}
     elif path.startswith('/api/sections/'):
         section = path.rsplit('/',1)[1]
-        data = {'data':sections[section],'sampled_at':1781268000,'stale':False,'error':None}
+        data = {'data':sections[section],'sampled_at':time.time(),'stale':False,'error':None}
     elif path == '/api/actions/prepare':
         incoming = route.request.post_data_json
         data = {'token':'single-use','confirmation':incoming['operation'],'impact':'This will stop a workload.','expires_in':60}
@@ -72,6 +73,21 @@ def main():
         page.goto('http://control.test/')
         expect(page.locator('h1')).to_have_text('Overview')
         expect(page.locator('#content')).to_contain_text('18.4')
+        expect(page.locator('.stat-memory .stat-value')).to_have_text('5.4 GiB')
+        expect(page.locator('.stat-memory')).to_contain_text('16.0 GiB installed')
+        expect(page.locator('.stat-memory')).to_contain_text('35.2%')
+        expect(page.locator('.stat-memory [role=progressbar]')).to_have_attribute('aria-valuenow','35.2')
+        expect(page.locator('.cpu-chart')).to_be_visible()
+        expect(page.locator('.chart-caption')).to_contain_text('Collecting samples')
+        page.evaluate('''() => {
+          const now = Date.now()/1000;
+          readings = [18,24,20,38,61,45,28,17,25,18.4].map((value,index)=>({stamp:now-90+index*10,value}));
+          rememberCpuReadings(); render();
+        }''')
+        expect(page.locator('.chart-area')).to_have_count(1)
+        assert page.locator('.chart-line').get_attribute('points').count(',') == 10
+        assert page.locator('.cpu-chart').bounding_box()['height'] >= 150
+        assert page.locator('.stat-memory .meter-fill').evaluate('node=>Math.abs(node.getBoundingClientRect().width/node.parentNode.getBoundingClientRect().width*100-35.2)<.5')
         artifacts = Path(os.getenv('CONTROL_BROWSER_ARTIFACTS', tempfile.gettempdir()))
         artifacts.mkdir(parents=True,exist_ok=True)
         page.screenshot(path=str(artifacts/'unraid-control-overview.png'),full_page=True)
@@ -126,8 +142,9 @@ def main():
         page.locator('#menuToggle').click()
         page.locator('.nav-link[data-page=overview]').click()
         expect(page.locator('h1')).to_have_text('Overview')
+        expect(page.locator('.chart-line')).to_be_visible()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        page.screenshot(path=str(artifacts/'unraid-control-mobile.png'),full_page=True)
+        page.screenshot(path=str(artifacts/'unraid-control-mobile.png'),full_page=True,animations='disabled')
         assert not errors, errors
         browser.close()
         print('PASS: original overview/storage, confirmation, tiles/persistence, escaping, stable drafts, command navigation, history, settings, mobile')
