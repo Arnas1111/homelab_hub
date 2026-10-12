@@ -68,9 +68,24 @@ def main():
         page.locator('[data-view="settings"]').click()
         expect(page.locator('#appearanceTheme')).to_have_value('paper')
         expect(page.locator('#automationTimezone')).to_have_value('Europe/Berlin')
+        # Hold an older response while editing: a late load must preserve the draft.
+        page.evaluate('''() => {
+          window.savedSettingsApi = api;
+          api = async (path, options) => {
+            const result = await window.savedSettingsApi(path, options);
+            if (path === '/api/zigbee/automations/time-settings' && !options?.method)
+              await new Promise(resolve => { window.releaseTimeLoad = resolve; });
+            return result;
+          };
+          loadAutomationTimeSettings();
+        }''')
+        page.wait_for_function('typeof window.releaseTimeLoad === "function"')
         page.locator('#solarLocation').fill('New location')
         page.locator('#solarLatitude').fill('48.14')
         page.locator('#solarLongitude').fill('11.58')
+        page.evaluate('() => { window.releaseTimeLoad(); api = window.savedSettingsApi; }')
+        page.wait_for_function('!automationTimeLoading')
+        expect(page.locator('#solarLocation')).to_have_value('New location')
         page.get_by_role('button', name='Save time settings', exact=True).click()
         expect(page.locator('#automationTimeSettingsFeedback')).to_have_text('Time and location settings saved.')
         expect(page.locator('#solarTimeStatus')).to_contain_text('Sunset')

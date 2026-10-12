@@ -111,20 +111,29 @@ function showSolarTimes(config) {
   const format = value => value ? new Date(value).toLocaleTimeString([], {timeZone:config.timezone, hour:'2-digit', minute:'2-digit'}) : 'Unavailable';
   $('solarTimeStatus').textContent = `${config.status}${config.solar_enabled ? ` Sunrise ${format(config.sunrise)} · Sunset ${format(config.sunset)} · ${config.timezone}` : ''}`;
 }
+let automationTimeLoading = false, automationTimeRevision = 0;
+$('automationTimeSettingsForm').addEventListener('input', () => { automationTimeRevision++; });
+$('automationTimeSettingsForm').addEventListener('change', () => { automationTimeRevision++; });
 async function loadAutomationTimeSettings() {
+  if (automationTimeLoading) return;
+  automationTimeLoading = true;
+  const revision = automationTimeRevision;
   $('saveAutomationTime').disabled = true;
   try {
     const config = await api('/api/zigbee/automations/time-settings');
-    $('automationTimezone').value = config.configured ? config.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
-    $('solarEnabled').checked = config.solar_enabled;
-    $('solarLocation').value = config.location || '';
-    $('solarLatitude').value = config.latitude ?? '';
-    $('solarLongitude').value = config.longitude ?? '';
-    $('solarLatitude').required = config.solar_enabled;
-    $('solarLongitude').required = config.solar_enabled;
+    if (revision === automationTimeRevision) {
+      $('automationTimezone').value = config.configured ? config.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
+      $('solarEnabled').checked = config.solar_enabled;
+      $('solarLocation').value = config.location || '';
+      $('solarLatitude').value = config.latitude ?? '';
+      $('solarLongitude').value = config.longitude ?? '';
+      $('solarLatitude').required = config.solar_enabled;
+      $('solarLongitude').required = config.solar_enabled;
+    }
     showSolarTimes(config);
     $('saveAutomationTime').disabled = false;
   } catch (error) { $('automationTimeSettingsFeedback').textContent = error.message; }
+  finally { automationTimeLoading = false; }
 }
 $('solarEnabled').addEventListener('change', () => {
   $('solarLatitude').required = $('solarEnabled').checked;
@@ -132,6 +141,7 @@ $('solarEnabled').addEventListener('change', () => {
 });
 $('automationTimeSettingsForm').addEventListener('submit', async event => {
   event.preventDefault();
+  automationTimeRevision++;
   $('saveAutomationTime').disabled = true;
   try {
     const config = await api('/api/zigbee/automations/time-settings', {method:'PUT', body:JSON.stringify({
