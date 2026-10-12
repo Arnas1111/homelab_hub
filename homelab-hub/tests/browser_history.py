@@ -15,6 +15,7 @@ database = dict(enabled=False, host='', port=5432, database='homelab', username=
                 sslmode='prefer', sample_seconds=30, retention_days=30, include_containers=True,
                 password_set=False, status={'last_saved': None, 'error': None, 'running': True})
 state = {'history_error': False}
+appearance = {'theme':'dark'}
 time_settings = dict(configured=True, timezone='Europe/Berlin', solar_enabled=True, location='Example city',
                      latitude=52.52, longitude=13.405, sunrise='2026-10-02T07:10:00+02:00',
                      sunset='2026-10-02T18:40:00+02:00', status='Calculated locally for today.')
@@ -28,6 +29,9 @@ def handler(route):
     url = urlparse(route.request.url)
     path = url.path
     data = {}
+    if path == '/api/appearance':
+        if route.request.method == 'PUT': appearance.update(route.request.post_data_json)
+        return route.fulfill(json=appearance)
     if path == '/api/metrics/history':
         if state['history_error']:
             route.fulfill(status=503, json={'detail': 'PostgreSQL temporarily unavailable'})

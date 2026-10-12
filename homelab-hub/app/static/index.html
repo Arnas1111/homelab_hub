@@ -7,8 +7,9 @@
   <link id="hubFavicon" rel="icon" href="/branding/favicon">
   <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
   <link rel="stylesheet" href="/static/workspace.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/themes.css?v={{ asset_version }}">
 </head>
-<body>
+<body data-theme="{{ theme }}">
   <aside class="sidebar">
     <div class="brand"><div class="brand-mark small"><img id="hubLogo" src="/branding/logo" alt=""></div><span id="brandTitle">{{ settings.title }}</span></div>
     <nav aria-label="Main navigation">
@@ -272,8 +273,15 @@
         </form>
       </div>
       <div id="appearanceSettings" class="panel settings-panel">
-        <div class="panel-head"><div><h2>Appearance</h2><p class="muted">PNG, JPEG or WebP, up to 512 KB. Square images work best.</p></div></div>
+        <div class="panel-head"><div><h2>Appearance</h2><p class="muted">Theme, logo and favicon for your Homelab Hub.</p></div></div>
+        <form id="appearanceForm" class="settings-form">
+          <label>Theme<select id="appearanceTheme" class="select"><option value="dark">Homelab dark</option><option value="paper">Artcraft-inspired light</option></select></label>
+          <p class="muted tiny">Preview changes immediately. Save the theme to keep it after reloads and restarts.</p>
+          <div><button id="appearanceSave" class="btn primary" type="submit" disabled>Save theme</button> <button id="appearanceCancel" class="btn" type="button">Cancel preview</button></div>
+          <p id="appearanceStatus" role="status"></p>
+        </form>
         <div class="settings-form">
+          <p class="muted tiny">Logo and favicon: PNG, JPEG or WebP, up to 512 KB. Square images work best.</p>
           <label>Top-left logo<input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
           <div><button class="btn" type="button" data-brand-upload="logo">Upload logo</button> <button class="btn" type="button" data-brand-reset="logo">Restore default logo</button></div>
           <label>Favicon<input id="faviconFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
@@ -397,6 +405,7 @@
   <script src="/static/logs.js?v={{ asset_version }}"></script>
   <script src="/static/zigbee.js?v={{ asset_version }}"></script>
   <script src="/static/settings.js?v={{ asset_version }}"></script>
+  <script src="/static/appearance.js?v={{ asset_version }}"></script>
   <script src="/static/connectors.js?v={{ asset_version }}"></script>
   <script src="/static/automations.js?v={{ asset_version }}"></script>
   <script src="/static/navigation.js?v={{ asset_version }}"></script>

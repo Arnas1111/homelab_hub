@@ -41,6 +41,7 @@ from app.modules.zigbee.settings import ZigbeeConfiguration, settings_router
 from app.core.preferences import Preferences
 from app.core.identity import Identity
 from app.core.branding import branding_router
+from app.core.appearance import appearance_router, appearance_settings
 from app.core.pages import PAGES, safe_page
 from app.core.connectors import CONNECTOR_FIELDS, configured_connectors, unraid_webui_url
 from app.modules.zigbee.automation import Automations, automation_router
@@ -270,7 +271,7 @@ def shutdown() -> None:
 
 
 def get_settings() -> dict:
-    with db() as conn:
+    with closing(db()) as conn:
         rows = conn.execute("SELECT key, value FROM settings").fetchall()
     values = {r["key"]: r["value"] for r in rows}
     return {
@@ -468,6 +469,7 @@ app.include_router(automation_router(automations, require_auth))
 zigbee_configuration = ZigbeeConfiguration(preferences, zigbee_module)
 app.include_router(settings_router(zigbee_configuration, require_auth))
 app.include_router(branding_router(preferences, require_auth, APP_DIR / 'static'))
+app.include_router(appearance_router(preferences, require_auth))
 
 
 def cpu_percent(stats: dict) -> float:
@@ -1466,7 +1468,8 @@ def change_password(payload: PasswordPayload, request: Request):
 def index(request: Request):
     if not is_authenticated(request):
         return RedirectResponse('/login?next=' + quote(safe_page(request.url.path), safe=''), status_code=303)
-    html = templates.get_template("index.html").render(server_name=SERVER_NAME, settings=get_settings(), asset_version=ASSET_VERSION)
+    html = templates.get_template("index.html").render(server_name=SERVER_NAME, settings=get_settings(), asset_version=ASSET_VERSION,
+                                                      theme=appearance_settings(preferences)['theme'])
     return HTMLResponse(html, headers={'Cache-Control': 'no-cache'})
 
 
