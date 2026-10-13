@@ -129,3 +129,28 @@ test('failed refresh preserves rows and schedules another attempt', async () => 
   assert.match(label.textContent, /Refresh failed/);
   assert.equal(label.innerHTML, undefined);
 });
+
+
+test('published port defaults support unknown apps, real bindings, IPv6 and manual overrides', () => {
+  const ctx=vm.createContext({currentData:{service_link_settings:{enabled:true,resolved_host:'192.0.2.20'},webui_links:[],containers:[]},
+    location:{hostname:'hub.example'}, WEBUI_RULES:[{terms:['jellyfin'],ports:['8096']}], NON_WEBUI_TERMS:['postgres','redis'],
+    containerIcon:()=> 'docker', safeKey:value=>String(value), sortValue:(index,label)=>String(index)+label});
+  vm.runInContext(source.slice(source.indexOf('function containerIdentity('),source.indexOf('async function saveWebuiLinks(')),ctx);
+  const port=(internal,host_port,host_ip='0.0.0.0')=>({internal,host_port,host_ip});
+  const container={name:'custom-app',ports:[port('22/tcp','2222'),port('8080/tcp','18080'),port('80/udp','18081')]};
+  ctx.currentData.containers=[container];
+  let links=ctx.autoWebLinks([container]);
+  assert.equal(links.length,1);
+  assert.equal(links[0].url,'http://192.0.2.20:18080');
+  assert.equal(ctx.autoWebLinks([{name:'custom-app',ports:[port('443/tcp','19443','2001:db8::2')]}])[0].url,'https://[2001:db8::2]:19443');
+  assert.equal(ctx.autoWebLinks([{name:'custom-app',ports:[port('8080/tcp','8080','192.0.2.21')]}])[0].url,'http://192.0.2.21:8080');
+  ctx.currentData.service_link_settings.host='docker.example';
+  assert.equal(ctx.autoWebLinks([container])[0].url,'http://docker.example:18080');
+  ctx.currentData.webui_links=[{link_key:'saved',label:'Custom',container_name:'custom-app',url:'https://custom.example',source:'manual',enabled:true}];
+  assert.equal(ctx.webuiLinkForContainer(container).url,'https://custom.example');
+  assert.equal(ctx.autoWebLinks([{name:'postgres',ports:[port('5432/tcp','5432')]}]).length,0);
+  assert.equal(ctx.autoWebLinks([{name:'custom',ports:[port('8080/tcp','8080','127.0.0.1')]}]).length,0);
+  ctx.currentData.service_link_settings.enabled=false;
+  assert.equal(ctx.autoWebLinks([container]).length,0);
+  assert.equal(ctx.autoWebLinks([{...container,discovered_url:'https://labeled.example'}])[0].url,'https://labeled.example');
+});

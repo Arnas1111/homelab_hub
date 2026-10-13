@@ -15,6 +15,7 @@ function showMqttStatus(status) {
 async function loadHubSettings() {
   loadAccessSettings();
   loadAutomationTimeSettings();
+  loadServiceLinkSettings();
   try {
     const config = await api('/api/zigbee/settings');
     $('mqttEnabled').checked = config.enabled;
@@ -30,6 +31,33 @@ async function loadHubSettings() {
     mqttReady = true;
   } catch (error) { $('mqttStatus').textContent = error.message; }
 }
+let serviceLinksLoading = false, serviceLinksRevision = 0;
+$('serviceLinkSettingsForm').addEventListener('input', () => { serviceLinksRevision++; });
+$('serviceLinkSettingsForm').addEventListener('change', () => { serviceLinksRevision++; });
+async function loadServiceLinkSettings() {
+  if (serviceLinksLoading) return;
+  serviceLinksLoading = true;
+  const revision = serviceLinksRevision;
+  try {
+    const config = await api('/api/service-link-settings');
+    if (revision === serviceLinksRevision) {
+      $('serviceLinksEnabled').checked = config.enabled;
+      $('serviceLinksHost').value = config.host;
+    }
+    $('serviceLinksSave').disabled = false;
+  } catch (error) { $('serviceLinksStatus').textContent = error.message; }
+  finally { serviceLinksLoading = false; }
+}
+$('serviceLinkSettingsForm').addEventListener('submit', async event => {
+  event.preventDefault(); $('serviceLinksSave').disabled = true;
+  serviceLinksRevision++;
+  try {
+    await api('/api/service-link-settings', {method:'PUT', body:JSON.stringify({enabled:$('serviceLinksEnabled').checked, host:$('serviceLinksHost').value.trim()})});
+    $('serviceLinksStatus').textContent = 'Default links saved.';
+    await refresh();
+  } catch (error) { $('serviceLinksStatus').textContent = error.message; }
+  finally { $('serviceLinksSave').disabled = false; }
+});
 document.querySelector('[data-view="settings"]').addEventListener('click', loadHubSettings);
 $('mqttForm').addEventListener('submit', async event => {
   event.preventDefault();

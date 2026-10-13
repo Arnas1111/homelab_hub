@@ -54,6 +54,10 @@ def main():
         page.goto('http://hub.test/')
         page.locator('[data-view="settings"]').click()
         expect(page.locator('#appearanceSave')).to_be_enabled()
+        expect(page.locator('#serviceLinksSave')).to_be_enabled()
+        page.locator('#serviceLinksHost').fill('192.0.2.20')
+        page.locator('#serviceLinksSave').click()
+        expect(page.locator('#serviceLinksStatus')).to_have_text('Default links saved.')
         page.locator('#appearanceTheme').select_option('paper')
         expect(page.locator('body')).to_have_attribute('data-theme','paper')
         page.evaluate('refresh()')
@@ -69,6 +73,7 @@ def main():
         expect(page.locator('#appearanceTheme')).to_have_value('paper')
         page.locator('#appearanceTheme').select_option('paper-dark')
         expect(page.locator('body')).to_have_attribute('data-theme','paper-dark')
+        expect(page.locator('#serviceLinksHost')).to_have_value('192.0.2.20')
         assert page.locator('body').evaluate('node=>getComputedStyle(node).backgroundColor') == 'rgb(17, 18, 20)'
         assert page.locator('#appearanceSettings').evaluate('node=>getComputedStyle(node).borderRadius') == '0px'
         page.locator('#appearanceSave').click()

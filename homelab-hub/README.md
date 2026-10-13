@@ -14,6 +14,8 @@ In **Services**, pin applications for Home or search with Ctrl/Cmd+K. **+ Add ti
 
 ## Current features
 
+- Container Web UI defaults now include unknown apps with published TCP ports. Common HTTP/HTTPS ports are preferred; obvious SSH/database ports, UDP and loopback-only bindings are excluded. Explicit Web UI labels and saved URLs take priority. Wildcard bindings use the configured Unraid hostname or the Hub hostname; **Settings → Default container Web UI links** offers a host override and an enable switch. These are editable URL suggestions, not availability checks. Host-network containers without published mappings still need an explicit URL.
+
 - **Settings → Appearance → Theme** selects **Homelab dark**, **Artcraft-inspired light**, or **Artcraft-inspired dark**. Both Artcraft variants share grid borders, bold headings and colorful navigation/metric accents; the dark variant uses charcoal surfaces and brighter accent colors. Changes preview immediately; **Save theme** persists the selection under `/data`, and **Cancel preview** restores the saved theme. Logo and favicon uploads remain in the same panel. This feature is part of Homelab Hub, independent of the discontinued Unraid Control experiment.
 
 - Settings includes Zigbee/MQTT setup, custom logo/favicon uploads, administrator password changes, and entry points to service connections and history storage. Changes persist under `/data`.

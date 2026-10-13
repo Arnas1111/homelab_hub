@@ -42,6 +42,7 @@ from app.core.preferences import Preferences
 from app.core.identity import Identity
 from app.core.branding import branding_router
 from app.core.appearance import appearance_router, appearance_settings
+from app.core.service_links import service_link_router, service_link_settings, service_link_host
 from app.core.pages import PAGES, safe_page
 from app.core.connectors import CONNECTOR_FIELDS, configured_connectors, unraid_webui_url
 from app.modules.zigbee.automation import Automations, automation_router
@@ -470,6 +471,7 @@ zigbee_configuration = ZigbeeConfiguration(preferences, zigbee_module)
 app.include_router(settings_router(zigbee_configuration, require_auth))
 app.include_router(branding_router(preferences, require_auth, APP_DIR / 'static'))
 app.include_router(appearance_router(preferences, require_auth))
+app.include_router(service_link_router(preferences, require_auth))
 
 
 def cpu_percent(stats: dict) -> float:
@@ -1535,6 +1537,8 @@ def overview(request: Request, include_containers: bool = Query(True),
         row = conn.execute("SELECT value FROM settings WHERE key='board_favorites'").fetchone()
     payload["board"] = {"favorites": json.loads(row["value"]) if row else []}
     configured = get_integration_values()
+    links_config = service_link_settings(preferences)
+    payload['service_link_settings'] = {**links_config, 'resolved_host':service_link_host(links_config, configured['unraid_url'], host_base_url(request))}
     payload['server']['webui_url'] = unraid_webui_url(configured['unraid_url'])
     payload['connector_types'] = configured_connectors(configured)
     payload["connections"] = {"jellyfin": bool(configured["jellyfin_api_key"]),
@@ -1556,7 +1560,7 @@ def overview(request: Request, include_containers: bool = Query(True),
             container["icon"] = pref.get("icon") or container["icon"]
             container["group_name"] = pref.get("group_name") or container["group_name"]
             container["sort_order"] = pref.get("sort_order", 0)
-            container["discovered_url"] = service_url(container["discovered_url"], container["ports"], host_base_url(request))
+            container["discovered_url"] = service_url(container["discovered_url"], container["ports"], payload['service_link_settings']['resolved_host'])
             sample = (stats["data"] or {}).get(container["id"]) if stats else None
             if sample and sample["status"] == container["status"]:
                 for key in ("cpu_percent", "memory_used", "memory_limit", "memory_percent", "stats_available"):

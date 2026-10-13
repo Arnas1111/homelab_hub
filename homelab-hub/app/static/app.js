@@ -846,19 +846,23 @@ function autoWebLinks(containers) {
         source: 'auto', sort_order: 999999, port: 0 });
       continue;
     }
-    for (const p of c.ports || []) {
+    if (currentData?.service_link_settings?.enabled === false) continue;
+    const candidates = webuiPortCandidates(c);
+    for (const p of candidates) {
       const [internalPort, protocol = 'tcp'] = String(p.internal || '').split('/');
-      const rule = webuiRuleFor(c, p);
-      if (!rule) continue;
       const port = Number(p.host_port);
-      const scheme = port === 443 || port === 8443 || Number(internalPort) === 443 ? 'https' : 'http';
+      const scheme = [443,8443,8920,9443].includes(Number(internalPort)) || (Number(internalPort) !== 80 && [443,8443].includes(port)) ? 'https' : 'http';
+      const config = currentData?.service_link_settings || {};
+      const binding = String(p.host_ip || '').replace(/^\[|\]$/g, '');
+      const hostname = String(config.host || (binding && !['0.0.0.0','::','*'].includes(binding) ? binding : '') || config.resolved_host || location.hostname).replace(/^\[|\]$/g, '');
+      const host = hostname.includes(':') ? `[${hostname}]` : hostname;
       const linkKey = `auto:${safeKey(c.name)}:${safeKey(p.host_port)}:${safeKey(p.internal)}`;
       if (seen.has(linkKey)) continue;
       seen.add(linkKey);
       links.push({
         link_key: linkKey,
         label: c.name,
-        url: `${scheme}://${location.hostname}:${p.host_port}`,
+        url: `${scheme}://${host}:${port}`,
         icon: containerIcon(c),
         container_name: c.name,
         enabled: true,
@@ -869,6 +873,24 @@ function autoWebLinks(containers) {
     }
   }
   return links.sort((a, b) => a.label.localeCompare(b.label) || a.port - b.port);
+}
+
+function webuiPortCandidates(container) {
+  if (NON_WEBUI_TERMS.some(term => containerIdentity(container).includes(term))) return [];
+  const ports = (container.ports || []).filter(p => {
+    const protocol = String(p.internal || '').split('/')[1] || 'tcp';
+    const port = Number(p.host_port);
+    const binding = String(p.host_ip || '').replace(/^\[|\]$/g, '');
+    return protocol === 'tcp' && Number.isInteger(port) && port > 0 && port <= 65535 && binding !== '::1' && !binding.startsWith('127.');
+  });
+  const recognized = ports.filter(p => webuiRuleFor(container, p));
+  if (recognized.length) return recognized;
+  const nonWeb = [20,21,22,25,53,110,143,445,465,587,993,995,1433,1521,1883,3306,5432,6379,8883,11211,27017];
+  const preferred = [80,443,8080,8443,8000,3000,8096,8123,9000,9443];
+  const eligible = ports.filter(p => !nonWeb.includes(Number(String(p.internal).split('/')[0])));
+  const rank = p => { const index = preferred.indexOf(Number(String(p.internal).split('/')[0])); return index < 0 ? 100 : index; };
+  eligible.sort((a,b) => rank(a)-rank(b) || Number(a.host_port)-Number(b.host_port));
+  return eligible.slice(0,1);
 }
 
 function storedWebLinks() {

@@ -244,6 +244,16 @@
           <div><button class="btn primary" type="submit">Save settings</button> <span id="settingsSaved" class="tiny muted"></span></div>
         </form>
       </div>
+      <div class="panel settings-panel">
+        <div class="panel-head"><h2>Default container Web UI links</h2></div>
+        <form id="serviceLinkSettingsForm" class="settings-form">
+          <label class="check"><input id="serviceLinksEnabled" type="checkbox" checked> Use published TCP ports to suggest container Web UI links</label>
+          <label>Docker host IP or hostname (optional)<input id="serviceLinksHost" maxlength="253" placeholder="Leave blank to detect automatically"></label>
+          <p class="muted tiny">Wildcard bindings use the configured Unraid host, then the Hub host. Set an override if you access the Hub through a reverse proxy. Enter a host without a scheme or port. Manual URLs and Docker Web UI labels take priority; port guesses can be edited from each service card.</p>
+          <button id="serviceLinksSave" class="btn primary" type="submit" disabled>Save default links</button>
+          <p id="serviceLinksStatus" role="status"></p>
+        </form>
+      </div>
       <div class="panel settings-panel" id="automationTimeSettings">
         <div class="panel-head"><h2>Automation time and solar location</h2></div>
         <form id="automationTimeSettingsForm" class="settings-form">
