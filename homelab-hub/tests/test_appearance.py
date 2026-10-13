@@ -33,6 +33,8 @@ class AppearanceTests(unittest.TestCase):
                 self.assertEqual(client.put('/api/appearance',json={'theme':'paper'}).json(), {'theme':'paper'})
                 self.assertEqual(appearance_settings(Preferences(db)), {'theme':'paper'})
                 self.assertEqual(preferences.read('branding_logo')['revision'],'saved-logo')
+                self.assertEqual(client.put('/api/appearance',json={'theme':'paper-dark'}).json(), {'theme':'paper-dark'})
+                self.assertEqual(appearance_settings(Preferences(db)), {'theme':'paper-dark'})
                 self.assertEqual(client.put('/api/appearance',json={'theme':'dark'}).json(), {'theme':'dark'})
 
 

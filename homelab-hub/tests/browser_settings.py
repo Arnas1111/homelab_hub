@@ -67,6 +67,16 @@ def main():
         expect(page.locator('body')).to_have_attribute('data-theme','paper')
         page.locator('[data-view="settings"]').click()
         expect(page.locator('#appearanceTheme')).to_have_value('paper')
+        page.locator('#appearanceTheme').select_option('paper-dark')
+        expect(page.locator('body')).to_have_attribute('data-theme','paper-dark')
+        assert page.locator('body').evaluate('node=>getComputedStyle(node).backgroundColor') == 'rgb(17, 18, 20)'
+        assert page.locator('#appearanceSettings').evaluate('node=>getComputedStyle(node).borderRadius') == '0px'
+        page.locator('#appearanceSave').click()
+        expect(page.locator('#appearanceStatus')).to_have_text('Theme saved.')
+        page.reload()
+        expect(page.locator('body')).to_have_attribute('data-theme','paper-dark')
+        page.locator('[data-view="settings"]').click()
+        expect(page.locator('#appearanceTheme')).to_have_value('paper-dark')
         expect(page.locator('#automationTimezone')).to_have_value('Europe/Berlin')
         page.wait_for_function('!automationTimeLoading')
         # Hold an older response while editing: a late load must preserve the draft.

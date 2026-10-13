@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 class Appearance(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    theme: Literal['dark', 'paper'] = 'dark'
+    theme: Literal['dark', 'paper', 'paper-dark'] = 'dark'
 
 
 def appearance_settings(preferences):

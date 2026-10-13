@@ -14,7 +14,7 @@ In **Services**, pin applications for Home or search with Ctrl/Cmd+K. **+ Add ti
 
 ## Current features
 
-- **Settings → Appearance → Theme** selects **Homelab dark** or **Artcraft-inspired light**. The light theme uses off-white surfaces, grid borders, bold headings and colorful navigation/metric accents. Changes preview immediately; **Save theme** persists the selection under `/data`, and **Cancel preview** restores the saved theme. Logo and favicon uploads remain in the same panel. This feature is part of Homelab Hub, independent of the discontinued Unraid Control experiment.
+- **Settings → Appearance → Theme** selects **Homelab dark**, **Artcraft-inspired light**, or **Artcraft-inspired dark**. Both Artcraft variants share grid borders, bold headings and colorful navigation/metric accents; the dark variant uses charcoal surfaces and brighter accent colors. Changes preview immediately; **Save theme** persists the selection under `/data`, and **Cancel preview** restores the saved theme. Logo and favicon uploads remain in the same panel. This feature is part of Homelab Hub, independent of the discontinued Unraid Control experiment.
 
 - Settings includes Zigbee/MQTT setup, custom logo/favicon uploads, administrator password changes, and entry points to service connections and history storage. Changes persist under `/data`.
 - Fresh installations need no feature credentials or manually supplied session secret: open the Hub and create the administrator password. Existing `HUB_ADMIN_PASSWORD` remains valid until you change the password in Settings. The session key is generated and persisted automatically when `HUB_SESSION_SECRET` is absent.

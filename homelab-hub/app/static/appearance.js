@@ -1,7 +1,8 @@
 /* Saved Homelab theme; previews stay independent of polling and other forms. */
-let appearanceSaved = document.body.dataset.theme === 'paper' ? 'paper' : 'dark';
+const appearanceThemes = ['dark', 'paper', 'paper-dark'];
+let appearanceSaved = appearanceThemes.includes(document.body.dataset.theme) ? document.body.dataset.theme : 'dark';
 let appearanceDirty = false, appearanceBusy = false;
-function applyHubTheme(theme) { document.body.dataset.theme = theme === 'paper' ? 'paper' : 'dark'; }
+function applyHubTheme(theme) { document.body.dataset.theme = appearanceThemes.includes(theme) ? theme : 'dark'; }
 applyHubTheme(appearanceSaved);
 $('appearanceTheme').value = appearanceSaved;
 async function loadAppearance() {
