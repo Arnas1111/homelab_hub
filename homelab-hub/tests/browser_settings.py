@@ -52,6 +52,7 @@ def main():
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.route('**/*', handler)
         page.goto('http://hub.test/')
+        page.locator('[data-nav-group="settings"] summary').click()
         page.locator('[data-view="settings"]').click()
         expect(page.locator('#appearanceSave')).to_be_enabled()
         expect(page.locator('#serviceLinksSave')).to_be_enabled()
