@@ -134,6 +134,7 @@ def main():
         state['history_error'] = False
         page.locator('#historyRefresh').click()
         page.wait_for_function("!document.getElementById('historyNotice').textContent.includes('temporarily unavailable')")
+        page.locator('[data-nav-group="settings"] summary').click()
         page.locator('[data-view="database"]').click()
         page.wait_for_function("document.getElementById('pgStatus').textContent.includes('disabled')")
         page.locator('#pgHost').fill('postgres')
