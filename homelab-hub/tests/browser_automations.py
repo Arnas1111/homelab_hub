@@ -68,6 +68,7 @@ def main():
         expect(page.locator('#pageTitle')).to_have_text('Memory history')
         page.go_back()
         expect(page.locator('#pageTitle')).to_have_text('CPU history')
+        page.locator('[data-nav-group="services"] summary').click()
         page.locator('[data-view="services"]').click()
         page.go_back()
         expect(page).to_have_url('http://hub.test/history')
