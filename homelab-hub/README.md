@@ -248,10 +248,13 @@ Automations**, **Performance → History / Logs**, and **Settings → General /
 Integrations / Metrics / Metrics storage**. Existing direct section URLs continue
 to work.
 
-Home has a **Customize Home** editor. It can show or hide the welcome/search,
-discovery status, host readings, favorite services, attention, connections, and
-Zigbee modules; change each module between half and full width; and reorder them.
-The layout is saved for this Hub in `/data/hub.db` and shared across browsers.
+Home keeps its normal view minimal. **Edit dashboard** opens an in-place canvas:
+add modules from the palette, drag existing cards to reorder them, select a card
+to set its width and accent, or remove it. Keyboard and touch users can use the
+move buttons. Available
+modules include service search, discovery, host readings, favorite services,
+attention, connections, Zigbee, a local clock, and an editable note. Save commits
+the layout to `/data/hub.db` for all browsers; Cancel restores the previous view.
 
 New Zigbee automations use a two-dimensional flow canvas. Drag an **Item** card
 from the discovered Zigbee list, then add and connect **When state reports**, **If

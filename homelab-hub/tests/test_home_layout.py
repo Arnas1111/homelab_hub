@@ -22,11 +22,18 @@ class HomeLayoutTests(unittest.TestCase):
             self.assertEqual(client.get(path).status_code,401)
             client.headers['x-user']='owner'
             self.assertIn('services',[row['id'] for row in client.get(path).json()['modules']])
+            prefs.write('home_layout',[{'id':'services','width':2}])
+            self.assertEqual(client.get(path).json()['modules'][0]['width'],3)
             layout={'modules':[{'id':'zigbee','width':2},{'id':'services','width':1}]}
             self.assertEqual(client.put(path,json=layout).status_code,200)
             self.assertEqual(client.get(path).json(),layout)
             self.assertEqual(client.put(path,json={'modules':[layout['modules'][0]]*2}).status_code,422)
             self.assertEqual(client.put(path,json={'modules':[{'id':'unknown','width':2}]}).status_code,422)
+            note={'modules':[{'id':'notes','width':3,'content':'Remember to inspect the hub','accent':'mint'}]}
+            self.assertEqual(client.put(path,json=note).json(),note)
+            self.assertEqual(client.get(path).json(),note)
+            self.assertEqual(client.put(path,json={'modules':[{'id':'notes','width':4}]}).status_code,422)
+            self.assertEqual(client.put(path,json={'modules':[{'id':'notes','content':'x'*2001}]}).status_code,422)
 
 
 if __name__=='__main__': unittest.main()
