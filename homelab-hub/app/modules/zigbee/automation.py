@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from app.core.objects import ActionRequest
 from app.modules.zigbee.time_conditions import AutomationTime, TimeCondition, TimeSettings
+from app.modules.zigbee.graph_automation import GraphRule, compare, paths, validate_graph, window_allows
 
 
 class Rule(BaseModel):
@@ -31,6 +32,7 @@ class Automations:
         self.stop_event = threading.Event()
         self.thread = None
         self.rules, self.pending, self.status = {}, {}, {}
+        self.graphs, self.graph_jobs, self.graph_status = {}, {}, {}
         self.holds = {}
         self.time = AutomationTime(preferences)
 
@@ -40,6 +42,8 @@ class Automations:
             self.rules = saved.get('rules', {})
             self.pending = saved.get('pending', {})
             self.holds = saved.get('holds', {})
+            self.graphs = saved.get('graphs', {})
+            self.graph_jobs = saved.get('graph_jobs', {})
         self.stop_event.clear()
         self.thread = threading.Thread(target=self._run, daemon=True, name='zigbee-automations')
         self.thread.start()
@@ -50,7 +54,8 @@ class Automations:
             self.thread.join(timeout=5)
 
     def _save(self):
-        self.preferences.write('zigbee_automations', {'rules': self.rules, 'pending': self.pending, 'holds': self.holds})
+        self.preferences.write('zigbee_automations', {'rules': self.rules, 'pending': self.pending, 'holds': self.holds,
+                                                       'graphs': self.graphs, 'graph_jobs': self.graph_jobs})
 
     def notify(self, object_id, values):
         # MQTT must never wait on storage or an actuator publish.
@@ -77,7 +82,10 @@ class Automations:
 
     def snapshot(self):
         with self.lock:
-            return {'rules': [dict(id=key, **rule, status=self.status.get(key, 'Occupied; light held on' if key in self.holds else 'Ready' if rule['enabled'] else 'Disabled'),
+            return {'graphs': [dict(id=key, **graph, status=self.graph_status.get(key, 'Ready' if graph['enabled'] else 'Disabled'))
+                               for key, graph in self.graphs.items()],
+                    'graph_pending_count': len(self.graph_jobs),
+                    'rules': [dict(id=key, **rule, status=self.status.get(key, 'Occupied; light held on' if key in self.holds else 'Ready' if rule['enabled'] else 'Disabled'),
                                   off_at=None if self._held(rule['target']) else self.pending.get(rule['target'], {}).get('due'))
                               for key, rule in self.rules.items()],
                     'pending_count': sum(not self._held(target) for target in self.pending), 'connection': self.module.describe()['status']}
@@ -145,6 +153,7 @@ class Automations:
 
     def process(self, source, values):
         with self.lock:
+            self._process_graphs(source, values)
             for key, rule in self.rules.items():
                 if not rule['enabled'] or rule['source'] != source or rule['property'] not in values:
                     continue
@@ -194,6 +203,7 @@ class Automations:
 
     def tick(self):
         with self.lock:
+            self._tick_graphs()
             now = self.clock()
             for target, job in list(self.pending.items()):
                 if self._held(target):
@@ -214,6 +224,88 @@ class Automations:
                             self.status[key] = 'Off command sent'
                 self._save()
 
+    def save_graph(self, graph: GraphRule, graph_id=None):
+        with self.lock:
+            if graph_id is not None and graph_id not in self.graphs:
+                raise HTTPException(404, 'Automation not found')
+            if graph_id is None and len(self.graphs) + len(self.rules) >= 100:
+                raise HTTPException(422, 'Maximum 100 automations')
+            validate_graph(graph, self.module, self.time)
+            graph_id = graph_id or uuid.uuid4().hex
+            self.graphs[graph_id] = graph.model_dump()
+            self.graph_status.pop(graph_id, None)
+            self._save()
+            return {'id': graph_id}
+
+    def delete_graph(self, graph_id):
+        with self.lock:
+            if graph_id not in self.graphs:
+                raise HTTPException(404, 'Automation not found')
+            del self.graphs[graph_id]
+            self.graph_status.pop(graph_id, None)
+            # Scheduled branches hold a copy of their graph and still finish.
+            self._save()
+
+    def _process_graphs(self, source, values):
+        for graph_id, graph in self.graphs.items():
+            if not graph['enabled']:
+                continue
+            nodes, incoming, outgoing = paths(graph)
+            for key, node in nodes.items():
+                if node['kind'] != 'trigger':
+                    continue
+                item = nodes[incoming[key][0]]['item']
+                if item != source or node['property'] not in values:
+                    continue
+                if not compare(values[node['property']], node['value'], node['operator']):
+                    continue
+                try:
+                    self._walk_graph(graph_id, graph, outgoing[key], item)
+                    self.graph_status[graph_id] = 'Triggered'
+                except Exception:
+                    self.graph_status[graph_id] = 'Action failed; check Zigbee connection'
+
+    def _walk_graph(self, graph_id, graph, next_ids, context):
+        nodes, _, outgoing = paths(graph)
+        for key in next_ids:
+            node = nodes[key]
+            kind = node['kind']
+            if kind == 'item':
+                self._walk_graph(graph_id, graph, outgoing[key], node['item'])
+            elif kind == 'condition':
+                obj = next((obj for obj in self.module.objects() if obj.id == context), None)
+                if obj and obj.available and compare(obj.state.get(node['property']), node['value'], node['operator']):
+                    self._walk_graph(graph_id, graph, outgoing[key], context)
+            elif kind == 'time':
+                if self.time.allows(node['time_condition'], self.clock()):
+                    self._walk_graph(graph_id, graph, outgoing[key], context)
+            elif kind == 'window':
+                if window_allows(node['start'], node['end'], self.clock(), self.time.settings().timezone):
+                    self._walk_graph(graph_id, graph, outgoing[key], context)
+            elif kind == 'action':
+                self.module.act(context, ActionRequest(action=node['action'], value=node['value']))
+                self._walk_graph(graph_id, graph, outgoing[key], context)
+            elif kind == 'delay':
+                job_key = graph_id + ':' + key + ':' + context
+                self.graph_jobs[job_key] = {'graph': graph, 'graph_id': graph_id, 'next': outgoing[key],
+                                            'context': context, 'due': self.clock() + node['seconds'], 'retry': 0}
+                self._save()
+
+    def _tick_graphs(self):
+        now = self.clock()
+        for key, job in list(self.graph_jobs.items()):
+            if now < max(job['due'], job['retry']):
+                continue
+            try:
+                self._walk_graph(job['graph_id'], job['graph'], job['next'], job['context'])
+            except Exception:
+                job['retry'] = now + 5
+                self.graph_status[job['graph_id']] = 'Delayed action failed; retrying'
+            else:
+                del self.graph_jobs[key]
+                self.graph_status[job['graph_id']] = 'Delayed actions completed'
+            self._save()
+
 
 def automation_router(engine, require_auth):
     router = APIRouter(prefix='/api/zigbee/automations', dependencies=[Depends(require_auth)])
@@ -221,6 +313,19 @@ def automation_router(engine, require_auth):
     @router.get('')
     def read():
         return engine.snapshot()
+
+    @router.post('/graphs', status_code=201)
+    def create_graph(graph: GraphRule):
+        return engine.save_graph(graph)
+
+    @router.put('/graphs/{graph_id}')
+    def update_graph(graph_id: str, graph: GraphRule):
+        return engine.save_graph(graph, graph_id)
+
+    @router.delete('/graphs/{graph_id}')
+    def delete_graph(graph_id: str):
+        engine.delete_graph(graph_id)
+        return {'ok': True}
 
     @router.get('/time-settings')
     def time_settings():

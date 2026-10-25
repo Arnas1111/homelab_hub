@@ -97,6 +97,7 @@ function openMetricPage(metric) {
   document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
   $('metricDetailView').classList.add('active');
   document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.classList.contains('history-nav')));
+  document.querySelector('.history-nav')?.closest('.nav-group')?.setAttribute('open', '');
   document.querySelectorAll('.metric-tabs button').forEach(btn => {
     btn.classList.toggle('primary', btn.dataset.metricPage === metric);
     btn.setAttribute('aria-pressed', String(btn.dataset.metricPage === metric));

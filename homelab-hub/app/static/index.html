@@ -13,19 +13,25 @@
   <aside class="sidebar">
     <div class="brand"><div class="brand-mark small"><img id="hubLogo" src="/branding/logo" alt=""></div><span id="brandTitle">{{ settings.title }}</span></div>
     <nav aria-label="Main navigation">
-      <span class="nav-heading">Workspace</span>
-      <a class="nav-item active" data-view="home" href="/home"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v10H3z M9 20v-7h6v7"/></svg></span> Home</a>
-      <a class="nav-item" data-view="services" href="/services"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg></span> Services</a>
-      <a class="nav-item" data-view="containers" href="/containers"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18v6H3z M3 14h18v6H3z M6 7h1 M6 17h1"/></svg></span> Containers</a>
-      <a class="nav-item" data-view="metrics" href="/metrics"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-7 5 4 8-11 M3 21h18"/></svg></span> Metrics</a>
-      <button class="nav-item history-nav" data-metric-page="cpu"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a9 9 0 1 1-1 9 M3 3v5h5 M12 7v5l3 2"/></svg></span> History</button>
-      <a class="nav-item" data-view="integrations" href="/integrations"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6v6H4z M14 13h6v6h-6z M10 8h7v5"/></svg></span> Integrations</a>
-      <a class="nav-item" data-view="logs" href="/logs"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 3h16v18H4z M8 7h8 M8 12h8 M8 17h5"/></svg></span> Logs</a>
-      <a class="nav-item" data-view="zigbee" href="/zigbee"><span class="nav-symbol" aria-hidden="true">&#9788;</span> Zigbee</a>
-      <span class="nav-heading">Manage</span>
-      <a class="nav-item" data-view="automations" href="/automations"><span class="nav-symbol" aria-hidden="true">&#9889;</span> Automations</a>
-      <a class="nav-item" data-view="settings" href="/settings"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16 M4 17h16 M8 4v6 M16 14v6"/></svg></span> Settings</a>
-      <a class="nav-item" data-view="database" href="/database"><span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6c0-4 16-4 16 0v12c0 4-16 4-16 0z M4 6c0 4 16 4 16 0 M4 12c0 4 16 4 16 0"/></svg></span> History storage</a>
+      <a class="nav-item active" data-view="home" href="/home"><span class="nav-symbol" aria-hidden="true">⌂</span> Home</a>
+      <details class="nav-group" data-nav-group="services" open><summary>Services</summary><div class="nav-children">
+        <a class="nav-item" data-view="services" href="/services">Applications</a>
+        <a class="nav-item" data-view="containers" href="/containers">Containers</a>
+      </div></details>
+      <details class="nav-group" data-nav-group="zigbee" open><summary>Zigbee</summary><div class="nav-children">
+        <a class="nav-item" data-view="zigbee" href="/zigbee">Devices</a>
+        <a class="nav-item" data-view="automations" href="/automations">Automations</a>
+      </div></details>
+      <details class="nav-group" data-nav-group="performance" open><summary>Performance</summary><div class="nav-children">
+        <button class="nav-item history-nav" data-metric-page="cpu">History</button>
+        <a class="nav-item" data-view="logs" href="/logs">Logs</a>
+      </div></details>
+      <details class="nav-group" data-nav-group="settings" open><summary>Settings</summary><div class="nav-children">
+        <a class="nav-item" data-view="settings" href="/settings">General</a>
+        <a class="nav-item" data-view="integrations" href="/integrations">Integrations</a>
+        <a class="nav-item" data-view="metrics" href="/metrics">Metrics</a>
+        <a class="nav-item" data-view="database" href="/database">Metrics storage</a>
+      </div></details>
     </nav>
     <div class="sidebar-bottom">
       <div class="server-pill"><span class="dot"></span><div><strong>{{ server_name }}</strong><small id="dockerVersion">Connecting…</small></div></div>
@@ -44,13 +50,18 @@
     </header>
 
     <section id="homeView" class="view active">
-      <div class="home-heading"><div><span class="eyebrow">YOUR HOMELAB</span><h2><a id="homeServerLink" target="_blank" rel="noreferrer"><span id="homeServerTitle">{{ server_name }}</span></a></h2><p>Everything in its place. Open a service or see what needs attention.</p></div><label class="board-search"><span class="sr-only">Search services</span><input id="homeSearch" class="search" placeholder="Search your services..." autocomplete="off"><kbd>Ctrl K</kbd></label></div>
-      <p id="boardStatus" class="discovery-status" role="status">Discovering your Docker environment...</p>
-      <div id="homePulse" class="home-pulse" aria-label="Host summary"><div class="pulse-placeholder">Host readings are loading independently.</div></div>
-      <div class="home-columns"><div><div class="board-section-heading"><div><span class="eyebrow">QUICK ACCESS</span><h2 id="favoriteTitle">Your services</h2></div><button class="btn subtle" data-open-view="services">View all services &rarr;</button></div><div id="homeServices"><div class="board-empty">Discovering services from Docker. Your page is ready while discovery runs.</div></div></div>
-      <aside class="home-aside"><section class="board-panel"><div class="board-section-heading"><h2>Needs attention</h2><span id="attentionCount" class="count-label">&mdash;</span></div><div id="homeAttention" class="board-empty">Waiting for the first discovery result.</div></section><section class="board-panel"><div class="board-section-heading"><h2>Connections</h2><button class="text-btn" data-open-view="integrations">View &rarr;</button></div><div id="homeConnections"></div></section></aside></div>
+      <div class="board-section-heading"><div><span class="eyebrow">YOUR SPACE</span><h2>Home</h2><p class="muted">Arrange the information and controls you use most.</p></div><button id="customizeHome" class="btn">Customize Home</button></div>
+      <div id="homeModules" class="home-modules">
+        <section class="home-module" data-home-module="welcome" data-width="2"><div class="home-heading"><div><span class="eyebrow">YOUR HOMELAB</span><h2><a id="homeServerLink" target="_blank" rel="noreferrer"><span id="homeServerTitle">{{ server_name }}</span></a></h2><p>Everything in its place. Open a service or see what needs attention.</p></div><label class="board-search"><span class="sr-only">Search services</span><input id="homeSearch" class="search" placeholder="Search your services..." autocomplete="off"><kbd>Ctrl K</kbd></label></div></section>
+        <section class="home-module" data-home-module="status" data-width="2"><p id="boardStatus" class="discovery-status" role="status">Discovering your Docker environment...</p></section>
+        <section class="home-module" data-home-module="host" data-width="2"><div class="board-section-heading"><h2>Host at a glance</h2></div><div id="homePulse" class="home-pulse" aria-label="Host summary"><div class="pulse-placeholder">Host readings are loading independently.</div></div></section>
+        <section class="home-module" data-home-module="services" data-width="2"><div class="board-section-heading"><div><span class="eyebrow">QUICK ACCESS</span><h2 id="favoriteTitle">Your services</h2></div><button class="btn subtle" data-open-view="services">View all services &rarr;</button></div><div id="homeServices"><div class="board-empty">Discovering services from Docker. Your page is ready while discovery runs.</div></div></section>
+        <section class="home-module board-panel" data-home-module="attention" data-width="1"><div class="board-section-heading"><h2>Needs attention</h2><span id="attentionCount" class="count-label">&mdash;</span></div><div id="homeAttention" class="board-empty">Waiting for discovery.</div></section>
+        <section class="home-module board-panel" data-home-module="connections" data-width="1"><div class="board-section-heading"><h2>Connections</h2><button class="text-btn" data-open-view="integrations">View &rarr;</button></div><div id="homeConnections"></div></section>
+        <section class="home-module board-panel" data-home-module="zigbee" data-width="1"><div class="board-section-heading"><h2>Zigbee</h2><button class="text-btn" data-open-view="zigbee">Devices &rarr;</button></div><div id="homeZigbee">Open Zigbee to check devices.</div></section>
+      </div>
+      <dialog id="homeLayoutDialog" class="home-layout-dialog"><form id="homeLayoutForm"><div class="board-section-heading"><div><span class="eyebrow">HOME MODULES</span><h2>Customize Home</h2><p class="muted">Add or hide modules, change their width, and move them up or down.</p></div><button id="homeLayoutClose" class="btn" type="button" aria-label="Close">✕</button></div><div id="homeModuleList"></div><p id="homeLayoutFeedback" role="status"></p><button class="btn primary" type="submit">Save layout</button></form></dialog>
     </section>
-
     <section id="servicesView" class="view">
       <div class="board-section-heading"><div><span class="eyebrow">APPLICATION DIRECTORY</span><h2>Services</h2><p class="muted tiny">Docker apps, automation tools, and your custom tiles. Pin frequently used services.</p></div><div class="service-actions"><button class="btn" id="manageServices">Manage links</button><button class="btn primary" id="addServiceTile">+ Add tile</button></div></div>
       <div class="service-toolbar"><label class="sr-only" for="serviceSearch">Search services</label><input id="serviceSearch" class="search" placeholder="Search name, group, image..."><label class="sr-only" for="serviceFilter">Filter services</label><select id="serviceFilter" class="select"><option value="all">All services</option><option value="favorites">Favorites</option><option value="attention">Needs attention</option><option value="running">Running</option></select><span id="serviceCount" class="muted tiny"></span></div>
@@ -140,8 +151,17 @@
     </section>
 
     <section id="automationsView" class="view">
-      <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Automations</h2><p class="muted">When a device reports a value, turn on a light or switch for a set time.</p></div><button id="automationRefresh" class="btn">Refresh</button></div>
+      <div class="board-section-heading"><div><span class="eyebrow">ZIGBEE / AUTOMATIONS</span><h2>Automations</h2><p class="muted">Connect items, triggers, conditions and actions on a canvas.</p></div><div class="automation-pair"><button id="graphNew" class="btn primary">+ New automation</button><button id="automationRefresh" class="btn">Refresh</button></div></div>
       <p id="automationStatus" role="status"></p>
+      <div id="automationAllCards" class="graph-list"></div>
+      <section id="graphEditor" class="graph-editor" hidden>
+        <div class="board-section-heading"><div><span class="eyebrow">FLOW EDITOR</span><h2 id="graphEditorHeading">New automation</h2></div><div class="automation-pair"><button id="graphSave" class="btn primary">Save</button><button id="graphCancel" class="btn">Close editor</button></div></div>
+        <div class="graph-meta"><label>Name<input id="graphName" maxlength="80" placeholder="Give this automation a name"></label><label class="check"><input id="graphEnabled" type="checkbox" checked> Enabled</label><span id="graphFeedback" role="status"></span></div>
+        <div class="graph-workspace"><aside class="graph-palette"><h3>Add cards</h3><p class="muted tiny">Drag onto the canvas, or tap to add. Select a card to configure it.</p><div id="graphItemPalette"></div><div id="graphLogicPalette"></div></aside>
+          <div class="graph-canvas-scroll"><div id="graphCanvas" class="graph-canvas" aria-label="Automation flow canvas"><svg id="graphWires" viewBox="0 0 2400 1600" preserveAspectRatio="none" aria-hidden="true"></svg><div id="graphNodes"></div></div></div>
+          <aside class="graph-inspector"><h3>Card settings</h3><div id="graphInspector" class="muted">Select a card. Connect cards with the output and input dots. You can also drag from one dot to another.</div><button id="graphDeleteNode" class="btn" hidden>Remove card</button><p class="muted tiny">Flow example: Motion item → state trigger → Light item → power on → delay → Light item → power off.</p></aside></div>
+      </section>
+      <details id="legacyAutomation" class="legacy-automation"><summary>Existing timed rules</summary><p class="muted tiny">Your saved rules continue to run. Use this editor to change them; new flows use the canvas above.</p>
       <div class="automation-layout">
         <form id="automationForm" class="panel automation-editor">
           <h3 id="automationEditorTitle">New automation</h3>
@@ -167,10 +187,11 @@
         </form>
         <div><div id="automationRules"></div><p class="muted tiny">Disabling or deleting a rule stops new activations. Existing switch-off timers still finish. If several rules control one light, the latest deadline wins. Manual changes do not cancel a timer.</p></div>
       </div>
+      </details>
     </section>
 
     <section id="zigbeeView" class="view">
-      <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Zigbee devices</h2><p class="muted tiny">Lights, switches and sensors. Controls follow the capabilities reported by each device.</p></div><button id="zigbeeRefresh" class="btn">Refresh</button></div>
+      <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Zigbee devices</h2><p class="muted tiny">Lights, switches and sensors. Controls follow the capabilities reported by each device.</p></div><div class="automation-pair"><button class="btn" data-open-view="automations">Automations</button><button id="zigbeeRefresh" class="btn">Refresh</button></div></div>
       <p id="zigbeeStatus" role="status">Loading connection status...</p>
       <p id="zigbeeFeedback" role="status" aria-live="polite"></p>
       <div class="zb-toolbar"><input id="zigbeeSearch" class="search" placeholder="Find a device…" aria-label="Search devices"><select id="zigbeeType" class="select" aria-label="Device type"><option value="">All types</option><option value="light">Lights</option><option value="switch">Switches</option><option value="sensor">Sensors</option></select><select id="zigbeeGrouping" class="select" aria-label="Group devices by"><option value="type">Group by type</option><option value="room">Group by room / category</option><option value="none">All devices</option></select><span id="zigbeeCount" class="muted tiny"></span></div><datalist id="zigbeeGroupNames"></datalist><div id="zigbeeLights"></div>
@@ -410,6 +431,7 @@
   <div id="toast" class="toast hidden"></div>
   <script src="/static/app.js?v={{ asset_version }}"></script>
   <script src="/static/board.js?v={{ asset_version }}"></script>
+  <script src="/static/home_layout.js?v={{ asset_version }}"></script>
   <script src="/static/services.js?v={{ asset_version }}"></script>
   <script src="/static/history.js?v={{ asset_version }}"></script>
   <script src="/static/logs.js?v={{ asset_version }}"></script>
@@ -418,6 +440,7 @@
   <script src="/static/appearance.js?v={{ asset_version }}"></script>
   <script src="/static/connectors.js?v={{ asset_version }}"></script>
   <script src="/static/automations.js?v={{ asset_version }}"></script>
+  <script src="/static/automation_graph.js?v={{ asset_version }}"></script>
   <script src="/static/navigation.js?v={{ asset_version }}"></script>
 </body>
 </html>

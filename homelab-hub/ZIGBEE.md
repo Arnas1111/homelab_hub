@@ -136,3 +136,13 @@ restarts and retry after connection failures. Disabling/deleting a rule prevents
 new triggers but preserves scheduled OFF; manual changes do not cancel a timer.
 Multiple rules targeting the same light use the latest deadline. Configuration is
 stored in the existing `/data/hub.db`; no additional container configuration is needed.
+### Flow editor
+
+Open **Zigbee → Automations**. New automations are built from Item, state trigger,
+state condition, local time or time-window condition, action, and wait cards on a movable canvas.
+An Item card selects any discovered Zigbee device. Connect its output to a trigger
+or condition; later Item cards can select different action targets. State conditions
+read the latest device report. Power, brightness and other actions appear only
+when the chosen device advertises them. A wait card persists its next step under
+`/data/hub.db`; repeating a trigger restarts that wait. Saved older rules remain
+under **Existing timed rules** and continue to run.

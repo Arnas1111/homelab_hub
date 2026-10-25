@@ -44,6 +44,7 @@ from app.core.branding import branding_router
 from app.core.appearance import appearance_router, appearance_settings
 from app.core.service_links import service_link_router, service_link_settings, service_link_host
 from app.core.pages import PAGES, safe_page
+from app.core.home_layout import home_layout_router
 from app.core.connectors import CONNECTOR_FIELDS, configured_connectors, unraid_webui_url
 from app.modules.zigbee.automation import Automations, automation_router
 
@@ -464,6 +465,7 @@ def require_auth(request: Request) -> None:
 
 app.include_router(object_router(module_registry, require_auth))
 preferences = Preferences(db)
+app.include_router(home_layout_router(preferences, require_auth))
 automations = Automations(preferences, zigbee_module)
 zigbee_module.on_report = automations.notify
 app.include_router(automation_router(automations, require_auth))

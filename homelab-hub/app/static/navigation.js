@@ -8,6 +8,7 @@ function restoreHubRoute() {
     if (view === 'history') { openMetricPage('cpu'); return; }
     const button = [...document.querySelectorAll('.nav-item[data-view]')].find(node => node.dataset.view === view);
     if (!button) return;
+    if (button.closest('.nav-group')) button.closest('.nav-group').open = true;
     // Cancel anchor navigation even if an older cached view handler does not.
     button.addEventListener('click', event => event.preventDefault(), { once: true, capture: true });
     button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));

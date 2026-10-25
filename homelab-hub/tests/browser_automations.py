@@ -76,6 +76,7 @@ def main():
         expect(page.locator('#pageTitle')).to_have_text('Services')
         page.goto('http://hub.test/automations')
         expect(page.locator('#pageTitle')).to_have_text('Automations')
+        page.locator('#legacyAutomation summary').click()
         expect(page.locator('#automationSource')).to_have_value('zigbee.sensor')
         page.locator('#automationName').fill('Motion <hall>')
         page.locator('#automationSeconds').fill('5')
@@ -86,7 +87,7 @@ def main():
         expect(page.locator('#automationEqualsLabel')).to_be_hidden()
         expect(page.locator('#automationSecondsLabel')).to_contain_text('occupancy becomes false')
         page.get_by_role('button', name='Save automation').click()
-        expect(page.locator('.automation-card h3')).to_have_text('Motion <hall>')
+        expect(page.locator('#automationRules .automation-card h3')).to_have_text('Motion <hall>')
         assert rules[0]['equals'] is True
         assert rules[0]['seconds'] == 5
         assert rules[0]['while_occupied'] is True
@@ -109,7 +110,7 @@ def main():
         page.locator('#automationValue').select_option('double')
         page.locator('#automationEnabled').uncheck()
         page.get_by_role('button', name='Save automation').click()
-        expect(page.locator('.automation-card h3')).to_contain_text('Disabled')
+        expect(page.locator('#automationRules .automation-card h3')).to_contain_text('Disabled')
         assert rules[0]['equals'] == 'double'
         assert rules[0]['while_occupied'] is False
         assert rules[0]['time_condition']['boundary'] == 'sunset'

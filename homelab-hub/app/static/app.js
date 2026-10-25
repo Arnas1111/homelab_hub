@@ -1556,6 +1556,7 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     if (!window.hubRestoringRoute && location.pathname !== '/' + btn.dataset.view) history.pushState(null, '', '/' + btn.dataset.view);
     if (location.hash.startsWith('#metrics/')) history.replaceState(null, '', location.pathname + location.search);
     document.querySelectorAll('.nav-item[data-view]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
+    if (btn.closest('.nav-group')) btn.closest('.nav-group').open = true;
     const overviewViews = { metrics: 'server', containers: 'containers', integrations: 'integrations' };
     const overviewView = overviewViews[btn.dataset.view];
     document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
@@ -1585,6 +1586,7 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     if (btn.dataset.view === 'logs' && typeof loadAggregateLogs === 'function') loadAggregateLogs();
     if (btn.dataset.view === 'zigbee' && typeof loadZigbee === 'function') loadZigbee();
     if (btn.dataset.view === 'automations' && typeof loadAutomations === 'function') loadAutomations();
+    if (btn.dataset.view === 'automations' && typeof loadGraphAutomations === 'function') loadGraphAutomations();
     if (overviewView === 'integrations' && typeof loadConnectorWorkspace === 'function') loadConnectorWorkspace();
     applySectionState();
     refresh();

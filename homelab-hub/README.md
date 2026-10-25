@@ -240,3 +240,39 @@ Automations support sensor/button equality triggers and occupancy holds, with on
 on/off target per rule (1 second to 24 hours), and up to 100 rules. Timers run on the Hub,
 so an outage may delay switch-off. Status reports command delivery, not guaranteed
 physical device state. Zigbee2MQTT and the MQTT broker must remain reachable.
+
+### Organized workspace and flow automations
+
+The sidebar groups **Services → Applications / Containers**, **Zigbee → Devices /
+Automations**, **Performance → History / Logs**, and **Settings → General /
+Integrations / Metrics / Metrics storage**. Existing direct section URLs continue
+to work.
+
+Home has a **Customize Home** editor. It can show or hide the welcome/search,
+discovery status, host readings, favorite services, attention, connections, and
+Zigbee modules; change each module between half and full width; and reorder them.
+The layout is saved for this Hub in `/data/hub.db` and shared across browsers.
+
+New Zigbee automations use a two-dimensional flow canvas. Drag an **Item** card
+from the discovered Zigbee list, then add and connect **When state reports**, **If
+item state**, **If local time**, **Do action**, and **Wait** cards. Select a card to
+edit its property, comparison, action, or delay. Item cards set the device context
+for following cards, so a light can be a condition as well as an action target.
+For example: motion item → occupancy true → light item → power on → wait 5 seconds
+→ light item → power off. Another path can check whether light A is on and turn
+off light B. Time cards gate actions using saved timezone/solar settings; place
+an **If time window** card for a range such as 18:00 until 00:00; ranges crossing
+midnight are supported in the saved timezone.
+
+Flows are validated before saving: discovered items and supported capabilities,
+matching value types, connected cards, and no cycles. Delayed branches persist
+through Hub restarts and retry after connection failures. A repeated trigger
+restarts its matching wait card. Conditions use the latest **reported** device
+state; a command immediately before a condition may not have a new report yet.
+The older timed-rule editor remains under **Existing timed rules** so saved rules
+keep running and can still be edited. New flows are not tied to that recipe.
+
+The Home layout follows Homarr's board/widget separation and Homepage's
+configurable sections; service cards retain Heimdall's simple app-launcher role.
+The flow canvas uses Node-RED's palette and connected-node idea while retaining
+the Hub's validated Zigbee object contract.
