@@ -1,11 +1,10 @@
 const HOME_CATALOG = [
-  ['welcome', 'Search & server', '⌕'], ['status', 'Discovery status', '◉'],
-  ['host', 'Host readings', '▥'], ['services', 'Favorite services', '▦'],
-  ['attention', 'Needs attention', '⚑'], ['connections', 'Connections', '◎'],
-  ['zigbee', 'Zigbee overview', '✦'], ['clock', 'Clock', '◷'], ['notes', 'Notes', '▤'],
+  ['welcome', 'Search & server', '⌕'],
+  ['host', 'Performance', '▥'], ['services', 'Favorites', '▦'],
+  ['clock', 'Clock', '◷'], ['notes', 'Notes', '▤'],
 ];
-const HOME_DEFAULT = ['welcome','status','host','services','attention','connections','zigbee','clock'].map(id =>
-  ({id, width:['welcome','status','host','services'].includes(id) ? 3 : 1}));
+const HOME_DEFAULT = ['welcome','host','services','clock'].map(id =>
+  ({id, width:['welcome','host','services'].includes(id) ? 3 : 1}));
 let homeLayout = HOME_DEFAULT.map(row => ({...row}));
 let homeEditSnapshot = null, homeDragId = null, homeNoteDraft = '', homeSelectedId = null;
 const homeModule = id => $('homeModules').querySelector(`[data-home-module="${id}"]`);
@@ -23,16 +22,6 @@ function renderHomeLayout() {
   for (const node of host.querySelectorAll('[data-home-module]')) node.classList.toggle('home-selected', homeEditing() && node.dataset.homeModule === homeSelectedId);
   renderHomePalette();
   renderHomeInspector();
-  if (homeLayout.some(row => row.id === 'zigbee')) loadHomeZigbee();
-}
-
-async function loadHomeZigbee() {
-  if (!homeLayout.some(row => row.id === 'zigbee') || document.hidden) return;
-  try {
-    const data = await api('/api/v1/objects?module=zigbee');
-    const objects = data.objects || [], online = objects.filter(item => item.available).length;
-    $('homeZigbee').textContent = `${objects.length} devices · ${online} available`;
-  } catch (_) { $('homeZigbee').textContent = 'Zigbee status unavailable'; }
 }
 function updateHomeClock() {
   const now = new Date();
@@ -49,9 +38,9 @@ function renderHomePalette() {
     button.type = 'button'; button.className = 'home-palette-item';
     button.innerHTML = `<span aria-hidden="true">${symbol}</span><strong>${escapeHtml(label)}</strong><span aria-hidden="true">＋</span>`;
     button.onclick = () => {
-      homeLayout.push({id, width:['welcome','status','host','services'].includes(id) ? 3 : 1, ...(id === 'notes' ? {content:homeNoteDraft} : {})});
+      homeLayout.push({id, width:['welcome','host','services'].includes(id) ? 3 : 1, ...(id === 'notes' ? {content:homeNoteDraft} : {})});
       homeSelectedId = id; renderHomeLayout();
-      if (id === 'notes') $('homeNoteInput').focus();
+      if (id === 'notes') $('homeInspectorNote')?.focus();
     };
     tray.append(button);
   }
@@ -86,8 +75,12 @@ function renderHomeInspector() {
   }
   host.append(colors);
   if (row.id === 'notes') {
-    const help = document.createElement('p'); help.className = 'muted tiny';
-    help.textContent = 'Edit the note directly on its card.'; host.append(help);
+    const noteLabel = document.createElement('label'); noteLabel.className = 'home-inspector-note';
+    noteLabel.textContent = 'Note';
+    const input = document.createElement('textarea'); input.id = 'homeInspectorNote';
+    input.maxLength = 2000; input.value = row.content || homeNoteDraft;
+    input.oninput = () => { row.content = input.value; homeNoteDraft = input.value; };
+    noteLabel.append(input); host.append(noteLabel);
   }
 }
 function moveHomeModule(id, direction) {
@@ -102,6 +95,9 @@ function installHomeControls() {
     const controls = document.createElement('div'); controls.className = 'home-tile-controls';
     controls.innerHTML = `<button type="button" class="home-drag-handle" draggable="true" title="Drag ${escapeHtml(label)}" aria-label="Drag ${escapeHtml(label)}">⠿ <span>${escapeHtml(label)}</span></button><span class="home-tile-actions"><button type="button" data-home-action="up" aria-label="Move ${escapeHtml(label)} earlier" title="Move earlier">↑</button><button type="button" data-home-action="down" aria-label="Move ${escapeHtml(label)} later" title="Move later">↓</button><button type="button" data-home-action="resize" aria-label="Resize ${escapeHtml(label)}" title="Change width">↔</button><button type="button" data-home-action="remove" aria-label="Remove ${escapeHtml(label)}" title="Remove from Home">×</button></span>`;
     node.prepend(controls);
+    const preview = document.createElement('div'); preview.className = 'home-edit-preview';
+    preview.innerHTML = `<span class="home-edit-preview-icon" aria-hidden="true">${HOME_CATALOG.find(row => row[0] === id)[2]}</span><strong>${escapeHtml(label)}</strong>${id === 'services' ? '<div id="homeFavoritePreview" class="home-favorite-preview"></div>' : ''}`;
+    controls.after(preview);
     controls.querySelector('.home-drag-handle').addEventListener('click', () => { homeSelectedId = id; renderHomeLayout(); });
     controls.addEventListener('click', event => {
       const action = event.target.closest('[data-home-action]')?.dataset.homeAction;
@@ -109,7 +105,7 @@ function installHomeControls() {
       if (action === 'up' || action === 'down') moveHomeModule(id, action === 'up' ? -1 : 1);
       if (action === 'resize') { const row = homeLayout.find(item => item.id === id); row.width = row.width % 3 + 1; renderHomeLayout(); }
       if (action === 'remove') {
-        if (id === 'notes') homeNoteDraft = $('homeNoteInput').value;
+        if (id === 'notes') homeNoteDraft = homeLayout.find(item => item.id === id)?.content || '';
         homeLayout = homeLayout.filter(item => item.id !== id);
         if (homeSelectedId === id) homeSelectedId = null;
         renderHomeLayout();
@@ -123,6 +119,31 @@ function installHomeControls() {
       homeDragId = null; node.classList.remove('home-dragging');
       for (const tile of $('homeModules').children) tile.classList.remove('home-drop-target');
     });
+    let touchPointer = null;
+    const grip = controls.querySelector('.home-drag-handle');
+    grip.addEventListener('pointerdown', event => {
+      if (!homeEditing() || event.pointerType === 'mouse') return;
+      touchPointer = event.pointerId; grip.setPointerCapture(event.pointerId);
+      node.classList.add('home-dragging'); event.preventDefault();
+    });
+    grip.addEventListener('pointermove', event => {
+      if (touchPointer !== event.pointerId) return;
+      for (const tile of $('homeModules').children) tile.classList.remove('home-drop-target');
+      const target = document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-home-module]');
+      if (target && target !== node) target.classList.add('home-drop-target');
+    });
+    grip.addEventListener('pointerup', event => {
+      if (touchPointer !== event.pointerId) return;
+      const targetId = document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-home-module]')?.dataset.homeModule;
+      touchPointer = null; node.classList.remove('home-dragging');
+      for (const tile of $('homeModules').children) tile.classList.remove('home-drop-target');
+      if (!targetId || targetId === id) return;
+      const source = homeLayout.find(row => row.id === id);
+      homeLayout = homeLayout.filter(row => row.id !== id);
+      homeLayout.splice(homeLayout.findIndex(row => row.id === targetId),0,source);
+      renderHomeLayout();
+    });
+    grip.addEventListener('pointercancel', () => { touchPointer = null; node.classList.remove('home-dragging'); });
     node.addEventListener('dragover', event => {
       if (!homeEditing() || !homeDragId || homeDragId === id) return;
       event.preventDefault(); node.classList.add('home-drop-target');
@@ -137,7 +158,7 @@ function installHomeControls() {
       renderHomeLayout();
     });
     node.addEventListener('click', event => {
-      if (homeEditing() && !event.target.closest('.home-tile-controls,.home-note-editor')) {
+      if (homeEditing() && !event.target.closest('.home-tile-controls,.home-favorite-preview')) {
         homeSelectedId = id; renderHomeLayout();
         event.preventDefault(); event.stopPropagation();
       }
@@ -154,12 +175,10 @@ function setHomeEditMode(enabled) {
   $('homeView').classList.toggle('home-editing', enabled);
   $('homePalette').hidden = !enabled; $('homeEditBar').hidden = !enabled;
   $('customizeHome').hidden = enabled;
-  $('homeView').querySelector('.home-note-editor').hidden = !enabled;
-  $('homeNoteText').hidden = enabled;
-  $('homeNoteInput').value = homeLayout.find(row => row.id === 'notes')?.content || homeNoteDraft;
   if (!enabled) homeSelectedId = null;
   $('homeLayoutFeedback').textContent = '';
   renderHomePalette(); renderHomeInspector();
+  if (enabled && currentData && typeof renderBoard === 'function') renderBoard();
 }
 $('customizeHome').onclick = () => { homeEditSnapshot = homeLayout.map(row => ({...row})); setHomeEditMode(true); };
 $('homeCancelEdit').onclick = () => {
@@ -167,8 +186,6 @@ $('homeCancelEdit').onclick = () => {
   homeEditSnapshot = null; setHomeEditMode(false); renderHomeLayout();
 };
 $('homeSaveEdit').onclick = async () => {
-  const note = homeLayout.find(row => row.id === 'notes');
-  if (note) note.content = $('homeNoteInput').value;
   $('homeSaveEdit').disabled = true;
   try {
     const result = await api('/api/home/layout', {method:'PUT', body:JSON.stringify({modules:homeLayout})});
@@ -186,4 +203,3 @@ async function initializeHomeLayout() {
 }
 installHomeControls(); renderHomeLayout(); initializeHomeLayout(); updateHomeClock();
 setInterval(updateHomeClock, 15000);
-setInterval(loadHomeZigbee, 30000);

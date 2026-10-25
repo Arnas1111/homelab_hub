@@ -86,7 +86,7 @@ def handler(route):
         data = time_settings
     elif path.startswith('/api/'):
         data = {}
-    elif path in ('/', '/home', '/services', '/containers', '/metrics', '/integrations', '/zigbee', '/automations', '/logs', '/settings', '/connectors', '/database', '/history'):
+    elif path in ('/', '/home', '/services', '/containers', '/container-details', '/metrics', '/integrations', '/zigbee', '/automations', '/logs', '/settings', '/connectors', '/database', '/history'):
         html = (STATIC / 'index.html').read_text(encoding='utf-8')
         for key, value in settings.items():
             html = html.replace('{{ settings.' + key + ' }}', str(value))

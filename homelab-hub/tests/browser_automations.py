@@ -43,18 +43,18 @@ def main():
         page.wait_for_timeout(1000)
         assert len(documents) == 1, documents
         assert page.locator('.nav-item').first.evaluate("node => getComputedStyle(node).textDecorationLine") == 'none'
-        page.locator('[data-view="services"]').click()
-        expect(page).to_have_url('http://hub.test/services')
+        page.locator('[data-view="home"]').click()
+        expect(page).to_have_url('http://hub.test/home')
         page.go_back()
         expect(page.locator('#pageTitle')).to_have_text('Containers')
         page.go_forward()
-        expect(page.locator('#pageTitle')).to_have_text('Services')
+        expect(page.locator('#pageTitle')).to_have_text('Home')
         page.reload()
-        expect(page.locator('#pageTitle')).to_have_text('Services')
-        page.locator('[data-metric-page="cpu"]').first.click()
+        expect(page.locator('#pageTitle')).to_have_text('Home')
+        page.locator('#homePulse [data-metric-page="cpu"]').click()
         expect(page).to_have_url('http://hub.test/history#metrics/cpu')
         page.go_back()
-        expect(page.locator('#pageTitle')).to_have_text('Services')
+        expect(page.locator('#pageTitle')).to_have_text('Home')
         page.go_forward()
         expect(page.locator('#metricDetailView')).to_have_class('view active')
         page.goto('http://hub.test/history')
@@ -73,7 +73,7 @@ def main():
         expect(page).to_have_url('http://hub.test/history')
         expect(page.locator('#pageTitle')).to_have_text('CPU history')
         page.go_forward()
-        expect(page.locator('#pageTitle')).to_have_text('Services')
+        expect(page.locator('#pageTitle')).to_have_text('Containers')
         page.goto('http://hub.test/automations')
         expect(page.locator('#pageTitle')).to_have_text('Automations')
         page.locator('#legacyAutomation summary').click()
@@ -123,7 +123,7 @@ def main():
         # Reproduce the previous handler's lack of preventDefault. Restoration
         # must still select the view without following the section anchor.
         legacy_source = (STATIC / 'app.js').read_text(encoding='utf-8').replace(
-            "    event.preventDefault();\n    if (!window.hubRestoringRoute", "    if (!window.hubRestoringRoute")
+            "    event.preventDefault();\n    const routePath", "    const routePath")
         page.route('**/static/app.js*', lambda route: route.fulfill(content_type='application/javascript', body=legacy_source))
         before = len(documents)
         page.goto('http://hub.test/containers')

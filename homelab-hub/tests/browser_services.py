@@ -1,7 +1,7 @@
 """Custom tiles and container Web UI overrides, including polling and reloads."""
 import os
 from playwright.sync_api import sync_playwright, expect
-from browser_dashboard import handler, webui_links
+from browser_dashboard import handler, webui_links, favorites
 
 
 def main():
@@ -14,6 +14,8 @@ def main():
         page.on('pageerror', lambda error:errors.append(str(error)))
         page.route('**/*', handler)
         page.goto('http://hub.test/services')
+        expect(page).to_have_url('http://hub.test/containers')
+        page.locator('#allContainersDisclosure summary').click()
         page.locator('#addServiceTile').click()
         page.locator('#serviceTilePreset').select_option(label='Unraid')
         expect(page.locator('#serviceTileUrl')).to_have_value('http://tower.test')
@@ -25,6 +27,11 @@ def main():
         page.locator('#serviceTilePreset').select_option(label='Automations')
         page.locator('#serviceTileForm [type=submit]').click()
         expect(page.locator('#allServices a[href="http://hub.test/automations"]')).to_have_count(1)
+        page.locator('#allServices [data-service-key="container:jellyfin"] [data-pin]').click()
+        page.locator('#allServices [data-service-key="container:sonarr"] [data-pin]').click()
+        expect(page.locator('#featuredContainers .service-card')).to_have_count(2)
+        page.locator('#featuredContainers [data-service-key="container:sonarr"] [data-favorite-drag]').drag_to(page.locator('#featuredContainers [data-service-key="container:jellyfin"]'))
+        assert favorites[:2] == ['container:sonarr','container:jellyfin'], favorites
         jellyfin = page.locator('#allServices [data-service-key="container:jellyfin"]')
         jellyfin.get_by_role('button', name='Edit Web UI').click()
         page.locator('#serviceTileUrl').fill('http://media.test:8096')
@@ -35,6 +42,8 @@ def main():
         expect(jellyfin.locator('.service-main a')).to_have_attribute('href', 'http://media.test:8096/')
         expect(jellyfin.locator('img')).to_have_attribute('src', '/icons/dashboard/jellyfin.svg')
         page.reload()
+        page.locator('#allContainersDisclosure summary').click()
+        expect(page.locator('#featuredContainers .service-card').first).to_have_attribute('data-service-key','container:sonarr')
         expect(jellyfin.locator('.service-main a')).to_have_attribute('href', 'http://media.test:8096/')
         expect(page.locator('#allServices .service-card')).to_have_count(8)
         unraid.get_by_role('button', name='Edit tile').click()

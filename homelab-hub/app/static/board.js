@@ -1,6 +1,8 @@
 /* The workspace overview is a service directory, not a second administration table. */
 let boardSaving = false;
 let unraidLoading = false;
+let favoriteDragKey = null;
+let favoritePointer = null;
 
 function boardLink(value) {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url.href : ''; }
@@ -27,13 +29,13 @@ function needsAttention(service) {
   return service.health === 'unhealthy' || ['restarting','dead','error'].includes(service.status);
 }
 
-function serviceCard(service) {
+function serviceCard(service, onHome = false) {
   const favorite = (currentData?.board?.favorites || []).includes(service.key);
   const state = needsAttention(service) ? 'attention' : service.status === 'running' ? 'running' : 'idle';
   const label = needsAttention(service) ? (service.health === 'unhealthy' ? 'Unhealthy' : service.status) : service.status === 'external' ? 'External link' : service.status || 'Unknown';
   const icon = `<span class="service-icon"><img src="${iconPath(service.icon)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></span>`;
   const title = `${icon}<span class="service-name"><strong>${escapeHtml(service.name)}</strong><small>${escapeHtml(service.description || service.group)}</small></span>`;
-  return `<article class="service-card" data-service-key="${escapeHtml(service.key)}"><div class="service-main">${service.url ? `<a href="${escapeHtml(service.url)}" target="_blank" rel="noreferrer" title="Open ${escapeHtml(service.name)}">${title}</a>` : `<div class="service-title">${title}</div>`}<button class="pin-service ${favorite ? 'pinned' : ''}" data-pin="${escapeHtml(service.key)}" aria-label="${favorite ? 'Unpin' : 'Pin'} ${escapeHtml(service.name)}" aria-pressed="${favorite}">${favorite ? '★' : '☆'}</button></div><div class="service-footer"><span class="service-state ${state}"><i></i>${escapeHtml(label)}</span><button class="text-btn" data-service-edit="${escapeHtml(service.key)}">${service.id ? service.url ? 'Edit Web UI' : 'Add Web UI' : 'Edit tile'}</button>${service.id ? `<button class="text-btn" data-service-details="${escapeHtml(service.id)}">Details ↗</button>` : '<span class="muted tiny">Link</span>'}</div></article>`;
+  return `<article class="service-card" data-service-key="${escapeHtml(service.key)}" ${onHome && favorite ? `data-favorite-key="${escapeHtml(service.key)}"` : ''}>${onHome && favorite ? `<button class="favorite-drag-handle" draggable="true" data-favorite-drag="${escapeHtml(service.key)}" aria-label="Move ${escapeHtml(service.name)} favorite" title="Drag to reorder favorites">⠿</button>` : ''}<div class="service-main">${service.url ? `<a href="${escapeHtml(service.url)}" target="_blank" rel="noreferrer" title="Open ${escapeHtml(service.name)}">${title}</a>` : `<div class="service-title">${title}</div>`}<button class="pin-service ${favorite ? 'pinned' : ''}" data-pin="${escapeHtml(service.key)}" aria-label="${favorite ? 'Unpin' : 'Pin'} ${escapeHtml(service.name)}" aria-pressed="${favorite}">${favorite ? '★' : '☆'}</button></div><div class="service-footer"><span class="service-state ${state}"><i></i>${escapeHtml(label)}</span><button class="text-btn" data-service-edit="${escapeHtml(service.key)}">${service.id ? service.url ? 'Edit Web UI' : 'Add Web UI' : 'Edit tile'}</button>${service.id ? `<button class="text-btn" data-service-details="${escapeHtml(service.id)}">Details ↗</button>` : '<span class="muted tiny">Link</span>'}</div></article>`;
 }
 
 function boardGroups(services) {
@@ -59,32 +61,29 @@ function renderBoard() {
   const dot = document.querySelector('.server-pill .dot');
   if (dot) dot.dataset.state = discovery.error ? 'error' : discovery.updated_at ? 'ready' : 'unknown';
   const favorites = currentData.board?.favorites || [];
-  const attention = services.filter(needsAttention);
   const homeQuery = $('homeSearch').value.trim().toLowerCase();
   const match = (service, query) => `${service.name} ${service.rawName || ''} ${service.group} ${service.description}`.toLowerCase().includes(query);
-  const pinned = services.filter(service => favorites.includes(service.key));
-  const visibleHome = (homeQuery ? services.filter(service => match(service, homeQuery)) : pinned.length ? pinned : services).slice(0, 8);
+  const pinned = favorites.map(key => services.find(service => service.key === key)).filter(Boolean);
+  $('allContainerCount').textContent = services.filter(service => service.id).length;
+  const selectedContainers = pinned.filter(service => service.id);
+  if (!favoriteDragKey && !favoritePointer) patchContent($('featuredContainers'), selectedContainers.length ? selectedContainers.map(service => serviceCard(service, true)).join('') : '<div class="board-empty">Pin containers in the list below to show them here.</div>');
+  const visibleHome = (homeQuery ? services.filter(service => match(service, homeQuery)) : pinned).slice(0, 8);
   $('homeServerTitle').textContent = s.name || 'Your homelab';
   const serverUrl = boardLink(s.webui_url || '');
   const serverLink = $('homeServerLink');
   if (serverUrl) { serverLink.href = serverUrl; serverLink.title = 'Open Unraid WebUI'; }
   else { serverLink.removeAttribute('href'); serverLink.removeAttribute('title'); }
-  $('favoriteTitle').textContent = homeQuery ? 'Search results' : pinned.length ? 'Favorites' : 'Your services';
-  $('boardStatus').textContent = discovery.error || (!discovery.updated_at && discovery.loading ? 'Discovering Docker services… Host readings load independently.' : `${services.length} services · ${s.cpus || metrics.cpu?.cores?.length || '—'} logical cores · ${bytes(s.memory_total || metrics.memory?.total)} memory${discovery.updated_at ? ` · discovered ${new Date(discovery.updated_at).toLocaleTimeString()}` : ''}`);
-  $('boardStatus').classList.toggle('attention', Boolean(discovery.error));
-  if (host.error) $('boardStatus').textContent += ` · ${host.error}; host readings may be stale`;
+  $('favoriteTitle').textContent = homeQuery ? 'Search results' : 'Favorites';
   const pulse = (title, value, note, action, level = 'normal') => `<button class="pulse-card ${level}" ${action}><span>${title}<b>↗</b></span><strong>${value}</strong><small>${escapeHtml(note)}</small></button>`;
   patchContent($('homePulse'),
-    pulse('Running containers', discovery.updated_at || services.length ? `${s.containers_running ?? services.filter(c => c.status === 'running').length}<em> / ${s.containers_total ?? services.length}</em>` : '—', 'Docker state, not service availability', 'data-open-view="containers"') +
+    pulse('Running containers', discovery.updated_at || services.length ? `${s.containers_running ?? services.filter(c => c.status === 'running').length}<em> / ${s.containers_total ?? services.length}</em>` : '—', 'Docker state, not service availability', 'data-open-view="services"') +
     pulse('CPU utilization', metrics.cpu?.cores?.length ? percent(metrics.cpu.total_percent) : '—', 'Host capacity', 'data-metric-page="cpu"', metricLevel(metrics.cpu?.total_percent).kind) +
     pulse('Memory utilization', metrics.memory?.total ? percent(metrics.memory.percent) : '—', `${metrics.memory?.available_human || '—'} available`, 'data-metric-page="memory"', metricLevel(metrics.memory?.percent).kind) +
     pulse('Storage capacity', metrics.data_mount?.total ? percent(metrics.data_mount.percent) : '—', `${metrics.data_mount?.free_human || '—'} free on /data mount`, 'data-metric-page="storage"', metricLevel(metrics.data_mount?.percent).kind));
-  patchContent($('homeServices'), visibleHome.length ? `<div class="service-grid home-service-grid">${visibleHome.map(serviceCard).join('')}</div><p class="board-help">${homeQuery ? 'Open Services to see all search results.' : pinned.length ? 'Your favorites are saved in the Hub.' : 'Pin a service with ☆ to make this space your own.'}</p>` : `<div class="board-empty">${discovery.loading ? 'Discovering services…' : 'No services yet. Connect the Docker socket or add an external link in Services.'}<button class="btn" data-open-view="services">Open services</button></div>`);
-  $('attentionCount').textContent = attention.length;
-  patchContent($('homeAttention'), discovery.error ? `<p class="attention">Docker discovery is unavailable. These readings may be stale.</p>` : !discovery.updated_at && !services.length ? '<p class="muted tiny">Waiting for Docker discovery.</p>' : attention.length ? attention.slice(0, 5).map(c => `<button class="attention-row" data-service-details="${escapeHtml(c.id)}"><span>${escapeHtml(c.name)}</span><small>${escapeHtml(c.health === 'unhealthy' ? 'Unhealthy' : c.status)}</small></button>`).join('') : '<div class="quiet-state"><span>✓</span><strong>No container alerts</strong><p>No unhealthy or restarting containers were reported. Stopped containers are not treated as incidents.</p></div>');
-  const configured = currentData.connections || {};
-  const added = currentData.connector_types || Object.keys(configured).filter(key => configured[key]);
-  patchContent($('homeConnections'), [['unraid','Unraid','Array & disks'],['jellyfin','Jellyfin','Media activity'],['home_assistant','Home Assistant','Home controls']].filter(([key]) => added.includes(key)).map(([key,label,description]) => `<button class="connection-row" data-open-view="integrations"><span><strong>${label}</strong><small>${description}</small></span><span class="connection-state">${configured[key] ? 'Configured' : 'Setup incomplete'} ↗</span></button>`).join('') || '<p class="muted tiny">Add your first connection in Integrations.</p>');
+  if (!favoriteDragKey && !favoritePointer) {
+    patchContent($('homeServices'), visibleHome.length ? `<div class="service-grid home-service-grid">${visibleHome.map(service => serviceCard(service, true)).join('')}</div>` : `<div class="board-empty">${homeQuery ? 'No matching services.' : 'Pin containers to add them here.'}<button class="btn" data-open-view="services">Open containers</button></div>`);
+    if ($('homeFavoritePreview')) patchContent($('homeFavoritePreview'), pinned.length ? pinned.map(service => `<button type="button" class="home-favorite-chip" draggable="true" data-favorite-drag="${escapeHtml(service.key)}" data-favorite-key="${escapeHtml(service.key)}" aria-label="Move ${escapeHtml(service.name)} favorite">${escapeHtml(service.name)}</button>`).join('') : '<span class="muted tiny">No pinned services</span>');
+  }
   const query = $('serviceSearch').value.trim().toLowerCase();
   const filter = $('serviceFilter').value;
   const filtered = services.filter(c => match(c, query) && (filter === 'all' || filter === 'favorites' && favorites.includes(c.key) || filter === 'attention' && needsAttention(c) || filter === 'running' && c.status === 'running'));
@@ -122,13 +121,83 @@ document.addEventListener('click', async event => {
   }
 });
 $('homeSearch').addEventListener('input', renderBoard);
+async function reorderFavorite(source, destination) {
+  if (source === destination || boardSaving) return;
+  const current = currentData?.board?.favorites || [];
+  const sourceIndex = current.indexOf(source), destinationIndex = current.indexOf(destination);
+  if (sourceIndex < 0 || destinationIndex < 0) return;
+  const favorites = current.filter(key => key !== source);
+  const index = favorites.indexOf(destination);
+  favorites.splice(index + (sourceIndex < destinationIndex ? 1 : 0), 0, source);
+  boardSaving = true;
+  try { currentData.board = await api('/api/board', {method:'PUT', body:JSON.stringify({favorites})}); renderBoard(); }
+  catch (error) { toast(error.message); }
+  finally { boardSaving = false; }
+}
+document.addEventListener('dragstart', event => {
+  const handle = event.target.closest('[data-favorite-drag]');
+  if (!handle || boardSaving) return;
+  favoriteDragKey = handle.dataset.favoriteDrag;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', favoriteDragKey);
+});
+document.addEventListener('dragover', event => {
+  const target = event.target.closest('[data-favorite-key]');
+  if (!favoriteDragKey || !target || target.dataset.favoriteKey === favoriteDragKey) return;
+  event.preventDefault(); target.classList.add('home-drop-target');
+});
+document.addEventListener('dragleave', event => {
+  event.target.closest('[data-favorite-key]')?.classList.remove('home-drop-target');
+});
+document.addEventListener('drop', async event => {
+  const target = event.target.closest('[data-favorite-key]');
+  if (!favoriteDragKey || !target) return;
+  event.preventDefault(); event.stopPropagation();
+  const source = favoriteDragKey, destination = target.dataset.favoriteKey;
+  favoriteDragKey = null; target.classList.remove('home-drop-target');
+  await reorderFavorite(source, destination);
+});
+document.addEventListener('dragend', () => {
+  favoriteDragKey = null;
+  for (const card of document.querySelectorAll('[data-favorite-key].home-drop-target')) card.classList.remove('home-drop-target');
+});
+document.addEventListener('pointerdown', event => {
+  const handle = event.target.closest('[data-favorite-drag]');
+  if (!handle || event.pointerType === 'mouse') return;
+  favoritePointer = {id:event.pointerId, key:handle.dataset.favoriteDrag};
+  handle.setPointerCapture(event.pointerId);
+  event.preventDefault();
+});
+document.addEventListener('pointermove', event => {
+  if (!favoritePointer || event.pointerId !== favoritePointer.id) return;
+  for (const card of document.querySelectorAll('[data-favorite-key].home-drop-target')) card.classList.remove('home-drop-target');
+  document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-favorite-key]')?.classList.add('home-drop-target');
+});
+document.addEventListener('pointerup', event => {
+  if (!favoritePointer || event.pointerId !== favoritePointer.id) return;
+  const source = favoritePointer.key;
+  const destination = document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-favorite-key]')?.dataset.favoriteKey;
+  favoritePointer = null;
+  for (const card of document.querySelectorAll('[data-favorite-key].home-drop-target')) card.classList.remove('home-drop-target');
+  if (destination) reorderFavorite(source,destination);
+});
+document.addEventListener('pointercancel', () => { favoritePointer = null; });
+document.addEventListener('keydown', event => {
+  const handle = event.target.closest('[data-favorite-drag]');
+  if (!handle || !['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
+  const favorites = currentData?.board?.favorites || [];
+  const index = favorites.indexOf(handle.dataset.favoriteDrag);
+  const destination = favorites[index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1)];
+  if (index < 0 || !destination) return;
+  event.preventDefault(); reorderFavorite(handle.dataset.favoriteDrag,destination);
+});
 $('serviceSearch').addEventListener('input', renderBoard);
 $('serviceFilter').addEventListener('change', renderBoard);
-$('manageServices').addEventListener('click', () => { const editor = document.querySelector('.webui-editor'); if (editor) { editor.open = true; editor.scrollIntoView({behavior:'smooth',block:'start'}); } });
 document.addEventListener('keydown', event => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
     document.querySelector('[data-view="services"]').click();
+    $('allContainersDisclosure').open = true;
     $('serviceSearch').focus();
   }
 });

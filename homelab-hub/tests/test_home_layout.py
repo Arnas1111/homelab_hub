@@ -24,11 +24,16 @@ class HomeLayoutTests(unittest.TestCase):
             self.assertIn('services',[row['id'] for row in client.get(path).json()['modules']])
             prefs.write('home_layout',[{'id':'services','width':2}])
             self.assertEqual(client.get(path).json()['modules'][0]['width'],3)
-            layout={'modules':[{'id':'zigbee','width':2},{'id':'services','width':1}]}
+            prefs.write('home_layout',[{'id':'status','width':2},{'id':'services','width':2}])
+            self.assertEqual([row['id'] for row in client.get(path).json()['modules']],['services'])
+            prefs.write('home_layout',[{'id':'zigbee','width':1}])
+            self.assertIn('host',[row['id'] for row in client.get(path).json()['modules']])
+            layout={'modules':[{'id':'clock','width':2},{'id':'services','width':1}]}
             self.assertEqual(client.put(path,json=layout).status_code,200)
             self.assertEqual(client.get(path).json(),layout)
             self.assertEqual(client.put(path,json={'modules':[layout['modules'][0]]*2}).status_code,422)
             self.assertEqual(client.put(path,json={'modules':[{'id':'unknown','width':2}]}).status_code,422)
+            self.assertEqual(client.put(path,json={'modules':[{'id':'zigbee','width':1}]}).status_code,422)
             note={'modules':[{'id':'notes','width':3,'content':'Remember to inspect the hub','accent':'mint'}]}
             self.assertEqual(client.put(path,json=note).json(),note)
             self.assertEqual(client.get(path).json(),note)

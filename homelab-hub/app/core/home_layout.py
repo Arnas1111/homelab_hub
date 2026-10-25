@@ -4,18 +4,17 @@ from typing import Literal
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-MODULES = ('welcome', 'status', 'host', 'services', 'attention', 'connections', 'zigbee', 'clock', 'notes')
+MODULES = ('welcome', 'host', 'services', 'clock', 'notes')
 DEFAULT_LAYOUT = [
-    {'id': 'welcome', 'width': 3}, {'id': 'status', 'width': 3},
+    {'id': 'welcome', 'width': 3},
     {'id': 'host', 'width': 3}, {'id': 'services', 'width': 3},
-    {'id': 'attention', 'width': 1}, {'id': 'connections', 'width': 1},
-    {'id': 'zigbee', 'width': 1}, {'id': 'clock', 'width': 1},
+    {'id': 'clock', 'width': 1},
 ]
 
 
 class HomeModule(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
-    id: Literal['welcome', 'status', 'host', 'services', 'attention', 'connections', 'zigbee', 'clock', 'notes']
+    id: Literal['welcome', 'host', 'services', 'clock', 'notes']
     width: Literal[1, 2, 3] = 1
     content: str | None = Field(default=None, max_length=2000)
     accent: Literal['default', 'blue', 'mint', 'amber', 'rose', 'violet'] | None = None
@@ -37,7 +36,10 @@ def home_layout_router(preferences, require_auth):
 
     @router.get('')
     def read():
-        modules = preferences.read('home_layout', DEFAULT_LAYOUT)
+        saved = preferences.read('home_layout', DEFAULT_LAYOUT)
+        modules = [module for module in saved if module.get('id') in MODULES]
+        if saved and not modules:
+            modules = DEFAULT_LAYOUT
         if preferences.read('home_layout_version', 1) < 2:
             modules = [{**module, 'width': 3 if module.get('width') == 2 else module.get('width', 1)} for module in modules]
         return {'modules': modules}

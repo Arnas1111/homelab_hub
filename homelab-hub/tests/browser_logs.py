@@ -45,8 +45,9 @@ def main():
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.route('**/*', handler)
         page.goto('http://hub.test/')
-        expect(page.locator('#homeServices .service-card')).to_have_count(6)
+        expect(page.locator('#homeServices .service-card')).to_have_count(0)
         assert not queries, 'Home must not collect logs'
+        page.locator('[data-nav-group="performance"] summary').click()
         page.locator('[data-view="logs"]').click()
         expect(page.locator('.aggregate-log-entry')).to_have_count(1)
         expect(page.locator('.aggregate-log-entry pre')).to_contain_text('<script>alert(1)</script>')

@@ -4,6 +4,11 @@ function restoreHubRoute() {
   try {
     if (location.hash.startsWith('#metrics/')) { openMetricPage(location.hash.split('/')[1]); return; }
     let view = location.pathname.replace(/^\//, '') || 'home';
+    if (view === 'containers' || view === 'services') {
+      view = 'services';
+      if (location.pathname === '/services') history.replaceState(null, '', '/containers');
+    }
+    if (view === 'container-details') view = 'containers';
     if (view === 'connectors') { view = 'integrations'; history.replaceState(null, '', '/integrations'); }
     if (view === 'history') { openMetricPage('cpu'); return; }
     const button = [...document.querySelectorAll('.nav-item[data-view]')].find(node => node.dataset.view === view);

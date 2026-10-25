@@ -2,7 +2,7 @@
 
 A self-hosted web dashboard for managing Docker containers on an Unraid host.
 
-The workspace now separates Home, Services, Containers, Metrics, History and Integrations. Home shows favorites, capacity and container alerts; Services automatically discovers applications from Docker metadata and Unraid/ Homepage display labels. Background collectors keep resource sampling off the opening request path.
+The workspace separates Home, Containers, Metrics, History and Integrations. Home shows favorites and performance; Containers discovers Docker services from metadata and Unraid/Homepage display labels. Background collectors keep resource sampling off the opening request path.
 
 See the [dashboard concept and research](DASHBOARD_CONCEPT.md) for design decisions, supported discovery labels, collection behavior and the roadmap.
 
@@ -10,7 +10,7 @@ See the [dashboard concept and research](DASHBOARD_CONCEPT.md) for design decisi
 
 Open **Connections** and save your Unraid server URL and an API key with Info and Array read permissions. **Integrations** then shows hardware, array state and disk temperatures. Docker discovery works through the existing socket mount without this API key. Unraid API readings are live snapshots; PostgreSQL history currently stores host/container performance metrics. Environment defaults are `HUB_UNRAID_URL` and `HUB_UNRAID_API_KEY`.
 
-In **Services**, pin applications for Home or search with Ctrl/Cmd+K. **+ Add tile** creates a custom service with a Web UI URL and built-in icon; suggestions include Unraid, Automations, Zigbee devices, Home Assistant, Node-RED, monitoring, backups, and files. Unraid uses the configured server URL when available. Automation and Zigbee suggestions link to the Hub's own pages. Standalone tiles open links and do not imply monitored availability. Use **Add Web UI / Edit Web UI** on a Docker service card to assign its URL and icon without creating a duplicate tile. **Edit tile** changes or deletes custom tiles; **Manage links** still supports bulk editing and hiding links. Favorites and tiles are shared by this Hub and persisted under `/data`. Explicit URLs are useful for host networking, dedicated container IPs or reverse proxies.
+In **Services → Containers**, pin containers to place them on the visible tile dashboard; open **All containers** to find everything else. Drag selected tiles to reorder them. **Resource and port details** opens the full Docker table and port view. Ctrl/Cmd+K opens container search. **+ Add tile** creates a standalone link with a Web UI URL and built-in icon; suggestions include Unraid, Automations, Zigbee devices, Home Assistant, Node-RED, monitoring, backups, and files. Unraid uses the configured server URL when available. Automation and Zigbee suggestions link to the Hub's own pages. Standalone tiles open links and do not imply monitored availability. Use **Add Web UI / Edit Web UI** directly on a container tile to set its URL and icon. **Edit tile** changes or deletes standalone tiles. Favorites and tiles persist under `/data` and are shared by this Hub.
 
 ## Current features
 
@@ -192,9 +192,10 @@ python -m unittest discover -s tests
 - Compose stack grouping and stack controls
 # Section links and Zigbee automations
 
-Every workspace section has a bookmarkable URL: `/home`, `/services`, `/containers`,
-`/metrics`, `/history`, `/integrations`, `/logs`, `/zigbee`, `/automations`, `/settings`,
-and `/database`. `/connectors` remains an alias for Integrations. `/` still opens Home. Reload and browser back/forward
+Every workspace section has a bookmarkable URL: `/home`, `/containers`,
+`/container-details`, `/metrics`, `/history`, `/integrations`, `/logs`, `/zigbee`,
+`/automations`, `/settings`, and `/database`. `/services` redirects to Containers;
+`/connectors` remains an alias for Integrations. `/` still opens Home. Reload and browser back/forward
 restore the selected section; signing in returns to the requested section.
 
 Open **Automations** (also linked from Settings) to configure a rule without Docker
@@ -243,7 +244,7 @@ physical device state. Zigbee2MQTT and the MQTT broker must remain reachable.
 
 ### Organized workspace and flow automations
 
-The sidebar groups **Services → Applications / Containers**, **Zigbee → Devices /
+The sidebar starts collapsed and groups **Services → Containers**, **Zigbee → Devices /
 Automations**, **Performance → History / Logs**, and **Settings → General /
 Integrations / Metrics / Metrics storage**. Existing direct section URLs continue
 to work.
@@ -251,9 +252,9 @@ to work.
 Home keeps its normal view minimal. **Edit dashboard** opens an in-place canvas:
 add modules from the palette, drag existing cards to reorder them, select a card
 to set its width and accent, or remove it. Keyboard and touch users can use the
-move buttons. Available
-modules include service search, discovery, host readings, favorite services,
-attention, connections, Zigbee, a local clock, and an editable note. Save commits
+move buttons. Available modules include service search, Performance, Favorites,
+a local clock, and an editable note. In edit mode, modules become non-interactive
+grid previews; favorite chips can be dragged to reorder them. Save commits
 the layout to `/data/hub.db` for all browsers; Cancel restores the previous view.
 
 New Zigbee automations use a two-dimensional flow canvas. Drag an **Item** card

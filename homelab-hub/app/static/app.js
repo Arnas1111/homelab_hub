@@ -13,8 +13,6 @@ let colorSendTimer = null;
 let partySpeedTimer = null;
 let refreshControlActive = false;
 let refreshControlHoldTimer = null;
-let webuiEditorActive = false;
-let webuiEditorHoldTimer = null;
 let haColorChoices = JSON.parse(localStorage.getItem('haColorChoices') || '{}');
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
 const DEFAULT_SECTION_ORDER = ['server', 'integrations', 'ports', 'containers'];
@@ -243,17 +241,6 @@ function holdRefreshControl(ms = 9000) {
 function releaseRefreshControlSoon(ms = 1000) {
   clearTimeout(refreshControlHoldTimer);
   refreshControlHoldTimer = setTimeout(() => { refreshControlActive = false; }, ms);
-}
-
-function holdWebuiEditor(ms = 9000) {
-  webuiEditorActive = true;
-  clearTimeout(webuiEditorHoldTimer);
-  webuiEditorHoldTimer = setTimeout(() => { webuiEditorActive = false; }, ms);
-}
-
-function releaseWebuiEditorSoon(ms = 1800) {
-  clearTimeout(webuiEditorHoldTimer);
-  webuiEditorHoldTimer = setTimeout(() => { webuiEditorActive = false; }, ms);
 }
 
 function rgbToHex(rgb) {
@@ -932,77 +919,8 @@ async function saveWebuiLinks(links) {
   }));
   const result = await api('/api/webui-links', { method: 'PUT', body: JSON.stringify({ links: payload }) });
   currentData.webui_links = result.links || [];
-  webuiEditorActive = false;
-  renderWebLinks();
   if (typeof renderBoard === 'function') renderBoard();
   renderContainers();
-}
-
-function webuiEditorRow(link) {
-  return `<form class="webui-edit-row" data-link-key="${escapeHtml(link.link_key)}">
-    <input name="label" value="${escapeHtml(link.label)}" maxlength="80" placeholder="Label">
-    <input name="url" value="${escapeHtml(link.url)}" maxlength="500" placeholder="http://server:port">
-    <input name="container_name" value="${escapeHtml(link.container_name || '')}" maxlength="120" placeholder="Container">
-    <input name="icon" value="${escapeHtml(link.icon || '')}" maxlength="90" placeholder="icon">
-    <button class="btn" type="submit">Save</button>
-    <button class="icon-btn small" type="button" data-action="webui-toggle" title="${link.enabled ? 'Hide link' : 'Show link'}">${link.enabled ? '×' : '+'}</button>
-    ${link.source === 'manual' ? '<button class="icon-btn small" type="button" data-action="webui-delete" title="Delete link">−</button>' : ''}
-  </form>`;
-}
-
-function renderWebLinks() {
-  const target = $('webuiPanelBody');
-  if (!target) return;
-  const editorOpen = target.querySelector('.webui-editor')?.open;
-  const visible = mergedWebLinks();
-  const editable = mergedWebLinks({ includeDisabled: true });
-  target.innerHTML = `
-    <details class="webui-editor" ${editorOpen ? 'open' : ''}>
-      <summary>Manage WebUI links <span>${visible.length} enabled</span></summary>
-      <form id="webuiAddForm" class="webui-edit-row add">
-        <input name="label" maxlength="80" placeholder="Label">
-        <input name="url" maxlength="500" placeholder="http://server:port">
-        <input name="container_name" maxlength="120" placeholder="Container">
-        <input name="icon" maxlength="90" placeholder="icon">
-        <button class="btn primary" type="submit">Add</button>
-      </form>
-      <div class="webui-edit-list">
-        ${editable.length ? editable.map(webuiEditorRow).join('') : '<div class="tiny muted">No discovered links yet.</div>'}
-      </div>
-    </details>
-  `;
-}
-
-function linkFromForm(form, existing = {}) {
-  const values = new FormData(form);
-  return {
-    ...existing,
-    link_key: existing.link_key || `manual:${Date.now()}`,
-    label: String(values.get('label') || '').trim(),
-    url: String(values.get('url') || '').trim(),
-    icon: sanitizeIcon(String(values.get('icon') || '')),
-    container_name: String(values.get('container_name') || existing.container_name || '').trim(),
-    enabled: existing.enabled !== false,
-    source: existing.source || 'manual',
-  };
-}
-
-async function saveWebuiForm(form) {
-  const key = form.dataset.linkKey;
-  const links = mergedWebLinks({ includeDisabled: true });
-  const existing = links.find(link => link.link_key === key);
-  const updated = linkFromForm(form, existing);
-  if (!updated.label || !updated.url) return toast('WebUI link needs a label and URL.');
-  const next = existing
-    ? links.map(link => link.link_key === key ? updated : link)
-    : [...links, updated];
-  await saveWebuiLinks(next);
-}
-
-async function toggleWebuiLink(key) {
-  const links = mergedWebLinks({ includeDisabled: true });
-  const next = links.map(link => link.link_key === key ? { ...link, enabled: !link.enabled } : link);
-  await saveWebuiLinks(next);
 }
 
 async function deleteWebuiLink(key) {
@@ -1136,7 +1054,6 @@ function render(data) {
     if (overviewFocus === 'containers') { renderContainers(); renderPorts(); }
     if (overviewFocus === 'integrations' && !integrationControlsActive()) renderIntegrations();
   }
-  if ($('servicesView').classList.contains('active') && !webuiEditorActive) renderWebLinks();
   applySectionOrder();
   applySectionState();
   scheduleRefresh();
@@ -1418,33 +1335,6 @@ $('dashboardIconGrid').addEventListener('click', event => {
 });
 $('iconDownloadBtn').addEventListener('click', downloadIcon);
 $('refreshBtn').addEventListener('click', refresh);
-$('webuiPanelBody').addEventListener('submit', async event => {
-  const form = event.target.closest('.webui-edit-row');
-  if (!form) return;
-  event.preventDefault();
-  try { await saveWebuiForm(form); }
-  catch (e) { toast(e.message); }
-});
-$('webuiPanelBody').addEventListener('focusin', event => {
-  if (event.target.closest('.webui-editor')) holdWebuiEditor();
-});
-$('webuiPanelBody').addEventListener('focusout', event => {
-  if (event.target.closest('.webui-editor')) releaseWebuiEditorSoon();
-});
-$('webuiPanelBody').addEventListener('input', event => {
-  if (event.target.closest('.webui-editor')) holdWebuiEditor();
-});
-$('webuiPanelBody').addEventListener('click', async event => {
-  const button = event.target.closest('[data-action="webui-toggle"], [data-action="webui-delete"]');
-  if (!button) return;
-  event.preventDefault();
-  const key = button.closest('.webui-edit-row')?.dataset.linkKey;
-  if (!key) return;
-  try {
-    if (button.dataset.action === 'webui-toggle') await toggleWebuiLink(key);
-    if (button.dataset.action === 'webui-delete') await deleteWebuiLink(key);
-  } catch (e) { toast(e.message); }
-});
 $('integrationsPanelBody').addEventListener('click', event => {
   const whiteButton = event.target.closest('[data-action="ha-white"]');
   if (whiteButton) {
@@ -1494,6 +1384,8 @@ $('overviewSections').addEventListener('click', event => {
   if (sectionButton.dataset.action === 'section-down') moveSection(section, 1);
 });
 $('containerSearch').addEventListener('input', renderContainers);
+$('containerTechnicalDetails').onclick = () => $('containerDetailsRoute').click();
+$('backToContainerTiles').onclick = () => document.querySelector('.nav-item[data-view="services"]').click();
 $('portSearch').addEventListener('input', renderPorts);
 $('portProtocol').addEventListener('change', renderPorts);
 $('portMode').addEventListener('change', renderPorts);
@@ -1502,10 +1394,9 @@ document.addEventListener('keydown', event => {
   event.preventDefault();
   let target = [...document.querySelectorAll('.view.active .search')].find(el => el.getClientRects().length);
   if (!target) {
-    document.querySelector('.nav-item[data-view="containers"]').click();
-    collapsedSections.delete('containers');
-    applySectionState();
-    target = $('containerSearch');
+    document.querySelector('.nav-item[data-view="services"]').click();
+    $('allContainersDisclosure').open = true;
+    target = $('serviceSearch');
   }
   target?.focus();
   target?.select();
@@ -1553,9 +1444,14 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
   btn.addEventListener('click', event => {
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    if (!window.hubRestoringRoute && location.pathname !== '/' + btn.dataset.view) history.pushState(null, '', '/' + btn.dataset.view);
+    const routePath = btn.getAttribute('href') || '/' + btn.dataset.view;
+    if (!window.hubRestoringRoute && location.pathname !== routePath) history.pushState(null, '', routePath);
     if (location.hash.startsWith('#metrics/')) history.replaceState(null, '', location.pathname + location.search);
     document.querySelectorAll('.nav-item[data-view]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
+    if (btn.dataset.view === 'containers') {
+      document.querySelector('.nav-item[data-view="services"]').classList.add('active');
+      document.querySelector('[data-nav-group="services"]').open = true;
+    }
     if (btn.closest('.nav-group')) btn.closest('.nav-group').open = true;
     const overviewViews = { metrics: 'server', containers: 'containers', integrations: 'integrations' };
     const overviewView = overviewViews[btn.dataset.view];
@@ -1572,12 +1468,12 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     const names = {
       dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],
       home:['Home','Your services and host, at a glance'],
-      services:['Services','Discover, organize and open your applications'],
+      services:['Containers',''],
       logs:['Logs','Errors, warnings and context across Docker containers'],
       zigbee:['Zigbee','Discovered lights and device controls'],
       automations:['Automations','Device events, timed actions and smart buttons'],
       metrics:['Metrics','Host utilization, saturation, and trends'],
-      containers:['Containers','Docker state, resources, ports, and logs'],
+      containers:['Container details','Docker state, resources, ports, and logs'],
       integrations:['Integrations','Live service status and controls'],
       settings:['Settings','Configure this hub'],
       database:['History storage','PostgreSQL connection and background collection'],

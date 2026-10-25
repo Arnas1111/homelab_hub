@@ -1,5 +1,5 @@
 """Explicit dashboard routes; never accept an arbitrary post-login redirect."""
-PAGES = ('home', 'services', 'containers', 'metrics', 'integrations', 'zigbee',
+PAGES = ('home', 'services', 'containers', 'container-details', 'metrics', 'integrations', 'zigbee',
          'automations', 'logs', 'settings', 'connectors', 'database', 'history')
 
 
