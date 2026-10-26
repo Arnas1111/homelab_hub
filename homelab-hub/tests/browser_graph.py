@@ -7,8 +7,8 @@ from browser_dashboard import handler as dashboard_handler
 
 layout={'modules':[{'id':id,'width':3} for id in ('welcome','host','services')]}
 graphs=[]
-objects=[dict(id='zigbee.motion',name='Motion sensor',type='sensor',available=True,state={'occupancy':False},actions=[],
-              capabilities={'occupancy':{'type':'boolean','label':'Occupancy'}}),
+objects=[dict(id='zigbee.motion',name='Motion sensor',type='sensor',available=True,state={'occupancy':False,'temperature':18},actions=[],
+              capabilities={'occupancy':{'type':'boolean','label':'Occupancy'},'temperature':{'type':'number','label':'Temperature'}}),
          dict(id='zigbee.light',name='Hall light',type='light',available=True,state={'power':False},
               actions=['set_power','set_brightness'],capabilities={'power':{'type':'boolean'},'brightness':{'type':'number','minimum':0,'maximum':100}})]
 
@@ -22,8 +22,9 @@ def handler(route):
     if path=='/api/v1/objects': return route.fulfill(json={'objects':objects})
     if path=='/api/zigbee/automations/graphs':
         if route.request.method=='POST':
-            graphs.append(dict(route.request.post_data_json,id='graph-1',status='Ready'))
-            return route.fulfill(status=201,json={'id':'graph-1'})
+            graph_id='graph-'+str(len(graphs)+1)
+            graphs.append(dict(route.request.post_data_json,id=graph_id,status='Ready'))
+            return route.fulfill(status=201,json={'id':graph_id})
     if path.startswith('/api/zigbee/automations/graphs/'):
         if route.request.method=='PUT': graphs[:]=[dict(route.request.post_data_json,id='graph-1',status='Ready')]
         if route.request.method=='DELETE': graphs.clear()
@@ -69,7 +70,10 @@ def main():
         page.get_by_role('button',name='+ New automation').click()
         palette=page.locator('#graphItemPalette')
         palette.get_by_role('button',name='Motion sensor').click()
-        page.locator('#graphLogicPalette').get_by_role('button',name='When state reports').click()
+        page.locator('#graphLogicPalette').get_by_role('button',name='When item reports').click()
+        page.locator('#graphLogicPalette').get_by_role('button',name='While less than').click()
+        expect(page.locator('#graphInspector [data-field="operator"]')).to_have_value('lt')
+        expect(page.locator('#graphInspector [data-field="property"]')).to_have_value('temperature')
         palette.get_by_role('button',name='Hall light').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='Wait').click()
@@ -77,7 +81,7 @@ def main():
         page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
         page.locator('#graphInspector [data-field="value"]').select_option('false')
         page.locator('#graphName').fill('Motion → hallway')
-        assert page.evaluate('graphCurrent.edges.length')==6
+        assert page.evaluate('graphCurrent.edges.length')==7
         page.get_by_role('button',name='Save',exact=True).click()
         expect(page.locator('#automationAllCards h3')).to_have_text('Motion → hallway')
         assert graphs[0]['nodes'][-1]['value'] is False
@@ -86,6 +90,16 @@ def main():
         page.locator('#graphName').fill('Edited draft')
         page.evaluate('loadGraphAutomations()')
         expect(page.locator('#graphName')).to_have_value('Edited draft')
+        page.locator('#graphCancel').click()
+        page.get_by_role('button',name='+ New automation').click()
+        page.locator('#graphLogicPalette').get_by_role('button',name='When time is reached').click()
+        page.locator('#graphInspector [data-field="time"]').fill('19:30')
+        palette.get_by_role('button',name='Hall light').click()
+        page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
+        page.locator('#graphName').fill('Evening light')
+        page.get_by_role('button',name='Save',exact=True).click()
+        assert graphs[-1]['nodes'][0]['kind']=='clock_trigger'
+        assert graphs[-1]['nodes'][0]['time_condition']['time']=='19:30'
         page.set_viewport_size({'width':390,'height':844})
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         assert not errors,errors

@@ -155,7 +155,7 @@
     </section>
 
     <section id="automationsView" class="view">
-      <div class="board-section-heading"><div><span class="eyebrow">ZIGBEE / AUTOMATIONS</span><h2>Automations</h2><p class="muted">Connect items, triggers, conditions and actions on a canvas.</p></div><div class="automation-pair"><button id="graphNew" class="btn primary">+ New automation</button><button id="automationRefresh" class="btn">Refresh</button></div></div>
+      <div class="board-section-heading"><div><h2>Automations</h2></div><div class="automation-pair"><button id="graphNew" class="btn primary">+ New automation</button><button id="automationRefresh" class="btn">Refresh</button></div></div>
       <p id="automationStatus" role="status"></p>
       <div id="automationAllCards" class="graph-list"></div>
       <section id="graphEditor" class="graph-editor" hidden>
@@ -163,35 +163,8 @@
         <div class="graph-meta"><label>Name<input id="graphName" maxlength="80" placeholder="Give this automation a name"></label><label class="check"><input id="graphEnabled" type="checkbox" checked> Enabled</label><span id="graphFeedback" role="status"></span></div>
         <div class="graph-workspace"><aside class="graph-palette"><h3>Add cards</h3><p class="muted tiny">Drag onto the canvas, or tap to add. Select a card to configure it.</p><div id="graphItemPalette"></div><div id="graphLogicPalette"></div></aside>
           <div class="graph-canvas-scroll"><div id="graphCanvas" class="graph-canvas" aria-label="Automation flow canvas"><svg id="graphWires" viewBox="0 0 2400 1600" preserveAspectRatio="none" aria-hidden="true"></svg><div id="graphNodes"></div></div></div>
-          <aside class="graph-inspector"><h3>Card settings</h3><div id="graphInspector" class="muted">Select a card. Connect cards with the output and input dots. You can also drag from one dot to another.</div><button id="graphDeleteNode" class="btn" hidden>Remove card</button><p class="muted tiny">Flow example: Motion item → state trigger → Light item → power on → delay → Light item → power off.</p></aside></div>
+          <aside class="graph-inspector"><h3>Card settings</h3><div id="graphInspector" class="muted">Select a card. Connect cards with the output and input dots. You can also drag from one dot to another.</div><button id="graphDeleteNode" class="btn" hidden>Remove card</button></aside></div>
       </section>
-      <details id="legacyAutomation" class="legacy-automation"><summary>Existing timed rules</summary><p class="muted tiny">Your saved rules continue to run. Use this editor to change them; new flows use the canvas above.</p>
-      <div class="automation-layout">
-        <form id="automationForm" class="panel automation-editor">
-          <h3 id="automationEditorTitle">New automation</h3>
-          <label>Name<input id="automationName" required maxlength="80" placeholder="Hallway motion light"></label>
-          <label>When this device reports<select id="automationSource" required></select></label>
-          <div class="automation-pair"><label>Property<select id="automationProperty" required></select></label><label id="automationEqualsLabel">Equals<span id="automationValueHost"></span></label></div>
-          <label id="automationOccupancyLabel" class="check" hidden><input id="automationWhileOccupied" type="checkbox"> Keep the light on while occupied</label>
-          <label class="check"><input id="automationTimeEnabled" type="checkbox"> Only activate when a time condition matches</label>
-          <div id="automationTimeFields" hidden>
-            <label>Time boundary<select id="automationTimeBoundary"><option value="clock">Clock time</option><option value="sunset">Sunset</option><option value="sunrise">Sunrise</option></select></label>
-            <label id="automationClockLabel">Local time<input id="automationClock" type="time" value="18:00"></label>
-            <label id="automationSolarOffsetLabel" hidden>Offset from solar time (minutes)<input id="automationSolarOffset" type="number" min="-180" max="180" value="0"></label>
-            <label class="check"><input id="automationTimeAfter" type="checkbox" checked> After this time is true (uncheck for before)</label>
-            <p id="automationTimeContext" class="muted tiny"></p><button class="btn" type="button" data-open-view="settings">Timezone and solar location in Settings</button>
-            <p class="muted tiny">Uses today's boundary in your saved timezone; conditions reset at midnight. Existing switch-off timers still finish.</p>
-          </div>
-          <label>Turn on<select id="automationTarget" required></select></label>
-          <label><span id="automationSecondsLabel">Then turn off after (seconds)</span><input id="automationSeconds" type="number" min="1" max="86400" value="5" required></label>
-          <label class="check"><input id="automationEnabled" type="checkbox" checked> Enabled</label>
-          <p id="automationModeHelp" class="muted tiny">Repeated matching reports extend the countdown. Timers run on the Hub, even with this page closed.</p>
-          <div class="automation-pair"><button type="submit" class="btn primary">Save automation</button><button id="automationCancel" type="button" class="btn">New / clear</button></div>
-          <p id="automationFeedback" role="status" aria-live="polite"></p>
-        </form>
-        <div><div id="automationRules"></div><p class="muted tiny">Disabling or deleting a rule stops new activations. Existing switch-off timers still finish. If several rules control one light, the latest deadline wins. Manual changes do not cancel a timer.</p></div>
-      </div>
-      </details>
     </section>
 
     <section id="zigbeeView" class="view">
@@ -443,7 +416,6 @@
   <script src="/static/settings.js?v={{ asset_version }}"></script>
   <script src="/static/appearance.js?v={{ asset_version }}"></script>
   <script src="/static/connectors.js?v={{ asset_version }}"></script>
-  <script src="/static/automations.js?v={{ asset_version }}"></script>
   <script src="/static/automation_graph.js?v={{ asset_version }}"></script>
   <script src="/static/navigation.js?v={{ asset_version }}"></script>
 </body>

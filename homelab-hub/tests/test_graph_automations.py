@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from app.modules.zigbee.automation import Automations, automation_router
 from app.modules.zigbee.connector import ZigbeeModule
-from app.modules.zigbee.graph_automation import GraphRule
+from app.modules.zigbee.graph_automation import GraphRule, compare
 from app.modules.zigbee.graph_automation import window_allows
 from test_automations import MemoryPreferences
 from test_zigbee import light
@@ -91,6 +91,46 @@ class GraphTests(unittest.TestCase):
         self.engine.process(self.sensor,{'action':'single'})
         self.engine.process(self.sensor,{'action':'double'})
         self.module.act.assert_not_called()
+
+    def test_comparison_operators_and_numeric_validation(self):
+        self.assertTrue(compare(18, 20, 'lt'))
+        self.assertTrue(compare(20, 20, 'lte'))
+        self.assertTrue(compare(21, 20, 'gt'))
+        self.assertTrue(compare(20, 20, 'gte'))
+        self.assertTrue(compare(False, True, 'ne'))
+        self.assertFalse(compare(False, 1, 'lt'))
+        self.assertFalse(compare(True, 1, 'eq'))
+        self.graph['nodes'][1]['operator'] = 'lt'
+        with self.assertRaises(HTTPException):
+            self.save()
+
+    def test_clock_trigger_fires_once_each_local_day_and_survives_restart(self):
+        self.prefs.write('automation_time', {'timezone':'Europe/Berlin'})
+        berlin = ZoneInfo('Europe/Berlin')
+        self.now = datetime(2026, 10, 26, 17, 59, 59, tzinfo=berlin).timestamp()
+        self.graph = {'name':'Evening light', 'enabled':True, 'nodes':[
+            self.node('clock','clock_trigger',time_condition={'boundary':'clock','time':'18:00','after':True,'offset_minutes':0}),
+            self.node('lamp','item',item=self.lamp),
+            self.node('on','action',action='set_power',value=True)],
+            'edges':[{'source':'clock','target':'lamp'},{'source':'lamp','target':'on'}]}
+        graph_id = self.save()
+        self.engine.tick()
+        self.module.act.assert_not_called()
+        self.now += 1
+        self.engine.tick()
+        self.assertEqual(self.module.act.call_count,1)
+        self.engine.tick()
+        self.assertEqual(self.module.act.call_count,1)
+        recovered = Automations(self.prefs,self.module,clock=lambda:self.now)
+        saved = self.prefs.read('zigbee_automations')
+        recovered.graphs = saved['graphs']
+        recovered.graph_fired = saved['graph_fired']
+        recovered.tick()
+        self.assertEqual(self.module.act.call_count,1)
+        self.assertEqual(recovered.graph_fired[graph_id+':clock'],'2026-10-26')
+        self.now = datetime(2026, 10, 27, 18, 0, tzinfo=berlin).timestamp()
+        recovered.tick()
+        self.assertEqual(self.module.act.call_count,2)
 
     def test_time_window_crosses_midnight_in_saved_timezone(self):
         berlin=ZoneInfo('Europe/Berlin')

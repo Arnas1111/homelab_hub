@@ -32,7 +32,7 @@ class Automations:
         self.stop_event = threading.Event()
         self.thread = None
         self.rules, self.pending, self.status = {}, {}, {}
-        self.graphs, self.graph_jobs, self.graph_status = {}, {}, {}
+        self.graphs, self.graph_jobs, self.graph_status, self.graph_fired = {}, {}, {}, {}
         self.holds = {}
         self.time = AutomationTime(preferences)
 
@@ -44,6 +44,7 @@ class Automations:
             self.holds = saved.get('holds', {})
             self.graphs = saved.get('graphs', {})
             self.graph_jobs = saved.get('graph_jobs', {})
+            self.graph_fired = saved.get('graph_fired', {})
         self.stop_event.clear()
         self.thread = threading.Thread(target=self._run, daemon=True, name='zigbee-automations')
         self.thread.start()
@@ -55,7 +56,8 @@ class Automations:
 
     def _save(self):
         self.preferences.write('zigbee_automations', {'rules': self.rules, 'pending': self.pending, 'holds': self.holds,
-                                                       'graphs': self.graphs, 'graph_jobs': self.graph_jobs})
+                                                       'graphs': self.graphs, 'graph_jobs': self.graph_jobs,
+                                                       'graph_fired': self.graph_fired})
 
     def notify(self, object_id, values):
         # MQTT must never wait on storage or an actuator publish.
@@ -203,6 +205,7 @@ class Automations:
 
     def tick(self):
         with self.lock:
+            self._tick_clock_triggers()
             self._tick_graphs()
             now = self.clock()
             for target, job in list(self.pending.items()):
@@ -233,6 +236,7 @@ class Automations:
             validate_graph(graph, self.module, self.time)
             graph_id = graph_id or uuid.uuid4().hex
             self.graphs[graph_id] = graph.model_dump()
+            self.graph_fired = {key: day for key, day in self.graph_fired.items() if not key.startswith(graph_id + ':')}
             self.graph_status.pop(graph_id, None)
             self._save()
             return {'id': graph_id}
@@ -242,6 +246,7 @@ class Automations:
             if graph_id not in self.graphs:
                 raise HTTPException(404, 'Automation not found')
             del self.graphs[graph_id]
+            self.graph_fired = {key: day for key, day in self.graph_fired.items() if not key.startswith(graph_id + ':')}
             self.graph_status.pop(graph_id, None)
             # Scheduled branches hold a copy of their graph and still finish.
             self._save()
@@ -264,6 +269,30 @@ class Automations:
                     self.graph_status[graph_id] = 'Triggered'
                 except Exception:
                     self.graph_status[graph_id] = 'Action failed; check Zigbee connection'
+
+    def _tick_clock_triggers(self):
+        now = self.clock()
+        for graph_id, graph in self.graphs.items():
+            if not graph['enabled']:
+                continue
+            nodes, _, outgoing = paths(graph)
+            for key, node in nodes.items():
+                if node['kind'] != 'clock_trigger':
+                    continue
+                try:
+                    boundary = self.time.boundary(node['time_condition'], now)
+                    elapsed = now - boundary.timestamp()
+                    day = boundary.date().isoformat()
+                    fired_key = graph_id + ':' + key
+                    if not 0 <= elapsed < 60 or self.graph_fired.get(fired_key) == day:
+                        continue
+                    # Persist before acting so restarts in this minute cannot repeat it.
+                    self.graph_fired[fired_key] = day
+                    self._save()
+                    self._walk_graph(graph_id, graph, outgoing[key], '')
+                    self.graph_status[graph_id] = 'Triggered'
+                except Exception:
+                    self.graph_status[graph_id] = 'Clock trigger failed; check time settings or Zigbee connection'
 
     def _walk_graph(self, graph_id, graph, next_ids, context):
         nodes, _, outgoing = paths(graph)

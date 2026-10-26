@@ -13,7 +13,7 @@ from app.modules.zigbee.time_conditions import TimeCondition
 class Node(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     id: str = Field(pattern=r'^[a-zA-Z0-9_-]{1,50}$')
-    kind: Literal['item', 'trigger', 'condition', 'time', 'window', 'action', 'delay']
+    kind: Literal['item', 'trigger', 'clock_trigger', 'condition', 'time', 'window', 'action', 'delay']
     item: str = Field(default='', max_length=160)
     property: str = Field(default='', max_length=100)
     operator: Literal['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] = 'eq'
@@ -45,8 +45,8 @@ class GraphRule(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     name: str = Field(min_length=1, max_length=80)
     enabled: bool = True
-    nodes: list[Node] = Field(min_length=4, max_length=50)
-    edges: list[Edge] = Field(min_length=3, max_length=80)
+    nodes: list[Node] = Field(min_length=3, max_length=50)
+    edges: list[Edge] = Field(min_length=2, max_length=80)
 
 
 def compare(actual, expected, operator):
@@ -75,11 +75,13 @@ def validate_graph(graph: GraphRule, module, automation_time):
             raise HTTPException(422, 'Duplicate connection')
         outgoing[edge.source].append(edge.target)
         incoming[edge.target].append(edge.source)
-    roots = [key for key, node in nodes.items() if node.kind == 'item' and not incoming[key]]
-    triggers = [key for key, node in nodes.items() if node.kind == 'trigger']
+    roots = [key for key, node in nodes.items() if node.kind in ('item', 'clock_trigger') and not incoming[key]]
+    triggers = [key for key, node in nodes.items() if node.kind in ('trigger', 'clock_trigger')]
     if not roots or not triggers or not any(n.kind == 'action' for n in nodes.values()):
         raise HTTPException(422, 'Add an item, a trigger, and an action')
-    if any(len(incoming[key]) != 1 or nodes[incoming[key][0]].kind != 'item' for key in triggers):
+    if any(len(incoming[key]) != 1 or nodes[incoming[key][0]].kind != 'item'
+           for key in triggers if nodes[key].kind == 'trigger') or any(
+               incoming[key] for key in triggers if nodes[key].kind == 'clock_trigger'):
         raise HTTPException(422, 'Connect each trigger directly after an item')
     visited, active = set(), set()
     def visit(key):
@@ -102,8 +104,15 @@ def validate_graph(graph: GraphRule, module, automation_time):
             if node.item not in objects:
                 raise HTTPException(422, 'Choose a discovered item for each item card')
         elif node.kind in ('trigger', 'condition'):
-            if not node.property or node.value is None or node.kind == 'trigger' and node.operator != 'eq':
+            if not node.property or node.value is None:
                 raise HTTPException(422, 'Set a property and value on each state card')
+        elif node.kind == 'clock_trigger':
+            if node.time_condition is None or not node.time_condition.after:
+                raise HTTPException(422, 'Choose an exact time for the clock trigger')
+            if automation_time.preferences.read('automation_time') is None:
+                raise HTTPException(422, 'Set the automation timezone in Settings first')
+            if node.time_condition.boundary != 'clock' and not automation_time.settings().solar_enabled:
+                raise HTTPException(422, 'Set timezone and solar location in Settings first')
         elif node.kind == 'action':
             if not node.action.startswith('set_') or node.value is None:
                 raise HTTPException(422, 'Choose an action and value')
@@ -127,6 +136,10 @@ def validate_graph(graph: GraphRule, module, automation_time):
         node = nodes[key]
         if node.kind == 'item':
             item_id = node.item
+        elif node.kind == 'clock_trigger':
+            if saw_trigger:
+                raise HTTPException(422, 'Place only one trigger on a path')
+            saw_trigger = True
         elif node.kind == 'trigger':
             if saw_trigger or item_id not in objects:
                 raise HTTPException(422, 'A trigger must follow a source item')
@@ -135,6 +148,8 @@ def validate_graph(graph: GraphRule, module, automation_time):
                 raise HTTPException(422, 'Source item does not report this property')
             if not valid_value(cap, node.value):
                 raise HTTPException(422, 'Trigger value does not match item property')
+            if node.operator not in ('eq', 'ne') and cap.type != 'number':
+                raise HTTPException(422, 'Order comparisons require a numeric property')
             saw_trigger = True
             trigger_source = item_id
         elif not saw_trigger:
@@ -149,6 +164,8 @@ def validate_graph(graph: GraphRule, module, automation_time):
                     raise HTTPException(422, 'Item does not report this property')
                 if not valid_value(cap, node.value):
                     raise HTTPException(422, 'Condition value does not match item property')
+                if node.operator not in ('eq', 'ne') and cap.type != 'number':
+                    raise HTTPException(422, 'Order comparisons require a numeric property')
             else:
                 cap = obj.capabilities.get(node.action.removeprefix('set_'))
                 if node.action not in obj.actions or not cap or not valid_value(cap, node.value):

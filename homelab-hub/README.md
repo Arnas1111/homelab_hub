@@ -258,14 +258,15 @@ grid previews; favorite chips can be dragged to reorder them. Save commits
 the layout to `/data/hub.db` for all browsers; Cancel restores the previous view.
 
 New Zigbee automations use a two-dimensional flow canvas. Drag an **Item** card
-from the discovered Zigbee list, then add and connect **When state reports**, **If
-item state**, **If local time**, **Do action**, and **Wait** cards. Select a card to
+from the discovered Zigbee list, then add and connect **When item reports**, **When
+time is reached**, **While item equals/differs/less than/greater than**, **While
+time matches**, **Do action**, and **Wait** cards. Select a card to
 edit its property, comparison, action, or delay. Item cards set the device context
 for following cards, so a light can be a condition as well as an action target.
 For example: motion item → occupancy true → light item → power on → wait 5 seconds
 → light item → power off. Another path can check whether light A is on and turn
 off light B. Time cards gate actions using saved timezone/solar settings; place
-an **If time window** card for a range such as 18:00 until 00:00; ranges crossing
+an **While inside time window** card for a range such as 18:00 until 00:00; ranges crossing
 midnight are supported in the saved timezone.
 
 Flows are validated before saving: discovered items and supported capabilities,
@@ -273,8 +274,11 @@ matching value types, connected cards, and no cycles. Delayed branches persist
 through Hub restarts and retry after connection failures. A repeated trigger
 restarts its matching wait card. Conditions use the latest **reported** device
 state; a command immediately before a condition may not have a new report yet.
-The older timed-rule editor remains under **Existing timed rules** so saved rules
-keep running and can still be edited. New flows are not tied to that recipe.
+Clock triggers run once per local day during the matching minute and persist
+their last fired date across restarts. Comparison cards evaluate the latest
+reported state when the flow reaches them; order comparisons require numeric
+properties. Earlier timed rules keep running and appear as cards with enable,
+disable, and delete controls. Recreate one on the canvas to change its flow.
 
 The Home layout follows Homarr's board/widget separation and Homepage's
 configurable sections; service cards retain Heimdall's simple app-launcher role.

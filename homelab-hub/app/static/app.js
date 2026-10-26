@@ -1481,7 +1481,7 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
     if (btn.dataset.view === 'logs' && typeof loadAggregateLogs === 'function') loadAggregateLogs();
     if (btn.dataset.view === 'zigbee' && typeof loadZigbee === 'function') loadZigbee();
-    if (btn.dataset.view === 'automations' && typeof loadAutomations === 'function') loadAutomations();
+    if (btn.dataset.view === 'automations' && typeof loadGraphAutomations === 'function') loadGraphAutomations();
     if (btn.dataset.view === 'automations' && typeof loadGraphAutomations === 'function') loadGraphAutomations();
     if (overviewView === 'integrations' && typeof loadConnectorWorkspace === 'function') loadConnectorWorkspace();
     applySectionState();

@@ -109,40 +109,49 @@ Reference contracts: [Zigbee2MQTT exposes](https://www.zigbee2mqtt.io/guide/usag
 Architecture and later phases: [ARCHITECTURE.md](ARCHITECTURE.md).
 ## Automations
 
-Open `/automations`, or Settings → Configure Zigbee automations. Choose a sensor,
-property and matching value, then a light/switch and switch-off delay. For motion:
-`occupancy = true → light on → 5 seconds → light off`. Repeated matching reports
-restart the timer. Button `action` values (single, double, etc.) are discovered from
-Zigbee2MQTT and selectable in the same editor.
+Open `/automations`, or Settings → Configure Zigbee automations. Build a flow on
+the canvas from Item, When, While, action, and Wait cards. For motion, connect
+`motion item → When occupancy equals true → light item → power on → Wait 5 seconds
+→ light item → power off`. A repeated matching report restarts the matching Wait.
+Button `action` values (single, double, etc.) come from Zigbee2MQTT.
 
-For occupancy-based lighting, select `occupancy` and check **Keep the light on
-while occupied**. The light stays on while occupancy is true. When occupancy
+Earlier occupancy-based rules using **Keep the light on while occupied** keep
+running. The light stays on while occupancy is true. When occupancy
 becomes false, the Hub starts the configured switch-off countdown; repeated false
 reports leave that deadline alone. New occupancy cancels switch-off. If multiple
 occupancy rules share the target, it stays on until all occupied sensors are clear.
 Holds persist across restarts and wait for a fresh false report. Disabling or
 deleting a held rule releases the hold and schedules switch-off after its delay.
 
-An optional **Only activate when a time condition matches** checkbox filters new
-sensor/button activations to before/after a clock time, sunrise or sunset. Configure
+Use **While time matches** to filter device activations before/after a clock time,
+sunrise or sunset, or **When time is reached** to start a flow once per local day.
+Configure
 the timezone and editable solar coordinates in Settings; the Hub calculates solar
 times locally. Solar offsets are in minutes. The after/before test uses today's
 boundary in the saved timezone and resets at midnight. No solar event for the day
 means no activation for that condition. OFF timers and occupancy false reports are
 processed even when the time condition is false or unavailable.
 
-Only fresh, non-retained reports activate rules. Pending OFF deadlines survive Hub
+Device triggers use fresh, non-retained reports; clock triggers use local time.
+Pending OFF deadlines survive Hub
 restarts and retry after connection failures. Disabling/deleting a rule prevents
 new triggers but preserves scheduled OFF; manual changes do not cancel a timer.
 Multiple rules targeting the same light use the latest deadline. Configuration is
 stored in the existing `/data/hub.db`; no additional container configuration is needed.
 ### Flow editor
 
-Open **Zigbee → Automations**. New automations are built from Item, state trigger,
-state condition, local time or time-window condition, action, and wait cards on a movable canvas.
+Open **Zigbee → Automations**. New automations are built from Item, When item
+reports or When time is reached, While comparison or time, action, and Wait cards
+on a movable canvas. Equals, differs, less/greater than, and inclusive comparisons
+are available as separate palette cards. A While card checks the latest reported
+state when the flow reaches it; it does not continuously watch the item. Order
+comparisons require numeric properties.
 An Item card selects any discovered Zigbee device. Connect its output to a trigger
 or condition; later Item cards can select different action targets. State conditions
 read the latest device report. Power, brightness and other actions appear only
 when the chosen device advertises them. A wait card persists its next step under
-`/data/hub.db`; repeating a trigger restarts that wait. Saved older rules remain
-under **Existing timed rules** and continue to run.
+`/data/hub.db`; repeating a trigger restarts that wait. Clock triggers fire during
+their matching minute, once per local day; the Hub must be running then. Saved
+older rules remain visible as cards with enable/disable and delete controls. They
+continue to run until disabled or deleted; recreate them on the canvas to edit
+their flow.

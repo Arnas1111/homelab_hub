@@ -5,7 +5,8 @@ from playwright.sync_api import sync_playwright, expect
 from browser_dashboard import handler as dashboard_handler
 from browser_history import STATIC
 
-rules = []
+rules = [dict(id='test-rule',name='Hall motion',enabled=True,source='zigbee.sensor',property='occupancy',equals=True,
+              target='zigbee.lamp',seconds=5,while_occupied=False,time_condition=None,status='Ready',off_at=None)]
 objects = [dict(id='zigbee.sensor', name='Hall motion', type='sensor', actions=[], capabilities={
     'occupancy':dict(type='boolean'), 'action':dict(type='enum', options=['single', 'double'])}),
     dict(id='zigbee.lamp', name='Hall light', type='light', actions=['set_power'], capabilities={'power':dict(type='boolean')})]
@@ -19,11 +20,11 @@ def handler(route):
         return dashboard_handler(route)
     if path.startswith('/api/zigbee/automations'):
         method = route.request.method
-        if method in ('POST', 'PUT'):
+        if method == 'PUT':
             rule = dict(route.request.post_data_json, id='test-rule', status='Ready', off_at=None)
             rules[:] = [rule]
         elif method == 'DELETE': rules.clear()
-        return route.fulfill(json={'rules':rules, 'pending_count':0, 'connection':'online'})
+        return route.fulfill(json={'rules':rules,'graphs':[], 'pending_count':0, 'connection':'online'})
     return dashboard_handler(route)
 
 
@@ -77,50 +78,19 @@ def main():
         expect(page.locator('#pageTitle')).to_have_text('Containers')
         page.goto('http://hub.test/automations')
         expect(page.locator('#pageTitle')).to_have_text('Automations')
-        page.locator('#legacyAutomation summary').click()
-        expect(page.locator('#automationSource')).to_have_value('zigbee.sensor')
-        page.locator('#automationName').fill('Motion <hall>')
-        page.locator('#automationSeconds').fill('5')
-        page.locator('#automationWhileOccupied').check()
-        page.locator('#automationTimeEnabled').check()
-        page.locator('#automationClock').fill('20:15')
-        page.locator('#automationTimeAfter').uncheck()
-        expect(page.locator('#automationEqualsLabel')).to_be_hidden()
-        expect(page.locator('#automationSecondsLabel')).to_contain_text('occupancy becomes false')
-        page.get_by_role('button', name='Save automation').click()
-        expect(page.locator('#automationRules .automation-card h3')).to_have_text('Motion <hall>')
-        assert rules[0]['equals'] is True
-        assert rules[0]['seconds'] == 5
-        assert rules[0]['while_occupied'] is True
-        assert rules[0]['time_condition']['time'] == '20:15'
-        assert rules[0]['time_condition']['after'] is False
-        expect(page.locator('.automation-summary')).to_contain_text('before 20:15')
-        expect(page.locator('.automation-summary')).to_contain_text('stays on')
-        page.get_by_role('button', name='Edit', exact=True).click()
-        expect(page.locator('#automationWhileOccupied')).to_be_checked()
-        expect(page.locator('#automationTimeEnabled')).to_be_checked()
-        expect(page.locator('#automationClock')).to_have_value('20:15')
-        page.locator('#automationTimeBoundary').select_option('sunset')
-        expect(page.locator('#automationClockLabel')).to_be_hidden()
-        page.locator('#automationSolarOffset').fill('-15')
-        page.locator('#automationName').fill('Unsaved draft')
-        page.evaluate('loadAutomations()')
-        expect(page.locator('#automationName')).to_have_value('Unsaved draft')
-        page.locator('#automationProperty').select_option('action')
-        expect(page.locator('#automationOccupancyLabel')).to_be_hidden()
-        page.locator('#automationValue').select_option('double')
-        page.locator('#automationEnabled').uncheck()
-        page.get_by_role('button', name='Save automation').click()
-        expect(page.locator('#automationRules .automation-card h3')).to_contain_text('Disabled')
-        assert rules[0]['equals'] == 'double'
-        assert rules[0]['while_occupied'] is False
-        assert rules[0]['time_condition']['boundary'] == 'sunset'
-        assert rules[0]['time_condition']['offset_minutes'] == -15
+        expect(page.locator('#legacyAutomation')).to_have_count(0)
+        expect(page.locator('#automationAllCards h3')).to_have_text('Hall motion')
+        page.locator('#automationAllCards [data-toggle]').click()
+        expect(page.locator('#automationAllCards [data-toggle]')).to_have_text('Enable')
+        assert rules[0]['enabled'] is False
+        page.locator('#automationAllCards [data-toggle]').click()
+        expect(page.locator('#automationAllCards [data-toggle]')).to_have_text('Disable')
+        assert rules[0]['enabled'] is True
         page.set_viewport_size({'width':390, 'height':844})
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.on('dialog', lambda dialog:dialog.accept())
         page.get_by_role('button', name='Delete', exact=True).click()
-        expect(page.locator('#automationRules')).to_contain_text('No automations yet')
+        expect(page.locator('#automationAllCards')).to_contain_text('No automations yet')
         # Reproduce the previous handler's lack of preventDefault. Restoration
         # must still select the view without following the section anchor.
         legacy_source = (STATIC / 'app.js').read_text(encoding='utf-8').replace(
@@ -133,7 +103,7 @@ def main():
         assert len(documents) == before + 1, documents
         assert not errors, errors
         browser.close()
-        print('PASS: deep links, reload, back/forward/history, motion/button rules, stable drafts, mobile, delete')
+        print('PASS: deep links, reload, back/forward/history, legacy-rule management, mobile, delete')
 
 
 if __name__ == '__main__': main()

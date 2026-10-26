@@ -299,6 +299,11 @@ body:has(#logsView.active) .top-actions { display:none; }
 .graph-palette h4 { margin:20px 0 7px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.1em; }
 .graph-palette-card { display:block; width:100%; margin:6px 0; padding:9px; text-align:left; color:var(--text); background:#202a39; border:1px solid #3b4962; border-radius:8px; cursor:grab; }
 .graph-palette-card:hover { border-color:#9cadff; }
+.graph-palette-card[data-kind="item"] { border-left:3px solid #70d9bc; }
+.graph-palette-card[data-kind="trigger"],.graph-palette-card[data-kind="clock_trigger"] { border-left:3px solid #f7bd80; }
+.graph-palette-card[data-kind="condition"],.graph-palette-card[data-kind="time"],.graph-palette-card[data-kind="window"] { border-left:3px solid #d7afff; }
+.graph-palette-card[data-kind="action"] { border-left:3px solid #ffd895; }
+.graph-palette-card[data-kind="delay"] { border-left:3px solid #9ac4ff; }
 .graph-canvas-scroll { overflow:auto; min-height:630px; max-height:75vh; border:1px solid #39445c; border-radius:11px; background-color:#111724; background-image:radial-gradient(#52607955 1px,transparent 1px); background-size:23px 23px; }
 .graph-canvas { position:relative; width:2400px; height:1600px; }
 #graphWires { position:absolute; inset:0; width:2400px; height:1600px; overflow:visible; pointer-events:none; }
@@ -307,6 +312,7 @@ body:has(#logsView.active) .top-actions { display:none; }
 .graph-node { position:absolute; width:188px; min-height:94px; box-sizing:border-box; border:1px solid #7285a7; border-top:3px solid #a6b8e8; border-radius:12px; background:#222b3b; box-shadow:0 9px 24px #0008; color:var(--text); }
 .graph-node.selected { border-color:#ffd895; box-shadow:0 0 0 2px #ffd89566,0 9px 24px #0008; }
 .graph-node.graph-item { border-top-color:#70d9bc; }
+.graph-node.graph-trigger,.graph-node.graph-clock_trigger { border-top-color:#f7bd80; }
 .graph-node.graph-condition,.graph-node.graph-time,.graph-node.graph-window { border-top-color:#d7afff; }
 .graph-node.graph-action { border-top-color:#ffd895; }
 .graph-node.graph-delay { border-top-color:#9ac4ff; }
@@ -318,7 +324,5 @@ body:has(#logsView.active) .top-actions { display:none; }
 .graph-inspector label { display:block; margin:14px 0; font-size:12px; color:var(--muted); }
 .graph-inspector label input,.graph-inspector label select { margin-top:6px; }
 .graph-inspector-type { letter-spacing:.12em; color:#a9b8ee; font-size:11px; font-weight:700; }
-.legacy-automation { border-top:1px solid var(--border); padding-top:16px; }
-.legacy-automation > summary { cursor:pointer; color:var(--muted); padding:10px 0; }
 @media(max-width:1100px) { .graph-workspace { grid-template-columns:150px minmax(0,1fr); } .graph-inspector { grid-column:1/-1; } }
 @media(max-width:700px) { .graph-workspace { grid-template-columns:1fr; } .graph-palette { max-height:180px; } .graph-canvas-scroll { height:460px; min-height:460px; } .graph-inspector { grid-column:auto; } }
