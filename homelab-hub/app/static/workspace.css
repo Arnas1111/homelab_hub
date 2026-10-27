@@ -295,6 +295,21 @@ body:is([data-theme="paper"],[data-theme="paper-dark"]) .graph-editor { --graph-
 .graph-meta label:first-child { flex:1; min-width:240px; display:flex; flex-direction:column; gap:9px; line-height:1.4; }
 .graph-meta #graphName { display:block; margin:0; }
 .graph-meta input:not([type=checkbox]),.graph-inspector input,.graph-inspector select { box-sizing:border-box; width:100%; padding:9px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:var(--graph-radius); }
+.graph-code-panel { margin:0 0 14px; border:1px solid var(--border); border-radius:var(--graph-radius); background:var(--panel2); }
+.graph-code-panel > summary { padding:10px 13px; font-size:13px; font-weight:700; cursor:pointer; }
+.graph-code-panel > summary::marker,.graph-code-syntax summary::marker { color:var(--accent); }
+.graph-code-body { display:grid; gap:8px; padding:0 13px 13px; }
+.graph-code-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--muted); font-size:11px; }
+.graph-code-heading > div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
+.graph-code-heading .btn { flex:0 0 auto; }
+.graph-code-body > label { font-size:12px; color:var(--text); }
+#graphCode { display:block; width:100%; min-height:118px; max-height:320px; padding:12px; resize:vertical; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:var(--graph-radius); font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; tab-size:2; }
+#graphCode:disabled { opacity:.6; }
+#graphCodeFeedback { min-height:17px; margin:0; color:var(--muted); font-size:11px; }
+#graphCodeFeedback[data-error="true"] { color:var(--red); }
+.graph-code-syntax { color:var(--muted); font-size:11px; }
+.graph-code-syntax summary { cursor:pointer; }
+.graph-code-syntax pre { margin:8px 0; padding:10px; overflow:auto; border:1px solid var(--border); border-radius:var(--graph-radius); background:var(--panel); color:var(--text); font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
 .graph-workspace { display:grid; grid-template-columns:195px minmax(0,1fr) 225px; gap:12px; min-height:650px; }
 .graph-workspace:has(.graph-inspector[hidden]) { grid-template-columns:195px minmax(0,1fr); }
 .graph-palette,.graph-inspector { padding:14px; background:var(--panel2); border:1px solid var(--border); border-radius:var(--graph-radius); overflow:auto; }

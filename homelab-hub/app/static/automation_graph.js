@@ -227,6 +227,7 @@ function graphDraw() {
     const node=graphById(card.dataset.node);
     card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
   });
+  if (typeof graphCodeSyncFromCanvas === 'function') graphCodeSyncFromCanvas();
 }
 function graphMove(node,stepX,stepY) {
   node.x=graphPosition(node.x+stepX*GRAPH_GRID,2200);
@@ -382,6 +383,7 @@ function graphInspector() {
     const card=$('graphNodes').querySelector(`[data-node="${node.id}"]`);
     card.querySelector('.graph-node-head span').textContent=graphKindLabel(node);
     card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
+    if (typeof graphCodeSyncFromCanvas === 'function') graphCodeSyncFromCanvas();
   });
 }
 function graphPalette() {
@@ -447,6 +449,7 @@ document.addEventListener('keydown',event => {
 });
 function graphOpen(saved=null) {
   graphOpener=document.activeElement;
+  if (typeof graphCodeResetForGraph === 'function') graphCodeResetForGraph();
   graphEditing=saved?.id || null;
   graphCurrent=saved ? {name:saved.name,enabled:saved.enabled,nodes:structuredClone(saved.nodes),edges:structuredClone(saved.edges)} : {name:'',enabled:true,nodes:[],edges:[]};
   graphSerial=Math.max(0,...graphCurrent.nodes.map(node=>Number(node.id.replace(/^n/,''))||0));
@@ -477,6 +480,10 @@ $('graphViewport').onclick=event => {
   if (!event.target.closest('.graph-node,.graph-wire-hit')) graphSelect(null);
 };
 $('graphSave').onclick=async () => {
+  if (typeof graphCodeHasError === 'function' && graphCodeHasError()) {
+    $('graphFeedback').textContent='Fix the programming error or restore code from the canvas before saving.';
+    $('graphCode').focus({preventScroll:true}); return;
+  }
   graphCurrent.name=$('graphName').value.trim(); graphCurrent.enabled=$('graphEnabled').checked;
   if (!graphCurrent.name) { $('graphFeedback').textContent='Give the automation a name.'; return; }
   const button=$('graphSave'); button.disabled=true;
@@ -550,7 +557,10 @@ async function loadGraphAutomations() {
     graphPaletteSignature=paletteSignature;
     graphObjects=nextObjects;
     graphRenderList();
-    if (graphCurrent && paletteChanged) graphPalette();
+    if (graphCurrent && paletteChanged) {
+      graphPalette();
+      if (typeof graphCodeSyncFromCanvas === 'function') graphCodeSyncFromCanvas();
+    }
   } catch (error) { $('automationStatus').textContent=error.message; }
   finally { graphLoading=false; }
 }

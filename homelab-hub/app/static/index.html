@@ -161,6 +161,10 @@
       <section id="graphEditor" class="graph-editor" hidden>
         <div class="board-section-heading"><div><span class="eyebrow">FLOW EDITOR</span><h2 id="graphEditorHeading">New automation</h2></div><div class="automation-pair"><button id="graphSave" class="btn primary">Save</button><button id="graphCancel" class="btn">Close editor</button></div></div>
         <div class="graph-meta"><label>Name<input id="graphName" maxlength="80" placeholder="Give this automation a name"></label><label class="check"><input id="graphEnabled" type="checkbox" checked> Enabled</label><span id="graphFeedback" role="status"></span></div>
+        <details id="graphCodePanel" class="graph-code-panel"><summary>Programming</summary><div class="graph-code-body"><div class="graph-code-heading"><span>One instruction per line. Valid code updates the canvas.</span><div><button id="graphCodeStart" class="btn" type="button" hidden>Start code draft</button><button id="graphCodeRestore" class="btn" type="button">Restore from canvas</button></div></div><label for="graphCode">Automation code</label><textarea id="graphCode" rows="7" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea><p id="graphCodeFeedback" role="status"></p><details class="graph-code-syntax"><summary>Syntax</summary><pre id="graphCodeExample">when "Motion sensor".occupancy == true
+if "Hall light".power == false
+do "Hall light".power = on
+wait 5s</pre><span>Start with <code>when</code> (or <code>if</code>) for a device report, or <code>at 18:00</code> for a clock trigger. Use names from Add cards. <code>item "Device"</code> changes the device context for later conditions.</span></details></div></details>
         <div class="graph-workspace"><aside class="graph-palette"><details id="graphPaletteDetails" open><summary>Add cards</summary><p class="muted tiny">Drag onto the canvas or click to add.</p><div id="graphItemPalette"></div><div id="graphLogicPalette"></div></details></aside>
           <div class="graph-canvas-panel"><div class="graph-canvas-toolbar"><details class="graph-canvas-help"><summary>Help</summary><span>Drag cards to move. Drag from a right dot onto another card to connect. Drag the background to pan. Double-click a card to edit. Delete removes the selected card.</span></details><div class="graph-zoom-controls" role="group" aria-label="Canvas zoom"><button id="graphZoomOut" class="btn" type="button" aria-label="Zoom out">−</button><output id="graphZoomValue" aria-live="off">100%</output><button id="graphZoomIn" class="btn" type="button" aria-label="Zoom in">+</button><button id="graphFit" class="btn" type="button">Fit</button></div></div><div id="graphViewport" class="graph-canvas-scroll" tabindex="0" aria-label="Automation flow canvas"><div id="graphCanvas" class="graph-canvas"><svg id="graphWires" viewBox="0 0 2400 1600" preserveAspectRatio="none"></svg><div id="graphNodes"></div></div></div></div>
           <aside class="graph-inspector" hidden><h3>Card settings</h3><div id="graphInspector"></div><button id="graphDeleteNode" class="btn danger" type="button">Remove card</button></aside></div>
@@ -417,6 +421,7 @@
   <script src="/static/appearance.js?v={{ asset_version }}"></script>
   <script src="/static/connectors.js?v={{ asset_version }}"></script>
   <script src="/static/automation_graph.js?v={{ asset_version }}"></script>
+  <script src="/static/automation_code.js?v={{ asset_version }}"></script>
   <script src="/static/navigation.js?v={{ asset_version }}"></script>
 </body>
 </html>

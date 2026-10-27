@@ -287,6 +287,25 @@ rejected before saving; the server also validates each flow. Connection handles
 follow the [draw.io hover-and-drag pattern](https://www.drawio.com/docs/manual/editor/panels/connection-points-hide/).
 The [code and interface review](IMPROVEMENT_REVIEW.md) records remaining work.
 
+**Programming** in the editor offers a short text form for one-path flows. Use
+device names from **Add cards**, for example:
+
+```text
+if "Motion sensor".occupancy = true
+do "Hall light".power = on
+wait 5s
+do "Hall light".power = off
+```
+
+`when` is an alias for the first `if`; `at 18:00` starts a clock flow. Later
+`if` lines check device state, and `item "Device"` changes context for later
+conditions. Valid edits update the canvas after a short pause. Incomplete or
+invalid lines leave the last valid canvas intact and show a line error; Save
+requires fixing that error or restoring code from the canvas. Changes made on
+a supported single path update the code too. Branches, solar/time-window cards,
+and other unrepresentable flows remain editable on the canvas; **Start code
+draft** keeps the canvas until a valid replacement is entered.
+
 Flows are validated before saving: discovered items and supported capabilities,
 matching value types, connected cards, and no cycles. Delayed branches persist
 through Hub restarts and retry after connection failures. A repeated trigger

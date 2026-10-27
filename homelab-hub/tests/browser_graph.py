@@ -213,6 +213,34 @@ def main():
         page.get_by_role('button',name='Save',exact=True).click()
         assert graphs[-1]['nodes'][0]['kind']=='clock_trigger'
         assert graphs[-1]['nodes'][0]['time_condition']['time']=='19:30'
+        page.set_viewport_size({'width':1440,'height':950})
+        page.get_by_role('button',name='+ New automation').click()
+        page.locator('#graphCodePanel > summary').click()
+        code='if "Motion sensor".occupancy = true\ndo "Hall light".power = on\nwait 5s\ndo "Hall light".power = off'
+        page.locator('#graphCode').fill(code)
+        expect(page.locator('#graphNodes .graph-node')).to_have_count(5)
+        assert page.evaluate('graphCurrent.nodes[2].target_item')=='zigbee.light'
+        assert page.evaluate('graphCurrent.edges.length')==4
+        page.locator('#graphCode').fill(code+'\nonsense')
+        expect(page.locator('#graphCodeFeedback')).to_contain_text('Line 5')
+        assert page.evaluate('graphCurrent.nodes.length')==5, 'invalid code must leave the canvas intact'
+        page.locator('#graphName').fill('Programmed motion light')
+        page.get_by_role('button',name='Save',exact=True).click()
+        expect(page.locator('#graphFeedback')).to_contain_text('Fix the programming error')
+        page.locator('#graphCode').fill(code)
+        expect(page.locator('#graphCodeFeedback')).to_contain_text('Canvas updated')
+        page.locator('#graphNodes [data-node="n5"] .graph-node-head').click()
+        page.locator('#graphInspector [data-field="value"]').select_option('true')
+        assert 'do "Hall light".power = true' in page.locator('#graphCode').input_value()
+        page.evaluate("graphLink('n2','n5')")
+        expect(page.locator('#graphCode')).to_be_disabled()
+        expect(page.locator('#graphCodeStart')).to_be_visible()
+        page.locator('#graphCodeStart').click()
+        page.locator('#graphCode').fill(code)
+        expect(page.locator('#graphNodes .graph-node')).to_have_count(5)
+        assert page.evaluate('graphCurrent.edges.length')==4
+        page.get_by_role('button',name='Save',exact=True).click()
+        assert graphs[-1]['nodes'][2]['target_item']=='zigbee.light'
         assert not errors,errors
         browser.close()
         print('PASS: Home module persistence, nested navigation, flow canvas, save/edit, mobile width')
