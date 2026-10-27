@@ -68,6 +68,24 @@ class GraphTests(unittest.TestCase):
         self.assertFalse(self.module.act.call_args.args[1].value)
         self.assertFalse(self.engine.graph_jobs)
 
+    def test_action_can_select_target_device_after_trigger(self):
+        self.graph={'name':'Hallway motion','enabled':True,'nodes':[
+            self.node('sensor','item',item=self.sensor),
+            self.node('trigger','trigger',property='occupancy',value=True),
+            self.node('on','action',target_item=self.lamp,action='set_power',value=True),
+            self.node('lamp','item',item=self.lamp)],
+            'edges':[{'source':'sensor','target':'trigger'},
+                     {'source':'trigger','target':'on'},
+                     {'source':'on','target':'lamp'}]}
+        self.save()
+        self.engine.process(self.sensor,{'occupancy':True})
+        self.assertEqual(self.module.act.call_args.args[0],self.lamp)
+        self.assertTrue(self.module.act.call_args.args[1].value)
+
+        self.graph['nodes'][2]['target_item']='zigbee.missing'
+        with self.assertRaises(HTTPException):
+            self.save()
+
     def test_state_condition_reads_current_item_and_branch(self):
         self.graph['nodes'].insert(3,self.node('check','condition',property='power',value=True))
         self.graph['edges'].remove({'source':'lamp1','target':'on'})

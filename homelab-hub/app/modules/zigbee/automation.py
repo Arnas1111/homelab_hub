@@ -312,7 +312,7 @@ class Automations:
                 if window_allows(node['start'], node['end'], self.clock(), self.time.settings().timezone):
                     self._walk_graph(graph_id, graph, outgoing[key], context)
             elif kind == 'action':
-                self.module.act(context, ActionRequest(action=node['action'], value=node['value']))
+                self.module.act(node.get('target_item') or context, ActionRequest(action=node['action'], value=node['value']))
                 self._walk_graph(graph_id, graph, outgoing[key], context)
             elif kind == 'delay':
                 job_key = graph_id + ':' + key + ':' + context

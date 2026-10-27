@@ -68,6 +68,12 @@ def main():
         page.goto('http://hub.test/automations')
         expect(page.locator('[data-nav-group="zigbee"]')).to_have_attribute('open','')
         page.get_by_role('button',name='+ New automation').click()
+        name_gap=page.locator('#graphName').evaluate('''input => {
+            const label=input.closest('label'),range=document.createRange();
+            range.selectNodeContents(label.firstChild);
+            return input.getBoundingClientRect().top-range.getBoundingClientRect().bottom;
+        }''')
+        assert name_gap >= 8, name_gap
         contrast=page.locator('#graphSave').evaluate('''button => {
             const luminance = color => {
                 const rgb=color.match(/\\d+/g).slice(0,3).map(Number).map(value => {
@@ -100,6 +106,8 @@ def main():
         }''')
         assert theme==['0px','0px','0px'], theme
         page.evaluate("for (let i=1;i<8;i++) graphLink('n'+i,'n'+(i+1))")
+        short_wire=page.locator('#graphWires .graph-wire').first.get_attribute('d')
+        assert short_wire.count('L')==1 and 'Q' not in short_wire, short_wire
         page.locator('#graphFit').click()
         page.locator('#graphNodes [data-node="n2"] .graph-node-head').click()
         page.locator('#graphNodes [data-node="n3"] .graph-node-head').dblclick()
@@ -176,6 +184,21 @@ def main():
         page.evaluate('loadGraphAutomations()')
         expect(page.locator('#graphName')).to_have_value('Edited draft')
         page.locator('#graphCancel').click()
+        page.get_by_role('button',name='+ New automation').click()
+        palette.get_by_role('button',name='Motion sensor').click()
+        page.locator('#graphLogicPalette').get_by_role('button',name='When item reports').click()
+        page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
+        page.evaluate("graphLink('n1','n2'); graphLink('n2','n3')")
+        page.locator('#graphFit').click()
+        page.locator('#graphNodes [data-node="n2"] .graph-node-head').click()
+        page.locator('#graphNodes [data-node="n3"] .graph-node-head').click()
+        expect(page.locator('#graphInspector [data-field="target_item"]')).to_have_value('')
+        page.locator('#graphInspector [data-field="target_item"]').select_option('zigbee.light')
+        expect(page.locator('#graphInspector [data-field="action"]')).to_have_value('set_power')
+        assert page.evaluate('graphCurrent.nodes[2].target_item')=='zigbee.light'
+        page.locator('#graphName').fill('Motion targets hall light')
+        page.get_by_role('button',name='Save',exact=True).click()
+        assert graphs[-1]['nodes'][2]['target_item']=='zigbee.light'
         page.get_by_role('button',name='+ New automation').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='When time is reached').click()
         page.locator('#graphInspector [data-field="time"]').fill('19:30')

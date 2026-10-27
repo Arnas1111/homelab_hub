@@ -15,6 +15,7 @@ class Node(BaseModel):
     id: str = Field(pattern=r'^[a-zA-Z0-9_-]{1,50}$')
     kind: Literal['item', 'trigger', 'clock_trigger', 'condition', 'time', 'window', 'action', 'delay']
     item: str = Field(default='', max_length=160)
+    target_item: str = Field(default='', max_length=160)
     property: str = Field(default='', max_length=100)
     operator: Literal['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] = 'eq'
     value: bool | str | int | float | None = None
@@ -155,9 +156,11 @@ def validate_graph(graph: GraphRule, module, automation_time):
         elif not saw_trigger:
             raise HTTPException(422, 'Place a trigger before conditions and actions')
         elif node.kind in ('condition', 'action'):
-            obj = objects.get(item_id)
+            effective_item = (node.target_item or item_id) if node.kind == 'action' else item_id
+            obj = objects.get(effective_item)
             if not obj:
-                raise HTTPException(422, 'Place an item before state checks and actions')
+                raise HTTPException(422, 'Choose a discovered target device for the action' if node.kind == 'action'
+                                    else 'Place an item before state checks')
             if node.kind == 'condition':
                 cap = obj.capabilities.get(node.property)
                 if not cap or cap.type not in ('boolean', 'enum', 'number'):
@@ -170,7 +173,7 @@ def validate_graph(graph: GraphRule, module, automation_time):
                 cap = obj.capabilities.get(node.action.removeprefix('set_'))
                 if node.action not in obj.actions or not cap or not valid_value(cap, node.value):
                     raise HTTPException(422, 'Item does not support this action or value')
-                if item_id == trigger_source:
+                if effective_item == trigger_source:
                     raise HTTPException(422, 'An action cannot target its own trigger item')
         for target in outgoing[key]:
             check_context(target, item_id, saw_trigger, trigger_source)

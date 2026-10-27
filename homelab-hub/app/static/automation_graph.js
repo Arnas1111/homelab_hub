@@ -68,17 +68,21 @@ function graphContext(id, seen = new Set()) {
   const input = graphCurrent.edges.find(edge => edge.target === id);
   return input ? graphContext(input.source, seen) : '';
 }
+const graphActionItem = node => graphItem(node.target_item || graphContext(node.id));
 function graphNodeLabel(node) {
   if (node.kind === 'item') return graphItem(node.item)?.name || 'Choose item';
   if (node.kind === 'delay') return `Wait ${node.seconds || 5}s`;
   if (node.kind === 'clock_trigger') return `At ${node.time_condition?.boundary === 'clock' ? node.time_condition?.time : node.time_condition?.boundary || 'time'}`;
   if (node.kind === 'time') return `${node.time_condition?.after ? 'After' : 'Before'} ${node.time_condition?.boundary === 'clock' ? node.time_condition?.time : node.time_condition?.boundary || 'time'}`;
   if (node.kind === 'window') return `${node.start} until ${node.end}`;
-  if (node.kind === 'action') return `${node.action?.replace(/^set_/, '') || 'Choose action'} = ${node.value ?? '—'}`;
+  if (node.kind === 'action') {
+    const target=graphActionItem(node);
+    return `${target?.actions?.length ? target.name+' · ' : 'Choose device · '}${node.action?.replace(/^set_/, '') || 'Choose action'}${node.action ? ' = '+String(node.value ?? '—') : ''}`;
+  }
   return `${node.property || 'Choose property'} ${node.operator || 'eq'} ${node.value ?? '—'}`;
 }
 function graphMakeNode(kind, item = '', x = 60, y = 80, operator = 'eq') {
-  const node = {id:'n'+(++graphSerial),kind,item,property:'',operator,value:null,action:'',seconds:kind === 'delay' ? 5 : 0,
+  const node = {id:'n'+(++graphSerial),kind,item,target_item:'',property:'',operator,value:null,action:'',seconds:kind === 'delay' ? 5 : 0,
     time_condition:['time','clock_trigger'].includes(kind) ? {boundary:'clock',time:'18:00',after:true,offset_minutes:0} : null,
     start:'18:00',end:'00:00',
     x:graphPosition(x,2200),y:graphPosition(y,1480)};
@@ -130,12 +134,12 @@ function graphRoundedPath(points) {
 }
 function graphWirePath(x1,y1,x2,y2,source,target) {
   const middle=(x1+x2)/2;
-  const forward=x2-x1>70;
+  const forward=x2-x1>4;
   const corridor=graphCurrent.nodes.some(node => node.id!==source && node.id!==target &&
     node.x < Math.max(x1,x2)+14 && node.x+188 > Math.min(x1,x2)-14 &&
     node.y < Math.max(y1,y2)+18 && node.y+105 > Math.min(y1,y2)-18);
   if (forward && !corridor)
-    return graphRoundedPath([[x1,y1],[middle,y1],[middle,y2],[x2,y2]]);
+    return Math.abs(y2-y1)<2 ? `M${x1} ${y1} L${x2} ${y2}` : graphRoundedPath([[x1,y1],[middle,y1],[middle,y2],[x2,y2]]);
   const nearby=graphCurrent.nodes.filter(node => node.x < Math.max(x1,x2)+70 && node.x+188 > Math.min(x1,x2)-70);
   const above=Math.min(y1,y2,...nearby.map(node=>node.y))-44;
   const below=Math.max(y1,y2,...nearby.map(node=>node.y+105))+44;
@@ -286,7 +290,13 @@ function graphBeginWire(event,source) {
   };
   port.onpointercancel=() => { finish(); graphConnecting=null; };
 }
-function graphSelect(id) { graphSelected=id; $('graphNodes').querySelectorAll('.graph-node').forEach(card => card.classList.toggle('selected',card.dataset.node===id)); graphInspector(); }
+function graphSelect(id) {
+  graphSelected=id;
+  $('graphNodes').querySelectorAll('.graph-node').forEach(card => card.classList.toggle('selected',card.dataset.node===id));
+  graphInspector();
+  const card=$('graphNodes').querySelector(`[data-node="${id}"]`),node=graphById(id);
+  if (card && node) card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
+}
 const graphSelectHtml=(name,options,value) => `<label>${graphText(name)}<select data-field="${name}">${options.map(([key,label]) => `<option value="${graphText(key)}"${String(key)===String(value) ? ' selected' : ''}>${graphText(label)}</option>`).join('')}</select></label>`;
 function graphValueEditor(node,cap) {
   const value=node.value;
@@ -299,16 +309,17 @@ function graphInspector() {
   host.closest('.graph-inspector').hidden=!node;
   if (!node) { host.replaceChildren(); return; }
   const item=graphItem(graphContext(node.id));
+  const actionItem=node.kind==='action' ? graphActionItem(node) : null;
   if (item && (node.kind === 'trigger' || node.kind === 'condition') && !node.property) {
     node.property=Object.keys(item.capabilities || {}).find(key =>
       ['eq','ne'].includes(node.operator) ? ['boolean','enum','number'].includes(item.capabilities[key].type) : item.capabilities[key].type === 'number') || '';
     const cap=item.capabilities[node.property];
     node.value=cap?.type==='boolean' ? true : cap?.type==='enum' ? cap.options?.[0] ?? null : 0;
   }
-  if (item && node.kind === 'action' && !node.action) {
-    node.action=(item.actions || []).find(action => ['boolean','enum','number'].includes(item.capabilities?.[action.replace(/^set_/,'')]?.type)) || '';
-    const cap=item.capabilities?.[node.action.replace(/^set_/,'')];
-    node.value=cap?.type==='boolean' ? true : cap?.type==='enum' ? cap.options?.[0] ?? null : 0;
+  if (node.kind === 'action' && (!actionItem || !actionItem.actions?.includes(node.action))) {
+    node.action=(actionItem?.actions || []).find(action => ['boolean','enum','number'].includes(actionItem.capabilities?.[action.replace(/^set_/,'')]?.type)) || '';
+    const cap=actionItem?.capabilities?.[node.action.replace(/^set_/,'')];
+    node.value=cap?.type==='boolean' ? true : cap?.type==='enum' ? cap.options?.[0] ?? null : cap?.type==='number' ? 0 : null;
   }
   let html=`<p class="graph-inspector-type">${graphText(node.kind.toUpperCase())}</p>`;
   if (node.kind === 'item') html+=graphSelectHtml('item',graphObjects.map(obj => [obj.id,obj.name]),node.item);
@@ -321,10 +332,11 @@ function graphInspector() {
     html+=graphValueEditor(node,item?.capabilities[node.property]);
   }
   if (node.kind === 'action') {
-    const actions=(item?.actions || []).filter(action => ['boolean','enum','number'].includes(item.capabilities?.[action.replace(/^set_/, '')]?.type));
-    html+=`<p class="muted tiny">Target item: ${graphText(item?.name || 'Connect an item card first')}</p>`;
-    html+=graphSelectHtml('action',actions.map(action => [action,action.replace(/^set_/, '').replaceAll('_',' ')]),node.action);
-    html+=graphValueEditor(node,item?.capabilities[node.action.replace(/^set_/, '')]);
+    const devices=graphObjects.filter(obj => (obj.actions || []).some(action => ['boolean','enum','number'].includes(obj.capabilities?.[action.replace(/^set_/, '')]?.type)));
+    html+=graphSelectHtml('target_item',[['','Choose device'],...devices.map(obj => [obj.id,obj.name])],node.target_item || (item?.actions?.length ? item.id : ''));
+    const actions=(actionItem?.actions || []).filter(action => ['boolean','enum','number'].includes(actionItem.capabilities?.[action.replace(/^set_/, '')]?.type));
+    if (actions.length) html+=graphSelectHtml('action',actions.map(action => [action,action.replace(/^set_/, '').replaceAll('_',' ')]),node.action);
+    if (node.action) html+=graphValueEditor(node,actionItem?.capabilities[node.action.replace(/^set_/, '')]);
   }
   if (node.kind === 'delay') html+=`<label>Seconds<input data-field="seconds" type="number" min="1" max="86400" value="${node.seconds}"></label>`;
   if (node.kind === 'time' || node.kind === 'clock_trigger') {
@@ -345,10 +357,11 @@ function graphInspector() {
     const field=input.dataset.field;
     if (node.kind === 'time' || node.kind === 'clock_trigger') node.time_condition[field]=field==='after' ? input.value==='true' : field==='offset_minutes' ? Number(input.value) : input.value;
     else if (field==='start' || field==='end') node[field]=input.value;
+    else if (field==='target_item') { node.target_item=input.value; node.action=''; node.value=null; }
     else if (field==='item' || field==='property' || field==='action' || field==='operator') {
       node[field]=input.value;
       if (field==='property' || field==='action') {
-        const cap=graphItem(graphContext(node.id))?.capabilities[field==='action' ? input.value.replace(/^set_/,'') : input.value];
+        const cap=(field==='action' ? graphActionItem(node) : item)?.capabilities[field==='action' ? input.value.replace(/^set_/,'') : input.value];
         node.value=cap?.type==='boolean' ? true : cap?.type==='enum' ? cap.options?.[0] ?? null : 0;
       }
       if (field==='operator' && !['eq','ne'].includes(node.operator)) {
@@ -360,15 +373,15 @@ function graphInspector() {
       }
     } else if (field==='seconds') node.seconds=Number(input.value);
     else {
-      const cap=graphItem(graphContext(node.id))?.capabilities[node.kind==='action' ? node.action.replace(/^set_/,'') : node.property];
+      const cap=(node.kind==='action' ? graphActionItem(node) : item)?.capabilities[node.kind==='action' ? node.action.replace(/^set_/,'') : node.property];
       node.value=cap?.type==='boolean' ? input.value==='true' : cap?.type==='number' ? Number(input.value) : input.value;
+    }
+    if (['item','target_item','property','action','operator','boundary'].includes(field)) {
+      graphInspector(); host.querySelector(`[data-field="${field}"]`)?.focus({preventScroll:true});
     }
     const card=$('graphNodes').querySelector(`[data-node="${node.id}"]`);
     card.querySelector('.graph-node-head span').textContent=graphKindLabel(node);
     card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
-    if (['item','property','action','operator','boundary'].includes(field)) {
-      graphInspector(); host.querySelector(`[data-field="${field}"]`)?.focus({preventScroll:true});
-    }
   });
 }
 function graphPalette() {

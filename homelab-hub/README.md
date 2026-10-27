@@ -263,6 +263,9 @@ time is reached**, **While item equals/differs/less than/greater than**, **While
 time matches**, **Do action**, and **Wait** cards. Select a card to
 edit its property, comparison, action, or delay. Item cards set the device context
 for following cards, so a light can be a condition as well as an action target.
+An action card also has a **Target device** selector; choose the light there
+even when its Item card appears later in the flow. Older flows that rely on a
+preceding Item card continue to use that context.
 For example: motion item → occupancy true → light item → power on → wait 5 seconds
 → light item → power off. Another path can check whether light A is on and turn
 off light B. Time cards gate actions using saved timezone/solar settings; place
