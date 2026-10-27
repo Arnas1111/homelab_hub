@@ -41,7 +41,7 @@
 
   <main class="main">
     <header class="topbar">
-      <div><h1 id="pageTitle">Home</h1><p id="pageSubtitle" class="muted">Your services and host, at a glance</p></div>
+      <div><h1 id="pageTitle">Home</h1><p id="pageSubtitle" class="muted" hidden></p></div>
       <div class="top-actions">
         <label class="refresh-control">Update <input id="topRefreshSeconds" type="number" min="1" max="60" step="1" value="{{ settings.refresh_seconds }}"> s</label>
         <span id="lastUpdated" class="muted tiny"></span>
@@ -114,9 +114,9 @@
               <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M6 8h12M6 16h12"/><path d="M8 6v4M16 14v4"/></svg></span><span><strong>Ports</strong><small>Published Docker ports and available ranges</small></span></span>
             </button>
             <div class="head-actions">
-              <input id="portSearch" class="search" placeholder="Search port, range, container…">
-              <select id="portProtocol" class="select"><option value="all">TCP + UDP</option><option value="tcp">TCP</option><option value="udp">UDP</option></select>
-              <select id="portMode" class="select"><option value="all">Used + free</option><option value="used">Used only</option><option value="free">Free ranges</option></select>
+              <label class="sr-only" for="portSearch">Search ports</label><input id="portSearch" class="search" placeholder="Search port, range, container…">
+              <label class="sr-only" for="portProtocol">Port protocol</label><select id="portProtocol" class="select"><option value="all">TCP + UDP</option><option value="tcp">TCP</option><option value="udp">UDP</option></select>
+              <label class="sr-only" for="portMode">Port availability</label><select id="portMode" class="select"><option value="all">Used + free</option><option value="used">Used only</option><option value="free">Free ranges</option></select>
               <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="ports" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="ports" aria-label="Move section down">▿</button></span>
             </div>
           </div>
@@ -138,7 +138,7 @@
               <span class="section-title"><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M7 7V5h10v2M8 17v2M16 17v2"/></svg></span><span><strong>Containers</strong><small>Monitoring state, resources, ports, and image</small></span></span>
             </button>
             <div class="head-actions">
-              <input id="containerSearch" class="search" placeholder="Search name, ID, port, image, status…">
+              <label class="sr-only" for="containerSearch">Search container details</label><input id="containerSearch" class="search" placeholder="Search name, ID, port, image, status…">
               <span class="section-order"><button class="order-btn" type="button" data-action="section-up" data-section="containers" aria-label="Move section up">▵</button><button class="order-btn" type="button" data-action="section-down" data-section="containers" aria-label="Move section down">▿</button></span>
             </div>
           </div>
@@ -163,7 +163,7 @@
         <div class="graph-meta"><label>Name<input id="graphName" maxlength="80" placeholder="Give this automation a name"></label><label class="check"><input id="graphEnabled" type="checkbox" checked> Enabled</label><span id="graphFeedback" role="status"></span></div>
         <div class="graph-workspace"><aside class="graph-palette"><h3>Add cards</h3><p class="muted tiny">Drag onto the canvas, or tap to add. Select a card to configure it.</p><div id="graphItemPalette"></div><div id="graphLogicPalette"></div></aside>
           <div class="graph-canvas-scroll"><div id="graphCanvas" class="graph-canvas" aria-label="Automation flow canvas"><svg id="graphWires" viewBox="0 0 2400 1600" preserveAspectRatio="none" aria-hidden="true"></svg><div id="graphNodes"></div></div></div>
-          <aside class="graph-inspector"><h3>Card settings</h3><div id="graphInspector" class="muted">Select a card. Connect cards with the output and input dots. You can also drag from one dot to another.</div><button id="graphDeleteNode" class="btn" hidden>Remove card</button></aside></div>
+          <aside class="graph-inspector"><h3>Card settings</h3><div id="graphInspector" class="muted">Select a card. Connect cards with the output and input dots. You can also drag from one dot to another.</div><button id="graphDeleteNode" class="btn" hidden>Remove card</button><div class="graph-connections-panel"><h4>Connections</h4><div id="graphConnections"></div></div></aside></div>
       </section>
     </section>
 

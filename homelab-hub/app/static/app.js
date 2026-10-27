@@ -13,15 +13,22 @@ let colorSendTimer = null;
 let partySpeedTimer = null;
 let refreshControlActive = false;
 let refreshControlHoldTimer = null;
-let haColorChoices = JSON.parse(localStorage.getItem('haColorChoices') || '{}');
-let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups') || '[]'));
+function storedJson(key, fallback) {
+  try { const value=localStorage.getItem(key); return value ? JSON.parse(value) : fallback; }
+  catch (_) { return fallback; }
+}
+const storedArray = key => { const value=storedJson(key,[]); return Array.isArray(value) ? value : []; };
+const savedColors=storedJson('haColorChoices',{});
+let haColorChoices=savedColors && typeof savedColors === 'object' && !Array.isArray(savedColors) ? savedColors : {};
+let collapsedGroups = new Set(storedArray('collapsedGroups'));
 const DEFAULT_SECTION_ORDER = ['server', 'integrations', 'ports', 'containers'];
-let collapsedSections = new Set(JSON.parse(localStorage.getItem('collapsedSections') || '[]'));
-if (localStorage.getItem('containersSectionCollapsed') === 'true') collapsedSections.add('containers');
-let sectionOrder = JSON.parse(localStorage.getItem('overviewSectionOrder') || '[]').filter(id => DEFAULT_SECTION_ORDER.includes(id));
+let collapsedSections = new Set(storedArray('collapsedSections'));
+if (storedJson('containersSectionCollapsed',false) === true) collapsedSections.add('containers');
+let sectionOrder = [...new Set(storedArray('overviewSectionOrder').filter(id => DEFAULT_SECTION_ORDER.includes(id)))];
 sectionOrder = [...sectionOrder, ...DEFAULT_SECTION_ORDER.filter(id => !sectionOrder.includes(id))];
 let overviewFocus = 'all';
-let metricHistory = JSON.parse(localStorage.getItem('metricHistory') || '{"cpu":[],"memory":[],"network":[]}');
+const savedHistory=storedJson('metricHistory',{});
+let metricHistory=Object.fromEntries(['cpu','memory','network'].map(key => [key,Array.isArray(savedHistory?.[key]) ? savedHistory[key] : []]));
 let containerStructureKey = '';
 
 const $ = (id) => document.getElementById(id);
@@ -1467,21 +1474,22 @@ for (const btn of document.querySelectorAll('.nav-item[data-view]')) {
     }
     const names = {
       dashboard:['Overview','Homelab data, shortcuts, ports, and monitoring'],
-      home:['Home','Your services and host, at a glance'],
+      home:['Home',''],
       services:['Containers',''],
       logs:['Logs','Errors, warnings and context across Docker containers'],
       zigbee:['Zigbee','Discovered lights and device controls'],
-      automations:['Automations','Device events, timed actions and smart buttons'],
+      automations:['Automations',''],
       metrics:['Metrics','Host utilization, saturation, and trends'],
       containers:['Container details','Docker state, resources, ports, and logs'],
       integrations:['Integrations','Live service status and controls'],
       settings:['Settings','Configure this hub'],
       database:['History storage','PostgreSQL connection and background collection'],
     };
-    $('pageTitle').textContent = names[btn.dataset.view][0]; $('pageSubtitle').textContent = names[btn.dataset.view][1];
+    $('pageTitle').textContent = names[btn.dataset.view][0];
+    $('pageSubtitle').textContent = names[btn.dataset.view][1];
+    $('pageSubtitle').hidden = !names[btn.dataset.view][1];
     if (btn.dataset.view === 'logs' && typeof loadAggregateLogs === 'function') loadAggregateLogs();
     if (btn.dataset.view === 'zigbee' && typeof loadZigbee === 'function') loadZigbee();
-    if (btn.dataset.view === 'automations' && typeof loadGraphAutomations === 'function') loadGraphAutomations();
     if (btn.dataset.view === 'automations' && typeof loadGraphAutomations === 'function') loadGraphAutomations();
     if (overviewView === 'integrations' && typeof loadConnectorWorkspace === 'function') loadConnectorWorkspace();
     applySectionState();

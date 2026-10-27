@@ -269,6 +269,13 @@ off light B. Time cards gate actions using saved timezone/solar settings; place
 an **While inside time window** card for a range such as 18:00 until 00:00; ranges crossing
 midnight are supported in the saved timezone.
 
+The canvas also supports tap-to-add, tap-to-connect, a connection list with
+Remove buttons, and click or arrow-key card movement. Cards snap to the visible
+grid. Invalid self-links, loops, and incoming clock-trigger links are rejected
+before saving; the server still validates each complete flow. The [code and
+interface review](IMPROVEMENT_REVIEW.md) records the evidence and remaining
+improvements.
+
 Flows are validated before saving: discovered items and supported capabilities,
 matching value types, connected cards, and no cycles. Delayed branches persist
 through Hub restarts and retry after connection failures. A repeated trigger

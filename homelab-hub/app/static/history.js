@@ -104,6 +104,7 @@ function openMetricPage(metric) {
   });
   $('pageTitle').textContent = METRIC_PAGES[metric][0];
   $('pageSubtitle').textContent = METRIC_PAGES[metric][1];
+  $('pageSubtitle').hidden = !METRIC_PAGES[metric][1];
   $('historyContainerLabel').hidden = metric !== 'containers';
   loadHistory(true);
 }

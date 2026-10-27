@@ -56,7 +56,13 @@ def main():
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.route('**/*', handler)
+        page.add_init_script("""localStorage.setItem('haColorChoices', '[]');
+            localStorage.setItem('collapsedGroups', '{broken');
+            localStorage.setItem('collapsedSections', '{}');
+            localStorage.setItem('overviewSectionOrder', 'null');
+            localStorage.setItem('metricHistory', '{\"cpu\":{}}');""")
         page.goto('http://hub.test/')
+        expect(page.locator('#pageSubtitle')).to_be_hidden()
         assert page.locator('.nav-group[open]').count() == 0
         assert page.locator('[data-home-module="status"], [data-home-module="attention"], [data-home-module="connections"], [data-home-module="zigbee"]').count() == 0
         assert page.locator('#webuiPanelBody').count() == 0

@@ -1,7 +1,10 @@
 /* Item-based flow editor. Cards are selectable, draggable and connected by ports. */
 let graphObjects = [], graphSaved = [], graphLegacy = [], graphCurrent = null;
 let graphEditing = null, graphSelected = null, graphConnecting = null, graphDrag = null;
-let graphLoading = false, graphSerial = 0;
+let graphLoading = false, graphSerial = 0, graphListSignature = '', graphPaletteSignature = '';
+let graphOpener = null;
+const GRAPH_GRID = 23;
+const graphPosition = (value, maximum) => Math.max(0,Math.min(Math.floor(maximum / GRAPH_GRID)*GRAPH_GRID,Math.round(value / GRAPH_GRID) * GRAPH_GRID));
 const GRAPH_KINDS = [
   ['trigger','When item reports','◆'], ['clock_trigger','When time is reached','◷'],
   ['condition','While item equals','=', 'eq'], ['condition','While item differs','≠', 'ne'],
@@ -14,6 +17,16 @@ const GRAPH_OPERATORS = [['eq','equals'],['ne','does not equal'],['gt','greater 
 const graphById = id => graphCurrent?.nodes.find(node => node.id === id);
 const graphItem = id => graphObjects.find(obj => obj.id === id);
 const graphText = value => escapeHtml(String(value ?? ''));
+const graphKindLabel = node => node.kind === 'item' ? 'Item' : GRAPH_KINDS.find(row => row[0] === node.kind && (!row[3] || row[3] === node.operator))?.[1] || node.kind;
+function graphRevealCard(card) {
+  const frame=$('graphCanvas').parentElement, margin=24;
+  if (card.offsetLeft < frame.scrollLeft+margin) frame.scrollLeft=Math.max(0,card.offsetLeft-margin);
+  if (card.offsetLeft+card.offsetWidth > frame.scrollLeft+frame.clientWidth-margin)
+    frame.scrollLeft=card.offsetLeft+card.offsetWidth-frame.clientWidth+margin;
+  if (card.offsetTop < frame.scrollTop+margin) frame.scrollTop=Math.max(0,card.offsetTop-margin);
+  if (card.offsetTop+card.offsetHeight > frame.scrollTop+frame.clientHeight-margin)
+    frame.scrollTop=card.offsetTop+card.offsetHeight-frame.clientHeight+margin;
+}
 
 function graphContext(id, seen = new Set()) {
   if (seen.has(id)) return '';
@@ -37,7 +50,7 @@ function graphMakeNode(kind, item = '', x = 60, y = 80, operator = 'eq') {
   const node = {id:'n'+(++graphSerial),kind,item,property:'',operator,value:null,action:'',seconds:kind === 'delay' ? 5 : 0,
     time_condition:['time','clock_trigger'].includes(kind) ? {boundary:'clock',time:'18:00',after:true,offset_minutes:0} : null,
     start:'18:00',end:'00:00',
-    x:Math.max(0,Math.min(2200,Math.round(x))),y:Math.max(0,Math.min(1480,Math.round(y)))};
+    x:graphPosition(x,2200),y:graphPosition(y,1480)};
   graphCurrent.nodes.push(node);
   if (graphSelected && graphSelected !== node.id) {
     const selected = graphById(graphSelected);
@@ -46,12 +59,37 @@ function graphMakeNode(kind, item = '', x = 60, y = 80, operator = 'eq') {
   }
   graphSelected = node.id;
   graphDraw();
+  const card=$('graphNodes').querySelector(`[data-node="${node.id}"]`);
+  card.querySelector('.graph-node-head').focus({preventScroll:true}); graphRevealCard(card);
   return node;
 }
 function graphLink(source, target, redraw = true) {
-  if (!source || !target || source === target || graphCurrent.edges.some(edge => edge.source === source && edge.target === target)) return;
+  const from=graphById(source),to=graphById(target);
+  if (!from || !to) return false;
+  let reason='';
+  if (source === target) reason='A card cannot connect to itself.';
+  else if (to.kind === 'clock_trigger') reason='A clock trigger starts a flow and cannot have an incoming connection.';
+  else if (to.kind === 'trigger' && from.kind !== 'item') reason='Connect an item directly before a device trigger.';
+  else if (to.kind === 'trigger' && graphCurrent.edges.some(edge => edge.target === target)) reason='A device trigger can have only one source item.';
+  else if (graphCurrent.edges.some(edge => edge.source === source && edge.target === target)) reason='These cards are already connected.';
+  else {
+    const seen=new Set(),pending=[target];
+    while (pending.length) {
+      const current=pending.pop();
+      if (current === source) { reason='This connection would make a loop.'; break; }
+      if (seen.has(current)) continue;
+      seen.add(current);
+      pending.push(...graphCurrent.edges.filter(edge => edge.source === current).map(edge => edge.target));
+    }
+  }
+  if (reason) { $('graphFeedback').textContent=reason; return false; }
   graphCurrent.edges.push({source,target});
-  if (redraw) graphDraw();
+  $('graphFeedback').textContent='';
+  if (redraw) {
+    graphDraw();
+    $('graphNodes').querySelector(`[data-node="${target}"] [data-port="in"]`)?.focus({preventScroll:true});
+  }
+  return true;
 }
 function graphDrawWires() {
   const svg = $('graphWires'); svg.replaceChildren();
@@ -68,6 +106,25 @@ function graphDrawWires() {
     svg.append(path);
   }
 }
+function graphRenderConnections() {
+  const host=$('graphConnections'); host.replaceChildren();
+  if (!graphCurrent.edges.length) { host.textContent='No connections'; return; }
+  for (const edge of graphCurrent.edges) {
+    const source=graphById(edge.source),target=graphById(edge.target);
+    if (!source || !target) continue;
+    const row=document.createElement('div'); row.className='graph-connection-row';
+    const label=document.createElement('span'); label.textContent=`${graphNodeLabel(source)} → ${graphNodeLabel(target)}`;
+    const remove=document.createElement('button'); remove.type='button'; remove.className='btn';
+    remove.textContent='Remove'; remove.setAttribute('aria-label',`Remove connection ${label.textContent}`);
+    remove.onclick=() => {
+      const index=graphCurrent.edges.indexOf(edge);
+      graphCurrent.edges.splice(index,1); graphDraw();
+      const buttons=host.querySelectorAll('button');
+      (buttons[Math.min(index,buttons.length-1)] || $('graphSave')).focus({preventScroll:true});
+    };
+    row.append(label,remove); host.append(row);
+  }
+}
 function graphDraw() {
   if (!graphCurrent) return;
   const host=$('graphNodes'); host.replaceChildren();
@@ -76,26 +133,41 @@ function graphDraw() {
     card.className=`graph-node graph-${node.kind}${graphSelected === node.id ? ' selected' : ''}`;
     card.dataset.node=node.id;
     card.style.left=node.x+'px'; card.style.top=node.y+'px';
-    const kind = node.kind === 'item' ? 'Item' : GRAPH_KINDS.find(row => row[0] === node.kind && (!row[3] || row[3] === node.operator))?.[1] || node.kind;
+    const kind = graphKindLabel(node);
     card.innerHTML=`<button class="graph-port input" type="button" aria-label="Connect into ${graphText(kind)}" data-port="in"></button>
       <button class="graph-node-head" type="button"><span>${graphText(kind)}</span><b>⠿</b></button>
       <div class="graph-node-body"></div><button class="graph-port output" type="button" aria-label="Connect from ${graphText(kind)}" data-port="out"></button>`;
     card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
-    card.querySelector('.graph-node-head').onclick = () => graphSelect(node.id);
-    card.querySelector('.graph-node-head').onpointerdown = event => graphBeginDrag(event,node,card);
+    const head=card.querySelector('.graph-node-head');
+    head.title='Select card; use arrow keys to move it';
+    head.onclick = () => graphSelect(node.id);
+    head.onpointerdown = event => graphBeginDrag(event,node,card);
+    head.onkeydown = event => {
+      const direction={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[event.key];
+      if (!direction) return;
+      event.preventDefault(); graphSelect(node.id);
+      graphMove(node,direction[0]*(event.shiftKey ? 5 : 1),direction[1]*(event.shiftKey ? 5 : 1));
+    };
     card.querySelector('[data-port="out"]').onpointerdown = event => graphBeginWire(event,node.id);
     card.querySelector('[data-port="out"]').onclick = event => { event.stopPropagation(); graphConnecting=node.id; $('graphFeedback').textContent='Select an input dot to connect cards.'; };
     card.querySelector('[data-port="in"]').onclick = event => {
       event.stopPropagation(); if (!graphConnecting) return;
-      graphLink(graphConnecting,node.id); graphConnecting=null; $('graphFeedback').textContent='';
+      graphLink(graphConnecting,node.id); graphConnecting=null;
     };
     host.append(card);
   }
-  graphDrawWires(); graphInspector();
+  graphDrawWires(); graphInspector(); graphRenderConnections();
   host.querySelectorAll('[data-node]').forEach(card => {
     const node=graphById(card.dataset.node);
     card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
   });
+}
+function graphMove(node,stepX,stepY) {
+  node.x=graphPosition(node.x+stepX*GRAPH_GRID,2200);
+  node.y=graphPosition(node.y+stepY*GRAPH_GRID,1480);
+  const card=$('graphNodes').querySelector(`[data-node="${node.id}"]`);
+  card.style.left=node.x+'px'; card.style.top=node.y+'px';
+  graphDrawWires(); graphRevealCard(card);
 }
 function graphBeginDrag(event,node,card) {
   if (event.button !== 0) return;
@@ -104,8 +176,8 @@ function graphBeginDrag(event,node,card) {
   event.currentTarget.setPointerCapture(event.pointerId);
   event.currentTarget.onpointermove = move => {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    node.x=Math.max(0,Math.min(2200,Math.round(startX+move.clientX-x)));
-    node.y=Math.max(0,Math.min(1480,Math.round(startY+move.clientY-y)));
+    node.x=graphPosition(startX+move.clientX-x,2200);
+    node.y=graphPosition(startY+move.clientY-y,1480);
     card.style.left=node.x+'px'; card.style.top=node.y+'px'; graphDrawWires();
   };
   event.currentTarget.onpointerup = up => { up.currentTarget.onpointermove=null; up.currentTarget.onpointerup=null; };
@@ -117,7 +189,7 @@ function graphBeginWire(event,source) {
   port.setPointerCapture(event.pointerId);
   port.onpointerup = up => {
     const target=document.elementFromPoint(up.clientX,up.clientY)?.closest('[data-port="in"]')?.closest('[data-node]')?.dataset.node;
-    if (target) { graphLink(source,target); graphConnecting=null; $('graphFeedback').textContent=''; }
+    if (target) { graphLink(source,target); graphConnecting=null; }
     port.onpointerup=null;
   };
 }
@@ -165,17 +237,26 @@ function graphInspector() {
   if (node.kind === 'time' || node.kind === 'clock_trigger') {
     const tc=node.time_condition;
     html+=graphSelectHtml('boundary',[['clock','Clock'],['sunrise','Sunrise'],['sunset','Sunset']],tc.boundary);
-    html+=`<label>Local time<input data-field="time" type="time" value="${graphText(tc.time)}"></label>`;
+    if (tc.boundary === 'clock') html+=`<label>Local time<input data-field="time" type="time" value="${graphText(tc.time)}"></label>`;
     if (node.kind === 'time') html+=graphSelectHtml('after',[['true','At or after'],['false','Before']],String(tc.after));
     else html+='<p class="muted tiny">Runs once per local day when this time is reached. The Hub must be running then.</p>';
-    html+=`<label>Solar offset (minutes)<input data-field="offset_minutes" type="number" min="-180" max="180" value="${tc.offset_minutes}"></label>`;
+    if (tc.boundary !== 'clock') html+=`<label>Solar offset (minutes)<input data-field="offset_minutes" type="number" min="-180" max="180" value="${tc.offset_minutes}"></label>`;
   }
   if (node.kind === 'window') {
     html+=`<p class="muted tiny">Uses the timezone saved in Settings. Windows that cross midnight work automatically.</p>
       <label>From<input data-field="start" type="time" value="${graphText(node.start)}"></label>
       <label>Until<input data-field="end" type="time" value="${graphText(node.end)}"></label>`;
   }
+  html+=`<div class="graph-move-panel"><span>Position · arrow keys on card</span><div class="graph-move-controls" role="group" aria-label="Move selected card">
+    <button type="button" class="btn" data-move="left" aria-label="Move card left">←</button>
+    <button type="button" class="btn" data-move="up" aria-label="Move card up">↑</button>
+    <button type="button" class="btn" data-move="down" aria-label="Move card down">↓</button>
+    <button type="button" class="btn" data-move="right" aria-label="Move card right">→</button></div></div>`;
   host.innerHTML=html;
+  host.querySelectorAll('[data-move]').forEach(button => button.onclick=() => {
+    const [dx,dy]=({left:[-1,0],up:[0,-1],down:[0,1],right:[1,0]})[button.dataset.move];
+    graphMove(node,dx,dy);
+  });
   host.querySelectorAll('[data-field]').forEach(input => input.onchange = () => {
     const field=input.dataset.field;
     if (node.kind === 'time' || node.kind === 'clock_trigger') node.time_condition[field]=field==='after' ? input.value==='true' : field==='offset_minutes' ? Number(input.value) : input.value;
@@ -186,12 +267,25 @@ function graphInspector() {
         const cap=graphItem(graphContext(node.id))?.capabilities[field==='action' ? input.value.replace(/^set_/,'') : input.value];
         node.value=cap?.type==='boolean' ? true : cap?.type==='enum' ? cap.options?.[0] ?? null : 0;
       }
+      if (field==='operator' && !['eq','ne'].includes(node.operator)) {
+        const item=graphItem(graphContext(node.id));
+        if (item?.capabilities[node.property]?.type !== 'number') {
+          node.property=Object.keys(item?.capabilities || {}).find(key => item.capabilities[key].type === 'number') || '';
+          node.value=0;
+        }
+      }
     } else if (field==='seconds') node.seconds=Number(input.value);
     else {
       const cap=graphItem(graphContext(node.id))?.capabilities[node.kind==='action' ? node.action.replace(/^set_/,'') : node.property];
       node.value=cap?.type==='boolean' ? input.value==='true' : cap?.type==='number' ? Number(input.value) : input.value;
     }
-    graphDraw();
+    const card=$('graphNodes').querySelector(`[data-node="${node.id}"]`);
+    card.querySelector('.graph-node-head span').textContent=graphKindLabel(node);
+    card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
+    graphRenderConnections();
+    if (['item','property','action','operator','boundary'].includes(field)) {
+      graphInspector(); host.querySelector(`[data-field="${field}"]`)?.focus({preventScroll:true});
+    }
   });
 }
 function graphPalette() {
@@ -228,6 +322,7 @@ $('graphCanvas').ondrop=event => {
   graphMakeNode(data.kind,data.item || '',event.clientX-rect.left,event.clientY-rect.top,data.operator || 'eq');
 };
 function graphOpen(saved=null) {
+  graphOpener=document.activeElement;
   graphEditing=saved?.id || null;
   graphCurrent=saved ? {name:saved.name,enabled:saved.enabled,nodes:structuredClone(saved.nodes),edges:structuredClone(saved.edges)} : {name:'',enabled:true,nodes:[],edges:[]};
   graphSerial=Math.max(0,...graphCurrent.nodes.map(node=>Number(node.id.replace(/^n/,''))||0));
@@ -236,14 +331,20 @@ function graphOpen(saved=null) {
   $('graphName').value=graphCurrent.name; $('graphEnabled').checked=graphCurrent.enabled;
   $('graphFeedback').textContent=''; graphPalette(); graphDraw();
   $('graphEditor').scrollIntoView({behavior:'smooth',block:'start'});
+  $('graphName').focus({preventScroll:true});
 }
-function graphClose() { $('graphEditor').hidden=true; graphCurrent=null; graphSelected=null; }
+function graphClose() {
+  $('graphEditor').hidden=true; graphCurrent=null; graphSelected=null;
+  (graphOpener?.isConnected ? graphOpener : $('graphNew')).focus({preventScroll:true});
+  graphOpener=null;
+}
 $('graphNew').onclick=() => graphOpen();
 $('graphCancel').onclick=graphClose;
 $('graphDeleteNode').onclick=() => {
   graphCurrent.nodes=graphCurrent.nodes.filter(node=>node.id!==graphSelected);
   graphCurrent.edges=graphCurrent.edges.filter(edge=>edge.source!==graphSelected&&edge.target!==graphSelected);
-  graphSelected=null; graphDraw();
+  graphSelected=graphCurrent.nodes.at(-1)?.id || null; graphDraw();
+  (graphSelected ? $('graphNodes').querySelector(`[data-node="${graphSelected}"] .graph-node-head`) : $('graphSave')).focus({preventScroll:true});
 };
 $('graphSave').onclick=async () => {
   graphCurrent.name=$('graphName').value.trim(); graphCurrent.enabled=$('graphEnabled').checked;
@@ -257,9 +358,18 @@ $('graphSave').onclick=async () => {
   finally { button.disabled=false; }
 };
 function graphRenderList() {
-  const host=$('automationAllCards'); host.replaceChildren();
+  const signature=JSON.stringify([graphSaved,graphLegacy,graphObjects.map(obj => [obj.id,obj.name])]);
+  if (signature === graphListSignature) return;
+  graphListSignature=signature;
+  const host=$('automationAllCards'),active=document.activeElement;
+  const focusedCard=active?.closest?.('[data-automation-key]');
+  const focusKey=focusedCard?.dataset.automationKey;
+  const focusAction=['edit','toggle','delete'].find(key => active.hasAttribute?.('data-'+key));
+  const focusIndex=focusedCard ? [...host.children].indexOf(focusedCard) : -1;
+  host.replaceChildren();
   for (const graph of graphSaved) {
     const card=document.createElement('article'); card.className='panel automation-card graph-list-card';
+    card.dataset.automationKey='graph:'+graph.id;
     card.innerHTML='<div><h3></h3><p class="muted"></p><span class="graph-card-status"></span></div><div class="automation-pair"><button class="btn" data-edit>Edit canvas</button><button class="btn" data-delete>Delete</button></div>';
     card.querySelector('h3').textContent=graph.name;
     card.querySelector('p').textContent=`${graph.nodes.length} cards · ${graph.edges.length} connections · ${graph.enabled ? 'Enabled' : 'Disabled'}`;
@@ -274,6 +384,7 @@ function graphRenderList() {
   }
   for (const rule of graphLegacy) {
     const card=document.createElement('article'); card.className='panel automation-card graph-list-card';
+    card.dataset.automationKey='rule:'+rule.id;
     card.innerHTML='<div><h3></h3><p class="muted"></p><span class="graph-card-status"></span></div><div class="automation-pair"><button class="btn" data-toggle></button><button class="btn" data-delete>Delete</button></div>';
     card.querySelector('h3').textContent=rule.name;
     card.querySelector('p').textContent=`Earlier rule · ${graphItem(rule.source)?.name || rule.source}: ${rule.property} = ${rule.equals} → ${graphItem(rule.target)?.name || rule.target} · ${rule.seconds}s`;
@@ -292,15 +403,24 @@ function graphRenderList() {
     host.append(card);
   }
   if (!host.children.length) host.textContent='No automations yet. Create a flow from the item and action cards.';
+  if (focusKey) {
+    const replacement=[...host.children].find(card => card.dataset.automationKey === focusKey);
+    (replacement?.querySelector(`[data-${focusAction}]`) || host.children[Math.min(focusIndex,host.children.length-1)]?.querySelector('button') || $('graphNew')).focus({preventScroll:true});
+  }
 }
 async function loadGraphAutomations() {
   if (graphLoading) return;
   graphLoading=true;
   try {
     const [data,devices]=await Promise.all([api('/api/zigbee/automations'),api('/api/v1/objects?module=zigbee')]);
-    graphSaved=data.graphs || []; graphLegacy=data.rules || []; graphObjects=devices.objects || [];
+    graphSaved=data.graphs || []; graphLegacy=data.rules || [];
+    const nextObjects=devices.objects || [];
+    const paletteSignature=JSON.stringify(nextObjects.map(obj => [obj.id,obj.name,obj.capabilities,obj.actions]));
+    const paletteChanged=paletteSignature !== graphPaletteSignature;
+    graphPaletteSignature=paletteSignature;
+    graphObjects=nextObjects;
     graphRenderList();
-    if (graphCurrent) graphPalette();
+    if (graphCurrent && paletteChanged) graphPalette();
   } catch (error) { $('automationStatus').textContent=error.message; }
   finally { graphLoading=false; }
 }

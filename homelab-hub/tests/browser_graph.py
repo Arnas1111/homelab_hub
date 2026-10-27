@@ -68,6 +68,7 @@ def main():
         page.goto('http://hub.test/automations')
         expect(page.locator('[data-nav-group="zigbee"]')).to_have_attribute('open','')
         page.get_by_role('button',name='+ New automation').click()
+        assert page.locator('#graphSave').evaluate('button => getComputedStyle(button).color')=='rgb(7, 17, 27)'
         palette=page.locator('#graphItemPalette')
         palette.get_by_role('button',name='Motion sensor').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='When item reports').click()
@@ -79,7 +80,23 @@ def main():
         page.locator('#graphLogicPalette').get_by_role('button',name='Wait').click()
         palette.get_by_role('button',name='Hall light').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
+        page.locator('#graphInspector [data-field="value"]').focus()
         page.locator('#graphInspector [data-field="value"]').select_option('false')
+        expect(page.locator('#graphInspector [data-field="value"]')).to_be_focused()
+        head=page.locator('#graphNodes [data-node="n8"] .graph-node-head')
+        head.focus()
+        previous_x=page.evaluate('graphCurrent.nodes.at(-1).x')
+        head.press('ArrowRight')
+        assert page.evaluate('graphCurrent.nodes.at(-1).x')==previous_x+23
+        assert page.evaluate('graphCurrent.nodes.every(node => node.x % 23 === 0 && node.y % 23 === 0)')
+        assert page.locator('#graphNodes [data-node="n8"] [data-port="out"]').bounding_box()['width'] >= 28
+        page.locator('#graphConnections button').first.click()
+        assert page.evaluate('graphCurrent.edges.length')==6
+        page.locator('#graphNodes [data-node="n1"] [data-port="out"]').click()
+        page.locator('#graphNodes [data-node="n2"] [data-port="in"]').click()
+        page.locator('#graphNodes [data-node="n8"] [data-port="out"]').click()
+        page.locator('#graphNodes [data-node="n1"] [data-port="in"]').click()
+        expect(page.locator('#graphFeedback')).to_contain_text('loop')
         page.locator('#graphName').fill('Motion → hallway')
         assert page.evaluate('graphCurrent.edges.length')==7
         page.get_by_role('button',name='Save',exact=True).click()
@@ -97,11 +114,13 @@ def main():
         palette.get_by_role('button',name='Hall light').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
         page.locator('#graphName').fill('Evening light')
+        page.set_viewport_size({'width':390,'height':844})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        columns=page.locator('.graph-workspace > *').evaluate_all('nodes => nodes.map(node => ({top:node.getBoundingClientRect().top,bottom:node.getBoundingClientRect().bottom}))')
+        assert columns[0]['bottom'] <= columns[1]['top'] and columns[1]['bottom'] <= columns[2]['top']
         page.get_by_role('button',name='Save',exact=True).click()
         assert graphs[-1]['nodes'][0]['kind']=='clock_trigger'
         assert graphs[-1]['nodes'][0]['time_condition']['time']=='19:30'
-        page.set_viewport_size({'width':390,'height':844})
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         assert not errors,errors
         browser.close()
         print('PASS: Home module persistence, nested navigation, flow canvas, save/edit, mobile width')

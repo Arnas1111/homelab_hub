@@ -80,6 +80,10 @@ def main():
         expect(page.locator('#pageTitle')).to_have_text('Automations')
         expect(page.locator('#legacyAutomation')).to_have_count(0)
         expect(page.locator('#automationAllCards h3')).to_have_text('Hall motion')
+        page.locator('#automationAllCards [data-toggle]').focus()
+        rules[0]['status']='Device report received'
+        page.evaluate('loadGraphAutomations()')
+        expect(page.locator('#automationAllCards [data-toggle]')).to_be_focused()
         page.locator('#automationAllCards [data-toggle]').click()
         expect(page.locator('#automationAllCards [data-toggle]')).to_have_text('Enable')
         assert rules[0]['enabled'] is False
