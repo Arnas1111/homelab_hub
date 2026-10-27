@@ -68,7 +68,17 @@ def main():
         page.goto('http://hub.test/automations')
         expect(page.locator('[data-nav-group="zigbee"]')).to_have_attribute('open','')
         page.get_by_role('button',name='+ New automation').click()
-        assert page.locator('#graphSave').evaluate('button => getComputedStyle(button).color')=='rgb(7, 17, 27)'
+        contrast=page.locator('#graphSave').evaluate('''button => {
+            const luminance = color => {
+                const rgb=color.match(/\\d+/g).slice(0,3).map(Number).map(value => {
+                    const x=value/255; return x <= .04045 ? x/12.92 : ((x+.055)/1.055)**2.4;
+                });
+                return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;
+            };
+            const style=getComputedStyle(button), foreground=luminance(style.color), background=luminance(style.backgroundColor);
+            return (Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05);
+        }''')
+        assert contrast >= 4.5, contrast
         palette=page.locator('#graphItemPalette')
         palette.get_by_role('button',name='Motion sensor').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='When item reports').click()
