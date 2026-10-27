@@ -100,9 +100,9 @@ function graphLink(source, target, redraw = true) {
   let reason='';
   if (source === target) reason='A card cannot connect to itself.';
   else if (to.kind === 'clock_trigger') reason='A clock trigger starts a flow and cannot have an incoming connection.';
+  else if (graphCurrent.edges.some(edge => edge.source === source && edge.target === target)) reason='These cards are already connected.';
   else if (to.kind === 'trigger' && from.kind !== 'item') reason='Connect an item directly before a device trigger.';
   else if (to.kind === 'trigger' && graphCurrent.edges.some(edge => edge.target === target)) reason='A device trigger can have only one source item.';
-  else if (graphCurrent.edges.some(edge => edge.source === source && edge.target === target)) reason='These cards are already connected.';
   else {
     const seen=new Set(),pending=[target];
     while (pending.length) {
