@@ -4,6 +4,8 @@ let graphEditing = null, graphSelected = null, graphConnecting = null, graphDrag
 let graphLoading = false, graphSerial = 0, graphListSignature = '', graphPaletteSignature = '';
 let graphOpener = null;
 const GRAPH_GRID = 23;
+const graphCamera = {x:24,y:24,scale:1};
+let graphWirePreview = null, graphSuppressPortClick = false;
 const graphPosition = (value, maximum) => Math.max(0,Math.min(Math.floor(maximum / GRAPH_GRID)*GRAPH_GRID,Math.round(value / GRAPH_GRID) * GRAPH_GRID));
 const GRAPH_KINDS = [
   ['trigger','When item reports','◆'], ['clock_trigger','When time is reached','◷'],
@@ -19,13 +21,42 @@ const graphItem = id => graphObjects.find(obj => obj.id === id);
 const graphText = value => escapeHtml(String(value ?? ''));
 const graphKindLabel = node => node.kind === 'item' ? 'Item' : GRAPH_KINDS.find(row => row[0] === node.kind && (!row[3] || row[3] === node.operator))?.[1] || node.kind;
 function graphRevealCard(card) {
-  const frame=$('graphCanvas').parentElement, margin=24;
-  if (card.offsetLeft < frame.scrollLeft+margin) frame.scrollLeft=Math.max(0,card.offsetLeft-margin);
-  if (card.offsetLeft+card.offsetWidth > frame.scrollLeft+frame.clientWidth-margin)
-    frame.scrollLeft=card.offsetLeft+card.offsetWidth-frame.clientWidth+margin;
-  if (card.offsetTop < frame.scrollTop+margin) frame.scrollTop=Math.max(0,card.offsetTop-margin);
-  if (card.offsetTop+card.offsetHeight > frame.scrollTop+frame.clientHeight-margin)
-    frame.scrollTop=card.offsetTop+card.offsetHeight-frame.clientHeight+margin;
+  const frame=$('graphViewport'), margin=28, scale=graphCamera.scale;
+  const left=graphCamera.x+card.offsetLeft*scale, right=left+card.offsetWidth*scale;
+  const top=graphCamera.y+card.offsetTop*scale, bottom=top+card.offsetHeight*scale;
+  if (left < margin) graphCamera.x+=margin-left;
+  else if (right > frame.clientWidth-margin) graphCamera.x-=right-frame.clientWidth+margin;
+  if (top < margin) graphCamera.y+=margin-top;
+  else if (bottom > frame.clientHeight-margin) graphCamera.y-=bottom-frame.clientHeight+margin;
+  graphApplyCamera();
+}
+function graphApplyCamera() {
+  $('graphCanvas').style.transform=`translate(${graphCamera.x}px, ${graphCamera.y}px) scale(${graphCamera.scale})`;
+  $('graphZoomValue').textContent=Math.round(graphCamera.scale*100)+'%';
+}
+function graphCanvasPoint(clientX,clientY) {
+  const rect=$('graphViewport').getBoundingClientRect();
+  return {x:(clientX-rect.left-graphCamera.x)/graphCamera.scale,y:(clientY-rect.top-graphCamera.y)/graphCamera.scale};
+}
+function graphZoomTo(scale,clientX,clientY) {
+  const frame=$('graphViewport'),rect=frame.getBoundingClientRect();
+  const anchorX=(clientX ?? rect.left+rect.width/2)-rect.left;
+  const anchorY=(clientY ?? rect.top+rect.height/2)-rect.top;
+  const next=Math.max(.35,Math.min(2,Math.round(scale*100)/100));
+  graphCamera.x=anchorX-(anchorX-graphCamera.x)*next/graphCamera.scale;
+  graphCamera.y=anchorY-(anchorY-graphCamera.y)*next/graphCamera.scale;
+  graphCamera.scale=next; graphApplyCamera();
+}
+function graphFit() {
+  const frame=$('graphViewport'),nodes=graphCurrent?.nodes || [];
+  if (!nodes.length) { Object.assign(graphCamera,{x:24,y:24,scale:1}); graphApplyCamera(); return; }
+  const left=Math.min(...nodes.map(node=>node.x))-42,top=Math.min(...nodes.map(node=>node.y))-42;
+  const right=Math.max(...nodes.map(node=>node.x+188))+42,bottom=Math.max(...nodes.map(node=>node.y+110))+42;
+  const scale=Math.max(.35,Math.min(1.4,frame.clientWidth/(right-left),frame.clientHeight/(bottom-top)));
+  graphCamera.scale=scale;
+  graphCamera.x=(frame.clientWidth-(right-left)*scale)/2-left*scale;
+  graphCamera.y=(frame.clientHeight-(bottom-top)*scale)/2-top*scale;
+  graphApplyCamera();
 }
 
 function graphContext(id, seen = new Set()) {
@@ -91,19 +122,53 @@ function graphLink(source, target, redraw = true) {
   }
   return true;
 }
+function graphRoundedPath(points) {
+  let result=`M${points[0][0]} ${points[0][1]}`;
+  for (let i=1;i<points.length-1;i++) {
+    const [x,y]=points[i],prev=points[i-1],next=points[i+1];
+    const before=Math.hypot(x-prev[0],y-prev[1]),after=Math.hypot(next[0]-x,next[1]-y);
+    const radius=Math.min(12,before/2,after/2);
+    if (!radius) { result+=` L${x} ${y}`; continue; }
+    const a=[x+(prev[0]-x)*radius/before,y+(prev[1]-y)*radius/before];
+    const b=[x+(next[0]-x)*radius/after,y+(next[1]-y)*radius/after];
+    result+=` L${a[0]} ${a[1]} Q${x} ${y} ${b[0]} ${b[1]}`;
+  }
+  return result+` L${points.at(-1)[0]} ${points.at(-1)[1]}`;
+}
+function graphWirePath(x1,y1,x2,y2,source,target) {
+  const middle=(x1+x2)/2;
+  const forward=x2-x1>70;
+  const corridor=graphCurrent.nodes.some(node => node.id!==source && node.id!==target &&
+    node.x < Math.max(x1,x2)+14 && node.x+188 > Math.min(x1,x2)-14 &&
+    node.y < Math.max(y1,y2)+18 && node.y+105 > Math.min(y1,y2)-18);
+  if (forward && !corridor)
+    return graphRoundedPath([[x1,y1],[middle,y1],[middle,y2],[x2,y2]]);
+  const nearby=graphCurrent.nodes.filter(node => node.x < Math.max(x1,x2)+70 && node.x+188 > Math.min(x1,x2)-70);
+  const above=Math.min(y1,y2,...nearby.map(node=>node.y))-44;
+  const below=Math.max(y1,y2,...nearby.map(node=>node.y+105))+44;
+  const lane=Math.abs(above-y1)+Math.abs(above-y2) < Math.abs(below-y1)+Math.abs(below-y2) ? above : below;
+  const out=x1+36,into=x2-36;
+  return graphRoundedPath([[x1,y1],[out,y1],[out,lane],[into,lane],[into,y2],[x2,y2]]);
+}
 function graphDrawWires() {
   const svg = $('graphWires'); svg.replaceChildren();
   for (const edge of graphCurrent.edges) {
     const a = graphById(edge.source), b = graphById(edge.target);
     if (!a || !b) continue;
-    const x1=a.x+188,y1=a.y+47,x2=b.x,y2=b.y+47;
     const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    const bend=Math.max(48,Math.abs(x2-x1)*.45);
-    path.setAttribute('d',`M${x1} ${y1} C${x1+bend} ${y1}, ${x2-bend} ${y2}, ${x2} ${y2}`);
+    path.setAttribute('d',graphWirePath(a.x+188,a.y+47,b.x,b.y+47,a.id,b.id));
     path.setAttribute('class','graph-wire');
     path.setAttribute('aria-label','Remove connection');
     path.onclick = () => { graphCurrent.edges=graphCurrent.edges.filter(row => row !== edge); graphDraw(); };
     svg.append(path);
+  }
+  if (graphWirePreview) {
+    const source=graphById(graphWirePreview.source),target=graphById(graphWirePreview.target);
+    if (source) {
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d',graphWirePath(source.x+188,source.y+47,target ? target.x : graphWirePreview.x,target ? target.y+47 : graphWirePreview.y,source.id,target?.id));
+      path.setAttribute('class','graph-wire graph-wire-preview'); svg.append(path);
+    }
   }
 }
 function graphRenderConnections() {
@@ -139,7 +204,7 @@ function graphDraw() {
       <div class="graph-node-body"></div><button class="graph-port output" type="button" aria-label="Connect from ${graphText(kind)}" data-port="out"></button>`;
     card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
     const head=card.querySelector('.graph-node-head');
-    head.title='Select card; use arrow keys to move it';
+    head.title='Drag to move; arrow keys also move this card';
     head.onclick = () => graphSelect(node.id);
     head.onpointerdown = event => graphBeginDrag(event,node,card);
     head.onkeydown = event => {
@@ -149,7 +214,11 @@ function graphDraw() {
       graphMove(node,direction[0]*(event.shiftKey ? 5 : 1),direction[1]*(event.shiftKey ? 5 : 1));
     };
     card.querySelector('[data-port="out"]').onpointerdown = event => graphBeginWire(event,node.id);
-    card.querySelector('[data-port="out"]').onclick = event => { event.stopPropagation(); graphConnecting=node.id; $('graphFeedback').textContent='Select an input dot to connect cards.'; };
+    card.querySelector('[data-port="out"]').onclick = event => {
+      event.stopPropagation();
+      if (graphSuppressPortClick) { graphSuppressPortClick=false; return; }
+      graphConnecting=node.id; $('graphFeedback').textContent='Drag to an input dot, or select one to connect.';
+    };
     card.querySelector('[data-port="in"]').onclick = event => {
       event.stopPropagation(); if (!graphConnecting) return;
       graphLink(graphConnecting,node.id); graphConnecting=null;
@@ -172,26 +241,50 @@ function graphMove(node,stepX,stepY) {
 function graphBeginDrag(event,node,card) {
   if (event.button !== 0) return;
   graphSelect(node.id);
-  const x=event.clientX,y=event.clientY,startX=node.x,startY=node.y;
-  event.currentTarget.setPointerCapture(event.pointerId);
-  event.currentTarget.onpointermove = move => {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    node.x=graphPosition(startX+move.clientX-x,2200);
-    node.y=graphPosition(startY+move.clientY-y,1480);
+  const handle=event.currentTarget,x=event.clientX,y=event.clientY,startX=node.x,startY=node.y;
+  handle.setPointerCapture(event.pointerId);
+  handle.onpointermove = move => {
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    node.x=graphPosition(startX+(move.clientX-x)/graphCamera.scale,2200);
+    node.y=graphPosition(startY+(move.clientY-y)/graphCamera.scale,1480);
     card.style.left=node.x+'px'; card.style.top=node.y+'px'; graphDrawWires();
   };
-  event.currentTarget.onpointerup = up => { up.currentTarget.onpointermove=null; up.currentTarget.onpointerup=null; };
+  const finish=() => { handle.onpointermove=null; handle.onpointerup=null; handle.onpointercancel=null; };
+  handle.onpointerup=finish; handle.onpointercancel=finish;
 }
 function graphBeginWire(event,source) {
+  if (event.button !== 0) return;
   event.stopPropagation();
+  const port=event.currentTarget,startX=event.clientX,startY=event.clientY;
+  let moved=false;
   graphConnecting=source;
-  const port=event.currentTarget;
   port.setPointerCapture(event.pointerId);
+  $('graphViewport').classList.add('graph-connecting');
+  const update=(clientX,clientY) => {
+    const input=document.elementFromPoint(clientX,clientY)?.closest('[data-port="in"]');
+    const target=input?.closest('[data-node]')?.dataset.node;
+    $('graphNodes').querySelectorAll('.graph-port.input').forEach(dot=>dot.classList.toggle('graph-port-target',dot===input));
+    graphWirePreview={source,...graphCanvasPoint(clientX,clientY),target}; graphDrawWires();
+  };
+  const finish=() => {
+    port.onpointermove=null; port.onpointerup=null; port.onpointercancel=null;
+    $('graphViewport').classList.remove('graph-connecting');
+    $('graphNodes').querySelectorAll('.graph-port-target').forEach(dot=>dot.classList.remove('graph-port-target'));
+    graphWirePreview=null; graphDrawWires();
+  };
+  port.onpointermove=move => {
+    if (!port.hasPointerCapture(event.pointerId)) return;
+    if (Math.hypot(move.clientX-startX,move.clientY-startY)>4) moved=true;
+    if (moved) update(move.clientX,move.clientY);
+  };
   port.onpointerup = up => {
     const target=document.elementFromPoint(up.clientX,up.clientY)?.closest('[data-port="in"]')?.closest('[data-node]')?.dataset.node;
-    if (target) { graphLink(source,target); graphConnecting=null; }
-    port.onpointerup=null;
+    finish();
+    if (target) { graphSuppressPortClick=true; graphConnecting=null; graphLink(source,target); }
+    else if (moved) { graphSuppressPortClick=true; graphConnecting=null; $('graphFeedback').textContent='Drop on a left input dot to connect.'; }
+    if (graphSuppressPortClick) setTimeout(()=>{ graphSuppressPortClick=false; },0);
   };
+  port.onpointercancel=() => { finish(); graphConnecting=null; };
 }
 function graphSelect(id) { graphSelected=id; $('graphNodes').querySelectorAll('.graph-node').forEach(card => card.classList.toggle('selected',card.dataset.node===id)); graphInspector(); }
 const graphSelectHtml=(name,options,value) => `<label>${graphText(name)}<select data-field="${name}">${options.map(([key,label]) => `<option value="${graphText(key)}"${String(key)===String(value) ? ' selected' : ''}>${graphText(label)}</option>`).join('')}</select></label>`;
@@ -313,23 +406,47 @@ function graphPaletteEntry(host,kind,label,item,operator='eq') {
   };
   host.append(button);
 }
-$('graphCanvas').ondragover=event => { if (event.dataTransfer.types.includes('application/x-hub-node')) event.preventDefault(); };
-$('graphCanvas').ondrop=event => {
+$('graphViewport').ondragover=event => { if (event.dataTransfer.types.includes('application/x-hub-node')) event.preventDefault(); };
+$('graphViewport').ondrop=event => {
   event.preventDefault();
   let data; try { data=JSON.parse(event.dataTransfer.getData('application/x-hub-node')); } catch (_) { return; }
   if (!['item',...GRAPH_KINDS.map(row=>row[0])].includes(data.kind)) return;
-  const rect=$('graphCanvas').getBoundingClientRect();
-  graphMakeNode(data.kind,data.item || '',event.clientX-rect.left,event.clientY-rect.top,data.operator || 'eq');
+  const point=graphCanvasPoint(event.clientX,event.clientY);
+  graphMakeNode(data.kind,data.item || '',point.x,point.y,data.operator || 'eq');
 };
+$('graphZoomIn').onclick=()=>graphZoomTo(graphCamera.scale*1.2);
+$('graphZoomOut').onclick=()=>graphZoomTo(graphCamera.scale/1.2);
+$('graphFit').onclick=graphFit;
+$('graphViewport').addEventListener('wheel',event => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  event.preventDefault(); graphZoomTo(graphCamera.scale*(event.deltaY<0 ? 1.1 : 1/1.1),event.clientX,event.clientY);
+},{passive:false});
+$('graphViewport').onpointerdown=event => {
+  if (event.button !== 0 || event.target.closest('.graph-node,.graph-wire')) return;
+  const frame=event.currentTarget,x=event.clientX,y=event.clientY,startX=graphCamera.x,startY=graphCamera.y;
+  frame.setPointerCapture(event.pointerId); frame.classList.add('graph-panning');
+  frame.onpointermove=move => {
+    if (!frame.hasPointerCapture(event.pointerId)) return;
+    graphCamera.x=startX+move.clientX-x; graphCamera.y=startY+move.clientY-y; graphApplyCamera();
+  };
+  const finish=()=>{ frame.classList.remove('graph-panning'); frame.onpointermove=null; frame.onpointerup=null; frame.onpointercancel=null; };
+  frame.onpointerup=finish; frame.onpointercancel=finish;
+};
+document.addEventListener('keydown',event => {
+  if (event.key!=='Escape' || !graphCurrent || !graphConnecting) return;
+  graphConnecting=null; graphWirePreview=null; $('graphViewport').classList.remove('graph-connecting');
+  graphDrawWires(); $('graphFeedback').textContent='Connection cancelled.';
+});
 function graphOpen(saved=null) {
   graphOpener=document.activeElement;
   graphEditing=saved?.id || null;
   graphCurrent=saved ? {name:saved.name,enabled:saved.enabled,nodes:structuredClone(saved.nodes),edges:structuredClone(saved.edges)} : {name:'',enabled:true,nodes:[],edges:[]};
   graphSerial=Math.max(0,...graphCurrent.nodes.map(node=>Number(node.id.replace(/^n/,''))||0));
-  graphSelected=null; graphConnecting=null;
+  graphSelected=null; graphConnecting=null; graphWirePreview=null;
   $('graphEditor').hidden=false; $('graphEditorHeading').textContent=saved ? 'Edit automation' : 'New automation';
   $('graphName').value=graphCurrent.name; $('graphEnabled').checked=graphCurrent.enabled;
   $('graphFeedback').textContent=''; graphPalette(); graphDraw();
+  requestAnimationFrame(graphFit);
   $('graphEditor').scrollIntoView({behavior:'smooth',block:'start'});
   $('graphName').focus({preventScroll:true});
 }

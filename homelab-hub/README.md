@@ -269,9 +269,13 @@ off light B. Time cards gate actions using saved timezone/solar settings; place
 an **While inside time window** card for a range such as 18:00 until 00:00; ranges crossing
 midnight are supported in the saved timezone.
 
-The canvas also supports tap-to-add, tap-to-connect, a connection list with
-Remove buttons, and click or arrow-key card movement. Cards snap to the visible
-grid. Invalid self-links, loops, and incoming clock-trigger links are rejected
+The canvas supports dragging placed cards again, dragging a wire from a right
+output dot to a left input dot, and panning by dragging the empty background.
+Use the +/− buttons or Ctrl/⌘+wheel to zoom around the pointer; **Fit** frames
+the flow. The canvas has no internal scrollbars. Tap-to-add, tap-to-connect,
+arrow-key movement, inspector move buttons, and the connection list with Remove
+buttons remain available. Cards snap to the visible grid. Invalid self-links,
+loops, and incoming clock-trigger links are rejected
 before saving; the server still validates each complete flow. The [code and
 interface review](IMPROVEMENT_REVIEW.md) records the evidence and remaining
 improvements.

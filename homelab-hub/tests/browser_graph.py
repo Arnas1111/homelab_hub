@@ -98,12 +98,38 @@ def main():
         previous_x=page.evaluate('graphCurrent.nodes.at(-1).x')
         head.press('ArrowRight')
         assert page.evaluate('graphCurrent.nodes.at(-1).x')==previous_x+23
+        start=head.bounding_box()
+        page.mouse.move(start['x']+start['width']/2,start['y']+start['height']/2)
+        page.mouse.down()
+        page.mouse.move(start['x']+start['width']/2-70,start['y']+start['height']/2-25,steps=5)
+        page.mouse.up()
+        assert page.evaluate('graphCurrent.nodes.at(-1).x') < previous_x+23, 'placed card should drag again'
         assert page.evaluate('graphCurrent.nodes.every(node => node.x % 23 === 0 && node.y % 23 === 0)')
         assert page.locator('#graphNodes [data-node="n8"] [data-port="out"]').bounding_box()['width'] >= 28
+        page.locator('#graphZoomOut').click()
+        assert page.evaluate('graphCamera.scale') < 1
+        page.locator('#graphFit').click()
+        assert page.evaluate('getComputedStyle(document.querySelector("#graphViewport")).overflow')=='hidden'
+        page.locator('#graphViewport').scroll_into_view_if_needed()
+        viewport=page.locator('#graphViewport').bounding_box()
+        corner_x=viewport['x']+viewport['width']-20
+        corner_y=viewport['y']+80
+        camera_x=page.evaluate('graphCamera.x')
+        page.mouse.move(corner_x,corner_y)
+        page.mouse.down()
+        page.mouse.move(corner_x-35,corner_y-20,steps=3)
+        page.mouse.up()
+        assert page.evaluate('graphCamera.x') < camera_x, 'dragging the background should pan the canvas'
+        page.locator('#graphFit').click()
         page.locator('#graphConnections button').first.click()
         assert page.evaluate('graphCurrent.edges.length')==6
+        page.locator('#graphNodes [data-node="n1"] [data-port="out"]').drag_to(page.locator('#graphNodes [data-node="n2"] [data-port="in"]'))
+        assert page.evaluate('graphCurrent.edges.length')==7, 'dragging between dots should create a connection'
+        wire=page.locator('#graphWires .graph-wire').first.get_attribute('d')
+        assert 'L' in wire and 'C' not in wire, wire
         page.locator('#graphNodes [data-node="n1"] [data-port="out"]').click()
         page.locator('#graphNodes [data-node="n2"] [data-port="in"]').click()
+        expect(page.locator('#graphFeedback')).to_contain_text('already connected')
         page.locator('#graphNodes [data-node="n8"] [data-port="out"]').click()
         page.locator('#graphNodes [data-node="n1"] [data-port="in"]').click()
         expect(page.locator('#graphFeedback')).to_contain_text('loop')
