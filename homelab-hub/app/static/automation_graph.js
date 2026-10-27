@@ -1,6 +1,6 @@
 /* Item-based flow editor. Cards are selectable, draggable and connected by ports. */
 let graphObjects = [], graphSaved = [], graphLegacy = [], graphCurrent = null;
-let graphEditing = null, graphSelected = null, graphConnecting = null, graphDrag = null;
+let graphEditing = null, graphSelected = null, graphConnecting = null;
 let graphLoading = false, graphSerial = 0, graphListSignature = '', graphPaletteSignature = '';
 let graphOpener = null;
 const GRAPH_GRID = 23;
@@ -83,18 +83,13 @@ function graphMakeNode(kind, item = '', x = 60, y = 80, operator = 'eq') {
     start:'18:00',end:'00:00',
     x:graphPosition(x,2200),y:graphPosition(y,1480)};
   graphCurrent.nodes.push(node);
-  if (graphSelected && graphSelected !== node.id) {
-    const selected = graphById(graphSelected);
-    if (selected && kind !== 'clock_trigger' && (kind !== 'trigger' || selected.kind === 'item'))
-      graphLink(selected.id, node.id, false);
-  }
   graphSelected = node.id;
   graphDraw();
   const card=$('graphNodes').querySelector(`[data-node="${node.id}"]`);
   card.querySelector('.graph-node-head').focus({preventScroll:true}); graphRevealCard(card);
   return node;
 }
-function graphLink(source, target, redraw = true) {
+function graphLink(source, target) {
   const from=graphById(source),to=graphById(target);
   if (!from || !to) return false;
   let reason='';
@@ -116,10 +111,8 @@ function graphLink(source, target, redraw = true) {
   if (reason) { $('graphFeedback').textContent=reason; return false; }
   graphCurrent.edges.push({source,target});
   $('graphFeedback').textContent='';
-  if (redraw) {
-    graphDraw();
-    $('graphNodes').querySelector(`[data-node="${target}"] [data-port="in"]`)?.focus({preventScroll:true});
-  }
+  graphDraw();
+  $('graphNodes').querySelector(`[data-node="${target}"] [data-port="in"]`)?.focus({preventScroll:true});
   return true;
 }
 function graphRoundedPath(points) {
@@ -156,38 +149,25 @@ function graphDrawWires() {
     const a = graphById(edge.source), b = graphById(edge.target);
     if (!a || !b) continue;
     const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',graphWirePath(a.x+188,a.y+47,b.x,b.y+47,a.id,b.id));
-    path.setAttribute('class','graph-wire');
-    path.setAttribute('aria-label','Remove connection');
-    path.onclick = () => { graphCurrent.edges=graphCurrent.edges.filter(row => row !== edge); graphDraw(); };
-    svg.append(path);
+    const route=graphWirePath(a.x+188,a.y+47,b.x,b.y+47,a.id,b.id);
+    path.setAttribute('d',route);
+    path.setAttribute('class','graph-wire'); path.setAttribute('aria-hidden','true');
+    const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
+    hit.setAttribute('d',route); hit.setAttribute('class','graph-wire-hit');
+    hit.setAttribute('tabindex','0'); hit.setAttribute('role','button');
+    hit.setAttribute('aria-label',`Remove connection from ${graphNodeLabel(a)} to ${graphNodeLabel(b)}`);
+    const remove=() => { graphCurrent.edges=graphCurrent.edges.filter(row => row !== edge); graphDraw(); $('graphSave').focus({preventScroll:true}); };
+    hit.onclick=remove;
+    hit.onkeydown=event => { if (['Enter',' ','Delete','Backspace'].includes(event.key)) { event.preventDefault(); event.stopPropagation(); remove(); } };
+    svg.append(path,hit);
   }
   if (graphWirePreview) {
     const source=graphById(graphWirePreview.source),target=graphById(graphWirePreview.target);
     if (source) {
       const path=document.createElementNS('http://www.w3.org/2000/svg','path');
       path.setAttribute('d',graphWirePath(source.x+188,source.y+47,target ? target.x : graphWirePreview.x,target ? target.y+47 : graphWirePreview.y,source.id,target?.id));
-      path.setAttribute('class','graph-wire graph-wire-preview'); svg.append(path);
+      path.setAttribute('class','graph-wire graph-wire-preview'); path.setAttribute('aria-hidden','true'); svg.append(path);
     }
-  }
-}
-function graphRenderConnections() {
-  const host=$('graphConnections'); host.replaceChildren();
-  if (!graphCurrent.edges.length) { host.textContent='No connections'; return; }
-  for (const edge of graphCurrent.edges) {
-    const source=graphById(edge.source),target=graphById(edge.target);
-    if (!source || !target) continue;
-    const row=document.createElement('div'); row.className='graph-connection-row';
-    const label=document.createElement('span'); label.textContent=`${graphNodeLabel(source)} → ${graphNodeLabel(target)}`;
-    const remove=document.createElement('button'); remove.type='button'; remove.className='btn';
-    remove.textContent='Remove'; remove.setAttribute('aria-label',`Remove connection ${label.textContent}`);
-    remove.onclick=() => {
-      const index=graphCurrent.edges.indexOf(edge);
-      graphCurrent.edges.splice(index,1); graphDraw();
-      const buttons=host.querySelectorAll('button');
-      (buttons[Math.min(index,buttons.length-1)] || $('graphSave')).focus({preventScroll:true});
-    };
-    row.append(label,remove); host.append(row);
   }
 }
 function graphDraw() {
@@ -206,6 +186,17 @@ function graphDraw() {
     const head=card.querySelector('.graph-node-head');
     head.title='Drag to move; arrow keys also move this card';
     head.onclick = () => graphSelect(node.id);
+    card.onclick=() => {
+      if (graphConnecting && graphConnecting!==node.id) {
+        const source=graphConnecting; graphConnecting=null;
+        $('graphViewport').classList.remove('graph-connecting'); graphLink(source,node.id);
+      } else graphSelect(node.id);
+    };
+    card.ondblclick=event => {
+      if (event.target.closest('.graph-port')) return;
+      graphSelect(node.id);
+      $('graphInspector').querySelector('input,select')?.focus({preventScroll:true});
+    };
     head.onpointerdown = event => graphBeginDrag(event,node,card);
     head.onkeydown = event => {
       const direction={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[event.key];
@@ -217,15 +208,17 @@ function graphDraw() {
     card.querySelector('[data-port="out"]').onclick = event => {
       event.stopPropagation();
       if (graphSuppressPortClick) { graphSuppressPortClick=false; return; }
-      graphConnecting=node.id; $('graphFeedback').textContent='Drag to an input dot, or select one to connect.';
+      graphConnecting=node.id; $('graphViewport').classList.add('graph-connecting');
+      $('graphFeedback').textContent='Choose a target card to connect.';
     };
     card.querySelector('[data-port="in"]').onclick = event => {
       event.stopPropagation(); if (!graphConnecting) return;
-      graphLink(graphConnecting,node.id); graphConnecting=null;
+      const source=graphConnecting; graphConnecting=null;
+      $('graphViewport').classList.remove('graph-connecting'); graphLink(source,node.id);
     };
     host.append(card);
   }
-  graphDrawWires(); graphInspector(); graphRenderConnections();
+  graphDrawWires(); graphInspector();
   host.querySelectorAll('[data-node]').forEach(card => {
     const node=graphById(card.dataset.node);
     card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
@@ -240,8 +233,10 @@ function graphMove(node,stepX,stepY) {
 }
 function graphBeginDrag(event,node,card) {
   if (event.button !== 0) return;
+  event.preventDefault();
   graphSelect(node.id);
   const handle=event.currentTarget,x=event.clientX,y=event.clientY,startX=node.x,startY=node.y;
+  handle.focus({preventScroll:true});
   handle.setPointerCapture(event.pointerId);
   handle.onpointermove = move => {
     if (!handle.hasPointerCapture(event.pointerId)) return;
@@ -255,21 +250,26 @@ function graphBeginDrag(event,node,card) {
 function graphBeginWire(event,source) {
   if (event.button !== 0) return;
   event.stopPropagation();
+  graphSelect(source);
   const port=event.currentTarget,startX=event.clientX,startY=event.clientY;
   let moved=false;
   graphConnecting=source;
   port.setPointerCapture(event.pointerId);
   $('graphViewport').classList.add('graph-connecting');
   const update=(clientX,clientY) => {
-    const input=document.elementFromPoint(clientX,clientY)?.closest('[data-port="in"]');
-    const target=input?.closest('[data-node]')?.dataset.node;
+    const element=document.elementFromPoint(clientX,clientY);
+    const targetCard=element?.closest('[data-node]');
+    const target=targetCard?.dataset.node!==source ? targetCard?.dataset.node : null;
+    const input=target ? targetCard.querySelector('[data-port="in"]') : null;
     $('graphNodes').querySelectorAll('.graph-port.input').forEach(dot=>dot.classList.toggle('graph-port-target',dot===input));
+    $('graphNodes').querySelectorAll('.graph-node').forEach(card=>card.classList.toggle('graph-node-target',card===targetCard && Boolean(target)));
     graphWirePreview={source,...graphCanvasPoint(clientX,clientY),target}; graphDrawWires();
   };
   const finish=() => {
     port.onpointermove=null; port.onpointerup=null; port.onpointercancel=null;
     $('graphViewport').classList.remove('graph-connecting');
     $('graphNodes').querySelectorAll('.graph-port-target').forEach(dot=>dot.classList.remove('graph-port-target'));
+    $('graphNodes').querySelectorAll('.graph-node-target').forEach(card=>card.classList.remove('graph-node-target'));
     graphWirePreview=null; graphDrawWires();
   };
   port.onpointermove=move => {
@@ -278,10 +278,10 @@ function graphBeginWire(event,source) {
     if (moved) update(move.clientX,move.clientY);
   };
   port.onpointerup = up => {
-    const target=document.elementFromPoint(up.clientX,up.clientY)?.closest('[data-port="in"]')?.closest('[data-node]')?.dataset.node;
+    const target=document.elementFromPoint(up.clientX,up.clientY)?.closest('[data-node]')?.dataset.node;
     finish();
-    if (target) { graphSuppressPortClick=true; graphConnecting=null; graphLink(source,target); }
-    else if (moved) { graphSuppressPortClick=true; graphConnecting=null; $('graphFeedback').textContent='Drop on a left input dot to connect.'; }
+    if (target && target!==source) { graphSuppressPortClick=true; graphConnecting=null; graphLink(source,target); }
+    else if (moved) { graphSuppressPortClick=true; graphConnecting=null; $('graphFeedback').textContent='Drop on another card to connect.'; }
     if (graphSuppressPortClick) setTimeout(()=>{ graphSuppressPortClick=false; },0);
   };
   port.onpointercancel=() => { finish(); graphConnecting=null; };
@@ -296,8 +296,8 @@ function graphValueEditor(node,cap) {
 }
 function graphInspector() {
   const host=$('graphInspector'),node=graphById(graphSelected);
-  $('graphDeleteNode').hidden=!node;
-  if (!node) { host.textContent='Select a card to configure it. Connect output to input dots.'; return; }
+  host.closest('.graph-inspector').hidden=!node;
+  if (!node) { host.replaceChildren(); return; }
   const item=graphItem(graphContext(node.id));
   if (item && (node.kind === 'trigger' || node.kind === 'condition') && !node.property) {
     node.property=Object.keys(item.capabilities || {}).find(key =>
@@ -340,16 +340,7 @@ function graphInspector() {
       <label>From<input data-field="start" type="time" value="${graphText(node.start)}"></label>
       <label>Until<input data-field="end" type="time" value="${graphText(node.end)}"></label>`;
   }
-  html+=`<div class="graph-move-panel"><span>Position · arrow keys on card</span><div class="graph-move-controls" role="group" aria-label="Move selected card">
-    <button type="button" class="btn" data-move="left" aria-label="Move card left">←</button>
-    <button type="button" class="btn" data-move="up" aria-label="Move card up">↑</button>
-    <button type="button" class="btn" data-move="down" aria-label="Move card down">↓</button>
-    <button type="button" class="btn" data-move="right" aria-label="Move card right">→</button></div></div>`;
   host.innerHTML=html;
-  host.querySelectorAll('[data-move]').forEach(button => button.onclick=() => {
-    const [dx,dy]=({left:[-1,0],up:[0,-1],down:[0,1],right:[1,0]})[button.dataset.move];
-    graphMove(node,dx,dy);
-  });
   host.querySelectorAll('[data-field]').forEach(input => input.onchange = () => {
     const field=input.dataset.field;
     if (node.kind === 'time' || node.kind === 'clock_trigger') node.time_condition[field]=field==='after' ? input.value==='true' : field==='offset_minutes' ? Number(input.value) : input.value;
@@ -375,7 +366,6 @@ function graphInspector() {
     const card=$('graphNodes').querySelector(`[data-node="${node.id}"]`);
     card.querySelector('.graph-node-head span').textContent=graphKindLabel(node);
     card.querySelector('.graph-node-body').textContent=graphNodeLabel(node);
-    graphRenderConnections();
     if (['item','property','action','operator','boundary'].includes(field)) {
       graphInspector(); host.querySelector(`[data-field="${field}"]`)?.focus({preventScroll:true});
     }
@@ -433,9 +423,14 @@ $('graphViewport').onpointerdown=event => {
   frame.onpointerup=finish; frame.onpointercancel=finish;
 };
 document.addEventListener('keydown',event => {
-  if (event.key!=='Escape' || !graphCurrent || !graphConnecting) return;
-  graphConnecting=null; graphWirePreview=null; $('graphViewport').classList.remove('graph-connecting');
-  graphDrawWires(); $('graphFeedback').textContent='Connection cancelled.';
+  if (!graphCurrent || $('graphEditor').hidden) return;
+  if (event.key==='Escape' && graphConnecting) {
+    graphConnecting=null; graphWirePreview=null; $('graphViewport').classList.remove('graph-connecting');
+    graphDrawWires(); $('graphFeedback').textContent='Connection cancelled.';
+  }
+  if (!['Delete','Backspace'].includes(event.key) || !graphSelected || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!event.target.closest('#graphEditor') || event.target.closest('input,textarea,select,[contenteditable]') || event.target.isContentEditable) return;
+  event.preventDefault(); graphDeleteSelected();
 });
 function graphOpen(saved=null) {
   graphOpener=document.activeElement;
@@ -451,17 +446,22 @@ function graphOpen(saved=null) {
   $('graphName').focus({preventScroll:true});
 }
 function graphClose() {
-  $('graphEditor').hidden=true; graphCurrent=null; graphSelected=null;
+  $('graphEditor').hidden=true; graphCurrent=null; graphSelected=null; graphConnecting=null; graphWirePreview=null;
   (graphOpener?.isConnected ? graphOpener : $('graphNew')).focus({preventScroll:true});
   graphOpener=null;
 }
 $('graphNew').onclick=() => graphOpen();
 $('graphCancel').onclick=graphClose;
-$('graphDeleteNode').onclick=() => {
+function graphDeleteSelected() {
+  if (!graphCurrent || !graphSelected) return;
   graphCurrent.nodes=graphCurrent.nodes.filter(node=>node.id!==graphSelected);
   graphCurrent.edges=graphCurrent.edges.filter(edge=>edge.source!==graphSelected&&edge.target!==graphSelected);
-  graphSelected=graphCurrent.nodes.at(-1)?.id || null; graphDraw();
-  (graphSelected ? $('graphNodes').querySelector(`[data-node="${graphSelected}"] .graph-node-head`) : $('graphSave')).focus({preventScroll:true});
+  graphSelected=null; graphConnecting=null; graphDraw();
+  $('graphViewport').focus({preventScroll:true});
+}
+$('graphDeleteNode').onclick=graphDeleteSelected;
+$('graphViewport').onclick=event => {
+  if (!event.target.closest('.graph-node,.graph-wire-hit')) graphSelect(null);
 };
 $('graphSave').onclick=async () => {
   graphCurrent.name=$('graphName').value.trim(); graphCurrent.enabled=$('graphEnabled').checked;

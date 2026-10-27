@@ -269,16 +269,20 @@ off light B. Time cards gate actions using saved timezone/solar settings; place
 an **While inside time window** card for a range such as 18:00 until 00:00; ranges crossing
 midnight are supported in the saved timezone.
 
-The canvas supports dragging placed cards again, dragging a wire from a right
-output dot to a left input dot, and panning by dragging the empty background.
-Use the +/− buttons or Ctrl/⌘+wheel to zoom around the pointer; **Fit** frames
-the flow. The canvas has no internal scrollbars. Tap-to-add, tap-to-connect,
-arrow-key movement, inspector move buttons, and the connection list with Remove
-buttons remain available. Cards snap to the visible grid. Invalid self-links,
-loops, and incoming clock-trigger links are rejected
-before saving; the server still validates each complete flow. The [code and
-interface review](IMPROVEMENT_REVIEW.md) records the evidence and remaining
-improvements.
+New cards remain disconnected until you connect them. Drag a card to move it;
+click to select it, double-click to focus its settings, and press Delete to
+remove the selected card. Drag from the small output dot, shown on hover or
+selection, onto another card to connect it. Input dots appear while connecting.
+Click a wire or focus it and press Delete to remove that connection. The card
+palette and canvas help can be collapsed. Keyboard arrow keys still move a
+focused card, and the inspector retains a Remove card button.
+
+Drag the empty background to pan. Use the +/− buttons or Ctrl/⌘+wheel to zoom;
+**Fit** frames the flow. The canvas has no internal scrollbars. Cards snap to
+the grid. Invalid self-links, loops, and incoming clock-trigger links are
+rejected before saving; the server also validates each flow. Connection handles
+follow the [draw.io hover-and-drag pattern](https://www.drawio.com/docs/manual/editor/panels/connection-points-hide/).
+The [code and interface review](IMPROVEMENT_REVIEW.md) records remaining work.
 
 Flows are validated before saving: discovered items and supported capabilities,
 matching value types, connected cards, and no cycles. Delayed branches persist

@@ -83,13 +83,31 @@ def main():
         palette.get_by_role('button',name='Motion sensor').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='When item reports').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='While less than').click()
-        expect(page.locator('#graphInspector [data-field="operator"]')).to_have_value('lt')
-        expect(page.locator('#graphInspector [data-field="property"]')).to_have_value('temperature')
         palette.get_by_role('button',name='Hall light').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='Wait').click()
         palette.get_by_role('button',name='Hall light').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
+        assert page.evaluate('graphCurrent.edges.length')==0, 'new cards must not connect automatically'
+        theme=page.evaluate('''() => {
+            const old=document.body.dataset.theme;
+            document.body.dataset.theme='paper';
+            const radius=selector=>getComputedStyle(document.querySelector(selector)).borderTopLeftRadius;
+            const result=[radius('.graph-editor'),radius('.graph-palette'),radius('.graph-node')];
+            if (old === undefined) delete document.body.dataset.theme;
+            else document.body.dataset.theme=old;
+            return result;
+        }''')
+        assert theme==['0px','0px','0px'], theme
+        page.evaluate("for (let i=1;i<8;i++) graphLink('n'+i,'n'+(i+1))")
+        page.locator('#graphFit').click()
+        page.locator('#graphNodes [data-node="n2"] .graph-node-head').click()
+        page.locator('#graphNodes [data-node="n3"] .graph-node-head').dblclick()
+        expect(page.locator('#graphInspector [data-field="operator"]')).to_have_value('lt')
+        expect(page.locator('#graphInspector [data-field="property"]')).to_have_value('temperature')
+        expect(page.locator('#graphInspector [data-field="property"]')).to_be_focused()
+        page.locator('#graphNodes [data-node="n5"] .graph-node-head').click()
+        page.locator('#graphNodes [data-node="n8"] .graph-node-head').click()
         page.locator('#graphInspector [data-field="value"]').focus()
         page.locator('#graphInspector [data-field="value"]').select_option('false')
         expect(page.locator('#graphInspector [data-field="value"]')).to_be_focused()
@@ -104,8 +122,11 @@ def main():
         page.mouse.move(start['x']+start['width']/2-70,start['y']+start['height']/2-25,steps=5)
         page.mouse.up()
         assert page.evaluate('graphCurrent.nodes.at(-1).x') < previous_x+23, 'placed card should drag again'
+        assert page.evaluate('window.getSelection().toString()')=='', 'dragging should not select card text'
         assert page.evaluate('graphCurrent.nodes.every(node => node.x % 23 === 0 && node.y % 23 === 0)')
         assert page.locator('#graphNodes [data-node="n8"] [data-port="out"]').bounding_box()['width'] >= 28
+        assert page.locator('#graphConnections').count()==0
+        assert page.locator('.graph-move-panel').count()==0
         page.locator('#graphZoomOut').click()
         assert page.evaluate('graphCamera.scale') < 1
         page.locator('#graphFit').click()
@@ -121,15 +142,24 @@ def main():
         page.mouse.up()
         assert page.evaluate('graphCamera.x') < camera_x, 'dragging the background should pan the canvas'
         page.locator('#graphFit').click()
-        page.locator('#graphConnections button').first.click()
+        page.locator('#graphLogicPalette').get_by_role('button',name='Wait').click()
+        page.locator('#graphNodes [data-node="n9"] .graph-node-head').press('Delete')
+        assert page.evaluate('graphCurrent.nodes.length')==8
+        expect(page.locator('.graph-inspector')).to_be_hidden()
+        page.locator('#graphFit').click()
+        page.locator('#graphWires .graph-wire-hit').first.focus()
+        page.locator('#graphWires .graph-wire-hit').first.press('Delete')
         assert page.evaluate('graphCurrent.edges.length')==6
-        page.locator('#graphNodes [data-node="n1"] [data-port="out"]').drag_to(page.locator('#graphNodes [data-node="n2"] [data-port="in"]'))
+        page.locator('#graphNodes [data-node="n1"]').hover()
+        page.locator('#graphNodes [data-node="n1"] [data-port="out"]').drag_to(page.locator('#graphNodes [data-node="n2"] .graph-node-body'))
         assert page.evaluate('graphCurrent.edges.length')==7, 'dragging between dots should create a connection'
         wire=page.locator('#graphWires .graph-wire').first.get_attribute('d')
         assert 'L' in wire and 'C' not in wire, wire
+        page.locator('#graphNodes [data-node="n1"]').hover()
         page.locator('#graphNodes [data-node="n1"] [data-port="out"]').click()
         page.locator('#graphNodes [data-node="n2"] [data-port="in"]').click()
         expect(page.locator('#graphFeedback')).to_contain_text('already connected')
+        page.locator('#graphNodes [data-node="n8"]').hover()
         page.locator('#graphNodes [data-node="n8"] [data-port="out"]').click()
         page.locator('#graphNodes [data-node="n1"] [data-port="in"]').click()
         expect(page.locator('#graphFeedback')).to_contain_text('loop')
@@ -149,6 +179,7 @@ def main():
         page.locator('#graphInspector [data-field="time"]').fill('19:30')
         palette.get_by_role('button',name='Hall light').click()
         page.locator('#graphLogicPalette').get_by_role('button',name='Do action').click()
+        page.evaluate("graphLink('n1','n2'); graphLink('n2','n3')")
         page.locator('#graphName').fill('Evening light')
         page.set_viewport_size({'width':390,'height':844})
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

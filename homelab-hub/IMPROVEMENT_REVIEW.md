@@ -1,5 +1,16 @@
 # Code and interface review — 27 October 2026
 
+## Subsequent canvas refinement
+
+The automation editor now shows compact connection handles on hover or while
+connecting, following [draw.io's documented hover-and-drag interaction](https://www.drawio.com/docs/manual/editor/panels/connection-points-hide/).
+The visible dots are small while their hit areas remain 28 px. Placed cards
+do not auto-connect, card dragging suppresses text selection, and Delete removes
+the selected card. The position arrows and always-visible Connections panel
+were removed; a focused wire can be deleted with Delete. The palette and help
+can be collapsed, and the editor surfaces use the active Hub theme variables.
+Earlier table entries below describe the review's original implementation.
+
 This review covers the main FastAPI entry point, Zigbee automation engine, dashboard and automation JavaScript, the three themes, and existing unit/browser tests. Findings below distinguish changes backed by a reproducible code path from ideas that still need live-device or usability testing. The linked guidance explains the expected benefit; it does not substitute for testing the Hub with users.
 
 ## Implemented in this review
