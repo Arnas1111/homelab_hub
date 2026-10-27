@@ -124,7 +124,9 @@ def main():
         assert page.evaluate('graphCurrent.nodes.at(-1).x') < previous_x+23, 'placed card should drag again'
         assert page.evaluate('window.getSelection().toString()')=='', 'dragging should not select card text'
         assert page.evaluate('graphCurrent.nodes.every(node => node.x % 23 === 0 && node.y % 23 === 0)')
-        assert page.locator('#graphNodes [data-node="n8"] [data-port="out"]').bounding_box()['width'] >= 28
+        port=page.locator('#graphNodes [data-node="n8"] [data-port="out"]')
+        sizes=port.evaluate('element => [getComputedStyle(element).width,getComputedStyle(element,"::after").width]')
+        assert sizes==['28px','10px'], sizes
         assert page.locator('#graphConnections').count()==0
         assert page.locator('.graph-move-panel').count()==0
         page.locator('#graphZoomOut').click()
