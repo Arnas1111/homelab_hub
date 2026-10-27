@@ -237,6 +237,7 @@ def main():
         expect(page.locator('#graphCodeStart')).to_be_visible()
         page.locator('#graphCodeStart').click()
         page.locator('#graphCode').fill(code)
+        expect(page.locator('#graphCodeFeedback')).to_contain_text('Canvas updated')
         expect(page.locator('#graphNodes .graph-node')).to_have_count(5)
         assert page.evaluate('graphCurrent.edges.length')==4
         page.get_by_role('button',name='Save',exact=True).click()
