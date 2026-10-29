@@ -107,7 +107,14 @@ def main():
         assert graphs[-1]['nodes'][0]['time_condition']['boundary']=='sunset'
         assert graphs[-1]['nodes'][0]['time_condition']['offset_minutes']==15
         page.set_viewport_size({'width':390,'height':844})
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        overflow=page.evaluate('''() => ({
+          width:document.documentElement.scrollWidth,
+          elements:[...document.querySelectorAll('body *')]
+            .filter(node => node.getBoundingClientRect().right > innerWidth + 2 &&
+                    getComputedStyle(node).visibility !== 'hidden')
+            .slice(0,12).map(node => node.tagName.toLowerCase() + '#' + node.id + '.' + node.className)
+        })''')
+        assert overflow['width'] <= 390, overflow
         assert not errors,errors
         browser.close()
         print('PASS: Home persistence, code automation, guide, save/edit, mobile width')
