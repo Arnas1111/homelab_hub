@@ -31,7 +31,7 @@ $('graphExample').onclick=()=>{
   graphCodeCheck();
   $('graphCode').focus({preventScroll:true});
 };
-$('graphValidate').onclick=graphCodeCheck;
+$('graphValidate').onclick=()=>graphCodeCheck();
 let graphCheckTimer;
 $('graphCode').addEventListener('input',()=>{
   clearTimeout(graphCheckTimer);
