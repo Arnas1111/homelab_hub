@@ -155,13 +155,32 @@
     </section>
 
     <section id="automationsView" class="view">
-      <div class="board-section-heading"><div><h2>Automations</h2></div><div class="automation-pair"><button id="graphNew" class="btn primary">+ New automation</button><button id="automationRefresh" class="btn">Refresh</button></div></div>
+      <div class="board-section-heading"><h2>Automations</h2><div class="automation-pair"><button id="graphNew" class="btn primary">+ New automation</button><button id="automationRefresh" class="btn">Refresh</button></div></div>
       <p id="automationStatus" role="status"></p>
       <div id="automationAllCards" class="graph-list"></div>
       <section id="graphEditor" class="graph-editor" hidden>
-        <div class="board-section-heading"><div><span class="eyebrow">FLOW EDITOR</span><h2 id="graphEditorHeading">New automation</h2></div><div class="automation-pair"><button id="graphSave" class="btn primary">Save</button><button id="graphCancel" class="btn">Close editor</button></div></div>
-        <div class="graph-meta"><label>Name<input id="graphName" maxlength="80" placeholder="Give this automation a name"></label><label class="check"><input id="graphEnabled" type="checkbox" checked> Enabled</label><span id="graphFeedback" role="status"></span></div>
-        <details id="graphCodePanel" class="graph-code-panel"><summary>Programming</summary><div class="graph-code-body"><div class="graph-code-heading"><span>One instruction per line. Valid code updates the canvas.</span><div><button id="graphCodeStart" class="btn" type="button" hidden>Start code draft</button><button id="graphCodeRestore" class="btn" type="button">Restore from canvas</button></div></div><label for="graphCode">Automation code</label><textarea id="graphCode" rows="7" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea><p id="graphCodeFeedback" role="status"></p><details class="graph-code-syntax"><summary>Syntax</summary><pre id="graphCodeExample">when "Motion sensor".occupancy == true
+        <div class="board-section-heading"><h2 id="graphEditorHeading">New automation</h2><div class="automation-pair"><button id="graphSave" class="btn primary">Save</button><button id="graphCancel" class="btn">Close</button></div></div>
+        <div class="graph-meta"><label>Name<input id="graphName" maxlength="80" placeholder="For example: Hallway light at night"></label><label class="check"><input id="graphEnabled" type="checkbox" checked> Enabled</label></div>
+        <label class="automation-code-label" for="graphCode">Rule</label>
+        <textarea id="graphCode" rows="12" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="graphCodeFeedback"></textarea>
+        <p id="graphCodeFeedback" role="status" aria-live="polite"></p>
+        <div class="automation-pair"><button id="graphExample" class="btn" type="button">Insert motion example</button><button id="graphValidate" class="btn" type="button">Check rule</button></div>
+        <details id="graphLegacyData" class="automation-guide" hidden><summary>Original rule data</summary><pre id="graphLegacyJson"></pre></details>
+      </section>
+      <details id="automationGuide" class="automation-guide"><summary>Automation guide</summary>
+        <div class="automation-guide-content">
+          <p>Write one instruction per line. Start each path with <code>when</code> for a device report or <code>at</code> for a time. Each path runs independently. Blank lines and lines beginning with <code>#</code> are ignored.</p>
+          <table><thead><tr><th>Instruction</th><th>What it does</th></tr></thead><tbody>
+            <tr><td><code>when "Sensor".occupancy == true</code></td><td>Start when this device reports a matching value. A second <code>when</code> starts another path in the same automation.</td></tr>
+            <tr><td><code>at 18:00</code><br><code>at sunset+15m</code></td><td>Start once a day at a local clock or solar time.</td></tr>
+            <tr><td><code>if "Sensor".occupancy == false</code></td><td>Continue only if the device's latest reported state matches. Use after a wait to recheck.</td></tr>
+            <tr><td><code>during 18:00..05:30</code></td><td>Continue only within this local time window. Crossing midnight is supported; the end is excluded.</td></tr>
+            <tr><td><code>after sunset</code><br><code>before 23:00</code></td><td>Continue only after or before a clock or solar boundary.</td></tr>
+            <tr><td><code>wait 5s</code><br><code>wait 2m</code></td><td>Pause this path. Repeated matching reports restart the same wait.</td></tr>
+            <tr><td><code>do "Light".power = on</code></td><td>Send an action. Use a writable property listed in Devices below.</td></tr>
+          </tbody></table>
+          <p>Comparisons: <code>==</code>, <code>!=</code>, and for numbers <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>. Boolean values accept <code>true/false</code>, <code>on/off</code>, or <code>1/0</code>. Put enum text in quotes when it contains spaces. Clock and solar conditions use the timezone and location in Settings.</p>
+          <pre>when "Motion sensor".occupancy == true
 during 18:00..05:30
 do "Hall light".power = on
 
@@ -169,13 +188,12 @@ when "Motion sensor".occupancy == false
 during 18:00..05:30
 wait 5s
 if "Motion sensor".occupancy == false
-do "Hall light".power = off</pre><span>Each <code>when</code> starts a separate path in one automation. <code>during 18:00..05:30</code> checks local time, including midnight. Use <code>if</code> for a later state check, <code>at 18:00</code> for a clock trigger, or <code>item "Device"</code> to change device context.</span></details></div></details>
-        <div class="graph-workspace"><aside class="graph-palette"><details id="graphPaletteDetails" open><summary>Add cards</summary><p class="muted tiny">Drag onto the canvas or click to add.</p><div id="graphItemPalette"></div><div id="graphLogicPalette"></div></details></aside>
-          <div class="graph-canvas-panel"><div class="graph-canvas-toolbar"><details class="graph-canvas-help"><summary>Help</summary><span>Drag cards to move. Drag from a right dot onto another card to connect. Drag the background to pan. Double-click a card to edit. Delete removes the selected card.</span></details><div class="graph-zoom-controls" role="group" aria-label="Canvas zoom"><button id="graphZoomOut" class="btn" type="button" aria-label="Zoom out">−</button><output id="graphZoomValue" aria-live="off">100%</output><button id="graphZoomIn" class="btn" type="button" aria-label="Zoom in">+</button><button id="graphFit" class="btn" type="button">Fit</button></div></div><div id="graphViewport" class="graph-canvas-scroll" tabindex="0" aria-label="Automation flow canvas"><div id="graphCanvas" class="graph-canvas"><svg id="graphWires" viewBox="0 0 2400 1600" preserveAspectRatio="none"></svg><div id="graphNodes"></div></div></div></div>
-          <aside class="graph-inspector" hidden><h3>Card settings</h3><div id="graphInspector"></div><button id="graphDeleteNode" class="btn danger" type="button">Remove card</button></aside></div>
-      </section>
+do "Hall light".power = off</pre>
+          <details><summary>Devices and available properties</summary><div id="automationDeviceReference"></div></details>
+          <p><a href="/static/automation-guide.html" target="_blank" rel="noopener">Full reference and examples</a></p>
+        </div>
+      </details>
     </section>
-
     <section id="zigbeeView" class="view">
       <div class="board-section-heading"><div><span class="eyebrow">SMART HOME</span><h2>Zigbee devices</h2><p class="muted tiny">Lights, switches and sensors. Controls follow the capabilities reported by each device.</p></div><div class="automation-pair"><button class="btn" data-open-view="automations">Automations</button><button id="zigbeeRefresh" class="btn">Refresh</button></div></div>
       <p id="zigbeeStatus" role="status">Loading connection status...</p>

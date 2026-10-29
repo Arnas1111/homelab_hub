@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Automation guide · Homelab Hub</title>
+  <style>
+    :root { color-scheme:dark; font:16px/1.6 system-ui,sans-serif; background:#10141b; color:#e7edf5; }
+    body { max-width:860px; margin:auto; padding:24px clamp(16px,4vw,48px) 80px; }
+    a { color:#9dbdff; } h1,h2,h3 { line-height:1.25; } h2 { margin-top:42px; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 18px; padding:12px 0 20px; border-bottom:1px solid #34404d; }
+    code,pre { font:14px/1.55 ui-monospace,Consolas,monospace; }
+    code { color:#b7d9ff; } pre { overflow:auto; padding:16px; border:1px solid #34404d; border-radius:8px; background:#1b222c; color:#e7edf5; }
+    pre code { color:inherit; } table { display:block; overflow:auto; border-collapse:collapse; }
+    th,td { padding:9px 12px; border-bottom:1px solid #34404d; text-align:left; vertical-align:top; }
+    th { color:#b8c3d2; } .note { padding:12px 16px; border-left:3px solid #8dacff; background:#1b222c; }
+  </style>
+</head>
+<body>
+  <header><a href="/automations">← Automations</a><h1>Automation guide</h1><p>One rule per line. No canvas, scripts, or programming setup required.</p></header>
+  <nav aria-label="Contents"><a href="#start">Start</a><a href="#commands">Commands</a><a href="#values">Values</a><a href="#examples">Examples</a><a href="#behavior">Behavior</a><a href="#limits">Limits</a></nav>
+  <main>
+    <section id="start"><h2>Start</h2>
+      <p>Open Zigbee → Automations, choose <strong>New automation</strong>, enter a name and rule, then select <strong>Check rule</strong> and <strong>Save</strong>. Use the device reference in the in-app guide for exact device names, reported properties, writable actions, enum options, and number ranges. A device ID may be used instead of a name if names are duplicated.</p>
+      <p>Every path begins with <code>when</code> or <code>at</code> and must contain at least one <code>do</code>. Start another path with another <code>when</code> or <code>at</code>. Paths run independently. Blank lines and lines starting with <code>#</code> are ignored. Spaces around operators and <code>=</code> are optional.</p>
+      <p>Save the automation timezone in Settings before using a clock, window, or solar condition. Solar instructions also require solar times enabled and a location in Settings.</p>
+    </section>
+    <section id="commands"><h2>Commands</h2>
+      <table><thead><tr><th>Syntax</th><th>Meaning</th></tr></thead><tbody>
+        <tr><td><code>when "Device".property == value</code></td><td>Starts when that device sends a matching report. The property must be a reported boolean, enum, or number.</td></tr>
+        <tr><td><code>at 18:00</code><br><code>at sunrise</code><br><code>at sunset+15m</code></td><td>Starts once per local day at that clock or solar time. Solar offsets may be from −180m to +180m.</td></tr>
+        <tr><td><code>if "Device".property != value</code></td><td>Continues only if the latest reported state matches now. A later <code>if</code> is an AND condition. If the device is unavailable, the path stops.</td></tr>
+        <tr><td><code>during 18:00..05:30</code></td><td>Continues within a local time window. A window crossing midnight is one continuous interval. The start is included; the end is excluded.</td></tr>
+        <tr><td><code>after 18:00</code><br><code>before sunrise-20m</code></td><td>Continues when the current local time is after or before the boundary. Clock boundaries cannot have offsets.</td></tr>
+        <tr><td><code>wait 5s</code><br><code>wait 2m</code><br><code>wait 1h</code></td><td>Pauses this path for 1 to 86400 seconds. A repeated matching trigger restarts the same wait.</td></tr>
+        <tr><td><code>do "Device".power = on</code></td><td>Sends a supported action to a device. Use the writable property name without <code>set_</code>, for example <code>power</code>, <code>brightness</code>, or <code>color_temp</code>.</td></tr>
+      </tbody></table>
+      <p>The first instruction may also be <code>if</code> for compatibility; later <code>if</code> and <code>and</code> both mean a state check. Use separate paths for OR behavior.</p>
+    </section>
+    <section id="values"><h2>Values and comparisons</h2>
+      <p>Put device names in double quotes: <code>"Flur"</code>. A device ID can be used the same way. Property names are unquoted and must match the device reference. Text enum values are case sensitive and can be quoted: <code>"double"</code>.</p>
+      <table><thead><tr><th>Type</th><th>Accepted values</th><th>Comparisons</th></tr></thead><tbody>
+        <tr><td>Boolean</td><td><code>true</code>/<code>false</code>, <code>on</code>/<code>off</code>, <code>1</code>/<code>0</code></td><td><code>==</code>, <code>!=</code></td></tr>
+        <tr><td>Number</td><td>Decimal numbers in the device's supported range</td><td><code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></td></tr>
+        <tr><td>Enum</td><td>One of the exact options shown in the device reference</td><td><code>==</code>, <code>!=</code></td></tr>
+      </tbody></table>
+      <p><code>=</code> is accepted as an alias for <code>==</code> in a trigger or state check. Actions always use <code>=</code>. White light and brightness are separate capabilities; use <code>brightness</code> for full brightness when exposed by the lamp.</p>
+    </section>
+    <section id="examples"><h2>Examples</h2>
+      <h3>Motion light, 18:00–05:30</h3>
+      <pre><code>when "Bewegungsmelder Flur".occupancy == true
+during 18:00..05:30
+do "Flur".power = on
+
+when "Bewegungsmelder Flur".occupancy == false
+during 18:00..05:30
+wait 5s
+if "Bewegungsmelder Flur".occupancy == false
+do "Flur".power = off</code></pre>
+      <p>The final check avoids turning the light off if motion returned during the wait. If the sensor stops reporting or the last clear report arrives after 05:30, this rule does not guarantee a switch-off; add a separate 05:30 cutoff path if you want one.</p>
+      <h3>Button action</h3><pre><code>when "Hall button".action == "double"
+do "Flur".power = on</code></pre>
+      <h3>Temperature threshold</h3><pre><code>when "Outside sensor".temperature &lt; 5
+if "Window sensor".contact == false
+do "Heater switch".power = on</code></pre>
+      <h3>Sunset and bedtime</h3><pre><code>at sunset+15m
+do "Garden light".power = on
+
+at 23:00
+do "Garden light".power = off</code></pre>
+      <h3>Brightness</h3><pre><code>when "Hall button".action == "single"
+do "Flur".power = on
+do "Flur".brightness = 100</code></pre>
+      <p>Replace the example names and properties with values from your own device reference. The example's <code>100</code> must be within that lamp's reported brightness range.</p>
+    </section>
+    <section id="behavior"><h2>What happens when a rule runs</h2>
+      <p><code>when</code> runs on fresh device reports; it is not a continuous loop. A later <code>if</code> reads the Hub's latest reported state at that moment. A <code>do</code> sends a command, but the next <code>if</code> may still see the old state until the device reports back. Use <code>wait</code> and a later <code>if</code> when you need a fresh check.</p>
+      <p>Time conditions are checked when reached. A <code>during</code> before a wait allows the delayed action to finish after the window closes. Delayed paths persist across Hub restarts, and failed delayed actions are retried. Disabling or deleting a rule does not cancel delays already scheduled by it. A new report on the same trigger path restarts its matching wait.</p>
+      <p>The Hub executes every matching path; separate automations can both control the same device. Use the automation status card to see whether a rule is enabled and its most recent result.</p>
+    </section>
+    <section id="limits"><h2>Limits and safety</h2>
+      <p>Rules can use up to 50 internal steps and a 24-hour wait. Only discovered Zigbee devices and actions exposed by them can be used. This language supports event triggers, current-state checks, time conditions, waits, and actions. It does not run JavaScript, loops, arbitrary calculations, network calls, or unrestricted programs. Older canvas rules remain active; if one cannot be converted safely, its original data is shown in the editor until you replace it with text.</p>
+    </section>
+  </main>
+</body>
+</html>

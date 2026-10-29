@@ -150,6 +150,26 @@ class GraphTests(unittest.TestCase):
         recovered.tick()
         self.assertEqual(self.module.act.call_count,2)
 
+    def test_text_and_clock_fired_state_survive_enable_toggle(self):
+        self.prefs.write('automation_time', {'timezone':'Europe/Berlin'})
+        berlin=ZoneInfo('Europe/Berlin')
+        self.now=datetime(2026,10,26,18,0,tzinfo=berlin).timestamp()
+        self.graph={'name':'Evening','enabled':True,'code':'at 18:00\ndo "Lamp".power = on','nodes':[
+            self.node('clock','clock_trigger',time_condition={'boundary':'clock','time':'18:00','after':True,'offset_minutes':0}),
+            self.node('lamp','item',item=self.lamp),
+            self.node('on','action',action='set_power',value=True)],
+            'edges':[{'source':'clock','target':'lamp'},{'source':'lamp','target':'on'}]}
+        graph_id=self.save()
+        self.engine.tick()
+        self.assertEqual(self.module.act.call_count,1)
+        self.graph['enabled']=False
+        self.engine.save_graph(GraphRule.model_validate(self.graph),graph_id)
+        self.graph['enabled']=True
+        self.engine.save_graph(GraphRule.model_validate(self.graph),graph_id)
+        self.engine.tick()
+        self.assertEqual(self.module.act.call_count,1)
+        self.assertEqual(self.engine.graphs[graph_id]['code'],self.graph['code'])
+
     def test_time_window_crosses_midnight_in_saved_timezone(self):
         berlin=ZoneInfo('Europe/Berlin')
         clock=lambda hour,minute:datetime(2026,10,25,hour,minute,tzinfo=berlin).timestamp()

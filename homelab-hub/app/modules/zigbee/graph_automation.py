@@ -46,6 +46,7 @@ class GraphRule(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     name: str = Field(min_length=1, max_length=80)
     enabled: bool = True
+    code: str = Field(default='', max_length=20000)
     nodes: list[Node] = Field(min_length=3, max_length=50)
     edges: list[Edge] = Field(min_length=2, max_length=80)
 

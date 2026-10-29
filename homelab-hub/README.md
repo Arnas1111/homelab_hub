@@ -257,64 +257,31 @@ a local clock, and an editable note. In edit mode, modules become non-interactiv
 grid previews; favorite chips can be dragged to reorder them. Save commits
 the layout to `/data/hub.db` for all browsers; Cancel restores the previous view.
 
-New Zigbee automations use a two-dimensional flow canvas. Drag an **Item** card
-from the discovered Zigbee list, then add and connect **When item reports**, **When
-time is reached**, **While item equals/differs/less than/greater than**, **While
-time matches**, **Do action**, and **Wait** cards. Select a card to
-edit its property, comparison, action, or delay. Item cards set the device context
-for following cards, so a light can be a condition as well as an action target.
-An action card also has a **Target device** selector; choose the light there
-even when its Item card appears later in the flow. Older flows that rely on a
-preceding Item card continue to use that context.
-For example: motion item → occupancy true → light item → power on → wait 5 seconds
-→ light item → power off. Another path can check whether light A is on and turn
-off light B. Time cards gate actions using saved timezone/solar settings; place
-an **While inside time window** card for a range such as 18:00 until 00:00; ranges crossing
-midnight are supported in the saved timezone.
+Zigbee automations use a small text language in **Zigbee → Automations**. The
+editor validates each line, shows a motion-light example, and lists the
+properties and actions reported by discovered devices. A built-in
+[automation guide](app/static/automation-guide.html) documents every command,
+value type, timing behavior, limitation, and common example.
 
-New cards remain disconnected until you connect them. Drag a card to move it;
-click to select it, double-click to focus its settings, and press Delete to
-remove the selected card. Drag from the small output dot, shown on hover or
-selection, onto another card to connect it. Input dots appear while connecting.
-Click a wire or focus it and press Delete to remove that connection. The card
-palette and canvas help can be collapsed. Keyboard arrow keys still move a
-focused card, and the inspector retains a Remove card button.
+Each rule can have multiple independent trigger paths:
 
-Drag the empty background to pan. Use the +/− buttons or Ctrl/⌘+wheel to zoom;
-**Fit** frames the flow. The canvas has no internal scrollbars. Cards snap to
-the grid. Invalid self-links, loops, and incoming clock-trigger links are
-rejected before saving; the server also validates each flow. Connection handles
-follow the [draw.io hover-and-drag pattern](https://www.drawio.com/docs/manual/editor/panels/connection-points-hide/).
-The [code and interface review](IMPROVEMENT_REVIEW.md) records remaining work.
+    when "Motion sensor".occupancy == true
+    during 18:00..05:30
+    do "Hall light".power = on
 
-**Programming** in the editor offers a short text form for independent trigger
-paths in one automation. Use device names from **Add cards**, for example:
+    when "Motion sensor".occupancy == false
+    during 18:00..05:30
+    wait 5s
+    if "Motion sensor".occupancy == false
+    do "Hall light".power = off
 
-```text
-when "Motion sensor".occupancy = true
-during 18:00..05:30
-do "Hall light".power = on
+The editor saves both the text and a validated internal graph. Older canvas
+automations keep running and open as text when they can be converted safely.
+For complex older flows, the editor shows their original rule data and requires
+new text before replacing them.
 
-when "Motion sensor".occupancy = false
-during 18:00..05:30
-wait 5s
-if "Motion sensor".occupancy = false
-do "Hall light".power = off
-```
-
-Each `when` begins a new trigger path; `at 18:00` starts a clock path. `during`
-checks the configured local timezone and supports windows across midnight.
-Later `if` lines check the latest device state, and `item "Device"` changes
-context for later conditions. Save the automation timezone in Settings first.
-Valid edits update the canvas after a short pause. Incomplete or
-invalid lines leave the last valid canvas intact and show a line error; Save
-requires fixing that error or restoring code from the canvas. Changes made on
-a supported set of independent paths update the code too. Forked branches,
-solar cards, and other unrepresentable flows remain editable on the canvas; **Start code
-draft** keeps the canvas until a valid replacement is entered.
-
-Flows are validated before saving: discovered items and supported capabilities,
-matching value types, connected cards, and no cycles. Delayed branches persist
+Rules are validated before saving: discovered items, supported capabilities,
+matching value types, and valid time settings. Delayed paths persist
 through Hub restarts and retry after connection failures. A repeated trigger
 restarts its matching wait card. Conditions use the latest **reported** device
 state; a command immediately before a condition may not have a new report yet.
@@ -322,9 +289,7 @@ Clock triggers run once per local day during the matching minute and persist
 their last fired date across restarts. Comparison cards evaluate the latest
 reported state when the flow reaches them; order comparisons require numeric
 properties. Earlier timed rules keep running and appear as cards with enable,
-disable, and delete controls. Recreate one on the canvas to change its flow.
+disable, and delete controls. Recreate one in the text editor to change its flow.
 
 The Home layout follows Homarr's board/widget separation and Homepage's
 configurable sections; service cards retain Heimdall's simple app-launcher role.
-The flow canvas uses Node-RED's palette and connected-node idea while retaining
-the Hub's validated Zigbee object contract.

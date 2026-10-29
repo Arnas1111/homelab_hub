@@ -235,8 +235,14 @@ class Automations:
                 raise HTTPException(422, 'Maximum 100 automations')
             validate_graph(graph, self.module, self.time)
             graph_id = graph_id or uuid.uuid4().hex
+            previous = self.graphs.get(graph_id, {})
+            old_clocks = {node['id']: node['time_condition'] for node in previous.get('nodes', [])
+                          if node['kind'] == 'clock_trigger'}
+            kept_clocks = {node.id for node in graph.nodes if node.kind == 'clock_trigger'
+                           and old_clocks.get(node.id) == node.time_condition.model_dump()}
             self.graphs[graph_id] = graph.model_dump()
-            self.graph_fired = {key: day for key, day in self.graph_fired.items() if not key.startswith(graph_id + ':')}
+            self.graph_fired = {key: day for key, day in self.graph_fired.items()
+                                if not key.startswith(graph_id + ':') or key[len(graph_id)+1:] in kept_clocks}
             self.graph_status.pop(graph_id, None)
             self._save()
             return {'id': graph_id}
