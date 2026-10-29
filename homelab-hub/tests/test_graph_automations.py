@@ -169,6 +169,46 @@ class GraphTests(unittest.TestCase):
         self.engine.process(self.sensor,{'occupancy':True})
         self.assertTrue(self.module.act.call_args.args[1].value)
 
+    def test_combined_motion_paths_respect_overnight_window_and_recheck_after_wait(self):
+        berlin=ZoneInfo('Europe/Berlin')
+        self.prefs.write('automation_time',{'timezone':'Europe/Berlin'})
+        self.graph={'name':'Flur at night','enabled':True,'nodes':[
+            self.node('on_source','item',item=self.sensor),
+            self.node('occupied','trigger',property='occupancy',value=True),
+            self.node('on_window','window',start='18:00',end='05:30'),
+            self.node('on','action',target_item=self.lamp,action='set_power',value=True),
+            self.node('off_source','item',item=self.sensor),
+            self.node('clear','trigger',property='occupancy',value=False),
+            self.node('off_window','window',start='18:00',end='05:30'),
+            self.node('wait','delay',seconds=5),
+            self.node('still_clear','condition',property='occupancy',value=False),
+            self.node('off','action',target_item=self.lamp,action='set_power',value=False)],
+            'edges':[{'source':a,'target':b} for a,b in [
+                ('on_source','occupied'),('occupied','on_window'),('on_window','on'),
+                ('off_source','clear'),('clear','off_window'),('off_window','wait'),
+                ('wait','still_clear'),('still_clear','off')]]}
+        self.save()
+        self.now=datetime(2026,10,26,12,0,tzinfo=berlin).timestamp()
+        self.engine.process(self.sensor,{'occupancy':True})
+        self.module.act.assert_not_called()
+        self.now=datetime(2026,10,27,4,0,tzinfo=berlin).timestamp()
+        self.module.ingest('zigbee2mqtt/Motion',b'{"occupancy":true}')
+        self.engine.process(self.sensor,{'occupancy':True})
+        self.assertTrue(self.module.act.call_args.args[1].value)
+        self.module.ingest('zigbee2mqtt/Motion',b'{"occupancy":false}')
+        self.engine.process(self.sensor,{'occupancy':False})
+        self.now+=3
+        self.module.ingest('zigbee2mqtt/Motion',b'{"occupancy":true}')
+        self.engine.process(self.sensor,{'occupancy':True})
+        self.now+=3
+        self.engine.tick()
+        self.assertTrue(self.module.act.call_args.args[1].value)
+        self.module.ingest('zigbee2mqtt/Motion',b'{"occupancy":false}')
+        self.engine.process(self.sensor,{'occupancy':False})
+        self.now+=5
+        self.engine.tick()
+        self.assertFalse(self.module.act.call_args.args[1].value)
+
     def test_restart_and_delete_preserve_scheduled_branch(self):
         graph_id=self.save()
         self.engine.process(self.sensor,{'occupancy':True})

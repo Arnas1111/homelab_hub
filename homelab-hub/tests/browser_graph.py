@@ -242,6 +242,24 @@ def main():
         assert page.evaluate('graphCurrent.edges.length')==4
         page.get_by_role('button',name='Save',exact=True).click()
         assert graphs[-1]['nodes'][2]['target_item']=='zigbee.light'
+        page.get_by_role('button',name='+ New automation').click()
+        if not page.locator('#graphCodePanel').evaluate('(panel) => panel.open'):
+            page.locator('#graphCodePanel > summary').click()
+        combined=('when "Motion sensor".occupancy == true\n'
+                  'during 18:00..05:30\n'
+                  'do "Hall light".power = on\n\n'
+                  'when "Motion sensor".occupancy == false\n'
+                  'during 18:00..05:30\n'
+                  'wait 5s\n'
+                  'if "Motion sensor".occupancy == false\n'
+                  'do "Hall light".power = off')
+        page.locator('#graphCode').fill(combined)
+        expect(page.locator('#graphNodes .graph-node')).to_have_count(10)
+        assert page.evaluate('graphCurrent.edges.length')==8
+        page.locator('#graphName').fill('Hallway at night')
+        page.get_by_role('button',name='Save',exact=True).click()
+        assert len(graphs[-1]['nodes'])==10
+        assert [node['kind'] for node in graphs[-1]['nodes']].count('window')==2
         assert not errors,errors
         browser.close()
         print('PASS: Home module persistence, nested navigation, flow canvas, save/edit, mobile width')

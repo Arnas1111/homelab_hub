@@ -287,23 +287,30 @@ rejected before saving; the server also validates each flow. Connection handles
 follow the [draw.io hover-and-drag pattern](https://www.drawio.com/docs/manual/editor/panels/connection-points-hide/).
 The [code and interface review](IMPROVEMENT_REVIEW.md) records remaining work.
 
-**Programming** in the editor offers a short text form for one-path flows. Use
-device names from **Add cards**, for example:
+**Programming** in the editor offers a short text form for independent trigger
+paths in one automation. Use device names from **Add cards**, for example:
 
 ```text
-if "Motion sensor".occupancy = true
+when "Motion sensor".occupancy = true
+during 18:00..05:30
 do "Hall light".power = on
+
+when "Motion sensor".occupancy = false
+during 18:00..05:30
 wait 5s
+if "Motion sensor".occupancy = false
 do "Hall light".power = off
 ```
 
-`when` is an alias for the first `if`; `at 18:00` starts a clock flow. Later
-`if` lines check device state, and `item "Device"` changes context for later
-conditions. Valid edits update the canvas after a short pause. Incomplete or
+Each `when` begins a new trigger path; `at 18:00` starts a clock path. `during`
+checks the configured local timezone and supports windows across midnight.
+Later `if` lines check the latest device state, and `item "Device"` changes
+context for later conditions. Save the automation timezone in Settings first.
+Valid edits update the canvas after a short pause. Incomplete or
 invalid lines leave the last valid canvas intact and show a line error; Save
 requires fixing that error or restoring code from the canvas. Changes made on
-a supported single path update the code too. Branches, solar/time-window cards,
-and other unrepresentable flows remain editable on the canvas; **Start code
+a supported set of independent paths update the code too. Forked branches,
+solar cards, and other unrepresentable flows remain editable on the canvas; **Start code
 draft** keeps the canvas until a valid replacement is entered.
 
 Flows are validated before saving: discovered items and supported capabilities,
